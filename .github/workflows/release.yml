@@ -33,7 +33,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           STAGE="gyroscope-$VERSION"
           mkdir "$STAGE"
-          cp -r plugin skill LICENSE README.md "$STAGE"/
+          cp -r plugin LICENSE README.md "$STAGE"/
           zip -qr "gyroscope-$VERSION.zip" "$STAGE"
           # Both exclusions asserted, not assumed: a bundle that quietly regained either of them
           # would look exactly like a correct one. The tests assertion no longer has a matching
@@ -54,5 +54,5 @@ jobs:
           git push origin "$TAG"
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes "Obligation-ledger hook for Claude Code and Codex: a costly call is denied until its cheap guard is on record, then the same call executes. Verified at release time: the 5/5 corpus replay (\`python3 eval/replay.py\`). Install from \`gyroscope-$VERSION.zip\` — it carries the two arms (plugin/ and skill/) only; the eval corpus lives in the repository, not the release bundle." \
+            --notes "Obligation-ledger hook for Claude Code and Codex: a costly call is denied until its cheap guard is on record, then the same call executes — and one skill whose pages carry each clause's positive construction. Verified at release time: the 5/5 corpus replay (\`python3 eval/replay.py\`). Install from \`gyroscope-$VERSION.zip\` — it carries \`plugin/\` only (dispatcher, clause table, hooks, and the skill pages in one arm); the eval corpus lives in the repository, not the release bundle." \
             "gyroscope-$VERSION.zip"

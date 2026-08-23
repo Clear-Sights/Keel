@@ -126,10 +126,24 @@ def _keyed_reason(clause, subject: str) -> str:
     base = f"[{clause.id}] {clause.deny_reason}"
     if isinstance(clause.subject, dict):
         if not subject:
-            return base
+            return base + _construction(clause)
         return (f"{base} -- keyed on `{subject}`, so the guard must name `{subject}` too; "
-                f"the same guard on another target does not discharge this.")
-    return f"{base} -- discharges once per session, for every target."
+                f"the same guard on another target does not discharge this."
+                + _construction(clause))
+    return f"{base} -- discharges once per session, for every target.{_construction(clause)}"
+
+
+# The deny names the guard that buys THIS session; the pointer names what to build so the guard
+# is never needed again. A pointer, never an inlined command: the construction is authored prose
+# with its own caveats, and a one-line paraphrase here would be a second writer of that fact.
+# Composed at render time from the clause's own `construction` field, so the pointer cannot
+# drift from the table -- one writer, read twice. The two unsolved points name their honest
+# empty slot instead, derived from the id the same way the loader pins anchors to ids.
+def _construction(clause) -> str:
+    anchor = getattr(clause, "construction", None)
+    if anchor:
+        return f" Construction: {anchor}."
+    return f" Construction: none yet -- POINTS.md#{clause.id.lower()} records why."
 
 
 def _segments(command: str) -> list[str]:

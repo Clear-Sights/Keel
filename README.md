@@ -76,17 +76,20 @@ treated as permission. Four properties of the ledger, each stated in the code it
   rather than papered over, because a scope that silently pools is worse than one that says it
   pools.
 
-This package carries two arms:
+`plugin/` is the whole package — exactly what the marketplace installs:
 
-- **`plugin/`** — the dispatcher (`gyroscope/`), the shipped clause table
-  (`gyroscope/clauses.json`, 24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook
-  manifests for both supported hosts. Every fingerprint is an exact predicate over command, tool,
-  or path identity — no clause infers intent from prose. The hook fails open: if the dispatcher
-  cannot run, it stays silent rather than blocking the host.
-- **`skill/`** — `SKILL.md` plus session hooks, wired via `hooks/settings.fragment.json`. This
-  arm covers the guards that leave no mark in a call sequence (clarify before committing to a
-  plan, confirm a checker can fail, run the entrypoint a user runs);
-  `gyroscope-sessionstart.sh` prints `SKILL.md` into context at session start.
+- **the dispatcher** (`gyroscope/`) and the shipped clause table (`gyroscope/clauses.json`,
+  24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both
+  supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity
+  — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it
+  stays silent rather than blocking the host.
+- **one skill** ([`plugin/SKILL.md`](plugin/SKILL.md), with
+  [`POINTS.md`](plugin/POINTS.md) and [`ACTS.md`](plugin/ACTS.md) beside it) — the positive
+  half. For each denied moment it names the construction that makes the guard unnecessary from
+  then on, and for the moments that leave no mark in a call sequence — budgets, plans, defaults,
+  reports — the seven acts carry the same reading. Each clause row's `construction` field
+  anchors into `POINTS.md`, so every negative is followed by its positive as a schema property
+  the loader checks, not a cross-document convention.
 
 ### Install
 
@@ -150,44 +153,44 @@ decision closed — checkable against the record rather than against its docstri
 ## The shipped clause table
 
 The dispatcher loads `plugin/gyroscope/clauses.json` — 24 admitted clauses, every one carrying
-positive and negative fixtures checked at load. Two tiers, split by whether the guard is a
-universal command or names environment-specific tooling.
+positive and negative fixtures checked at load. The table below is a generated view of that
+file, byte-compared against it by the test fence on every push, so it cannot quietly lag the
+artifact the dispatcher loads. Each row's construction column anchors the clause's positive
+half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
-### Portable (guards are universal commands)
+<!-- BEGIN GENERATED: clause-routes | source: plugin/gyroscope/clauses.json | regenerate: python3 tools/render_views.py --write -->
 
-| ID | Costly fate | Guard |
-| --- | --- | --- |
-| `A01` | `git push` with nothing on record about what is staged | `git status` first |
-| `A02` | bulk delete (`rm -rf`, `find -delete`, `git clean -f`) over a set never listed | `ls`, `find` (without `-delete`), `du`, or `git status` first |
-| `A03` | `git push --force` over a ref never fetched (`--force-with-lease` is exempt) | `git fetch` first |
-| `C03-verify-what-returns` | Stop after delegated work returned, with no returned artifact read | a `Read` after dispatch, before stopping |
-| `C08-check-can-fail` | Stop after a checker ran whose PASS may be cited as evidence | an observed **nonzero** exit from the same normalized checker invocation |
-| `C09-checker-excludes-self` | infer process presence from `ps \| grep` where the checker can match itself | a listing that excludes the shell/checker PID (`grep -v $$`, awk `!=`) |
-| `D01` | dispatch work to a subagent with no ground probed | a `Read`, `Glob`, or `Grep` first |
-| `P01` | present a plan with nothing read from this repository | a `Read`, `Glob`, or `Grep` first |
-| `P02` | present a plan whose ambiguities were settled by guessing | one `AskUserQuestion` first |
-| `T01` | Stop with `git status` never run this session | `git status` at least once |
-| `T02` | Stop after a push whose landing was never checked | `git fetch` or `git ls-remote` after pushing |
-| `U03` | use a PID in a signal operation (`kill`, `pkill`, `killall`) | `ps` or `pgrep` first |
-| `U06` | `curl -X POST/PUT/PATCH/DELETE` to an external service | an authenticated read canary (`curl -H 'Authorization: ...'`) |
-| `U08` | create a signed git commit (`-S`/`--gpg-sign`) | a signer canary (`gpg --clearsign` / `--detach-sign`) |
-| `U09` | `git switch`/`checkout` of a ref not known to exist | `git rev-parse --verify REF`, or creating it (`-b`/`-B`, `git branch REF`) |
-| `U10` | traverse structured JSON blind (`jq .field` with no assertion) | a `jq` structure assertion (`-e`, `keys`, `type`, `has(...)`) on the same file |
-| `U12` | apply a patch to unread context | `rg`/`grep` for the patch context first |
-| `U13` | apply a `.patch`/`.diff` file unchecked | `git apply --check PATCH` first |
-| `U19` | in-place text rewrite (`sed -i`, `perl -pi`) | `rg`/`grep` the pattern, or `cmp`/checksum the file first |
-| `U20` | destructive behavior-changing mutation (`rm`, `git reset --hard`, `truncate`) | an independent behavior observer (the relevant test or probe) first |
-| `U24` | publish/release (`npm publish`, `twine upload`, `cargo publish`) | the suite with warnings promoted to errors |
+| ID | Costly fate | Guard | Construction |
+| --- | --- | --- | --- |
+| `A01` | push without knowing what is staged or which branch is current | run `git status` first | [POINTS.md#a01](plugin/POINTS.md#a01) |
+| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first (`ls`, `find` without -delete, or `git status`) | [POINTS.md#a02](plugin/POINTS.md#a02) |
+| `A03` | overwrite remote history that was never read, discarding commits with no local copy | fetch the ref first (`git fetch`) | [POINTS.md#a03](plugin/POINTS.md#a03) |
+| `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](plugin/POINTS.md#c03-verify-what-returns) |
+| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | observe a nonzero PostToolUse result from the same normalized checker invocation | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
+| `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | run a process listing filtered by the shell or checker PID before trusting the match | [POINTS.md#c09-checker-excludes-self](plugin/POINTS.md#c09-checker-excludes-self) |
+| `D01` | fan out work with nothing probed first | probe the ground first with a read or a search, so the brief describes what is there | [POINTS.md#d01](plugin/POINTS.md#d01) |
+| `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | unsolved — [POINTS.md#p01](plugin/POINTS.md#p01) |
+| `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | unsolved — [POINTS.md#p02](plugin/POINTS.md#p02) |
+| `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](plugin/POINTS.md#t01) |
+| `T02` | end the run treating a push report as a landing | fetch or `git ls-remote` the ref after pushing | [POINTS.md#t02](plugin/POINTS.md#t02) |
+| `U01` | launch a nested worker | run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write` | [POINTS.md#u01](plugin/POINTS.md#u01) |
+| `U02` | re-launch a nested-worker target | run `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change` | [POINTS.md#u02](plugin/POINTS.md#u02) |
+| `U03` | use a PID in a signal operation | run `ps`, `pgrep`, or an equivalent observer-namespace process listing | [POINTS.md#u03](plugin/POINTS.md#u03) |
+| `U06` | send a mutating request to an external service | run an authenticated read canary such as `curl ... -H 'Authorization: ...'` | [POINTS.md#u06](plugin/POINTS.md#u06) |
+| `U08` | create a signed git commit | run a signer canary such as `printf test \| gpg --clearsign` | [POINTS.md#u08](plugin/POINTS.md#u08) |
+| `U09` | switch or check out a git ref | know the ref exists: `git rev-parse --verify REF`, or have created it yourself with `git checkout -b/-B REF` or `git branch REF` | [POINTS.md#u09](plugin/POINTS.md#u09) |
+| `U10` | traverse structured JSON data | look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file | [POINTS.md#u10](plugin/POINTS.md#u10) |
+| `U12` | apply a patch | run `rg`/`grep` for the patch context and read the target immediately before applying | [POINTS.md#u12](plugin/POINTS.md#u12) |
+| `U13` | apply a generated patch | run `git apply --check PATCH` first | [POINTS.md#u13](plugin/POINTS.md#u13) |
+| `U19` | perform an in-place text rewrite | look at the text you are about to rewrite: `rg`/`grep` for the pattern, or `cmp`/checksum the file | [POINTS.md#u19](plugin/POINTS.md#u19) |
+| `U20` | make a destructive behavior-changing mutation | run an independent behavior observer such as the relevant test or probe first | [POINTS.md#u20](plugin/POINTS.md#u20) |
+| `U24` | publish or release an artifact after runtime testing | run the suite with warnings promoted to errors on a supported runtime | [POINTS.md#u24](plugin/POINTS.md#u24) |
+| `U25` | run a scanner as an acceptance check | run its prefix-distractor regression test first | [POINTS.md#u25](plugin/POINTS.md#u25) |
 
-### Environment-specific (guards or fingerprints name repo-local tooling)
+<!-- END GENERATED: clause-routes -->
 
-| ID | Costly fate | Guard |
-| --- | --- | --- |
-| `U01` | launch a nested worker (`dispatch.sh`) | `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write` |
-| `U02` | re-launch a nested-worker target (`dispatch.sh TARGET`) | `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change` |
-| `U25` | run a scanner (`python3 *scan*.py`, scanner test suites) as an acceptance check | its prefix-distractor regression test first |
-
-What happens when the named tooling does not exist in the current repository — read from the
+Three clauses (`U01`, `U02`, `U25`) name repository-local tooling in their guards or
+fingerprints. What happens when that tooling does not exist in the current repository — read from the
 dispatch code, not guessed:
 
 - **The demand is raised anyway.** `pre_tool_use` demands whenever a clause's fingerprint matches,
@@ -199,14 +202,6 @@ dispatch code, not guessed:
   and, undischarged, Stop-blocked — dischargeable only by a test invocation whose command text
   contains `prefix` or `distractor`. Per the discharge limit above, the ledger records that such a
   command was *invoked*, not that the named regression test exists or passed.
-
-Two clause IDs in the generated [`plugin/SKILL.md`](plugin/SKILL.md) — `U05` ("mutate a filesystem
-target", guarded by `test -w`) and `U18` ("write, move, or delete a filesystem target", guarded by
-`realpath`/`readlink -f`) — read as colliding: their costly-fate domains overlap almost entirely.
-Stated honestly rather than resolved: **neither ID is present in the shipped 24-clause bundle**
-(nor are `U07`, `U11`, `U14`, `U15`, `U17`), so the dispatcher never evaluates them; the overlap
-exists only in the generated skill text, which lags the shipped table. The table above is derived
-from `clauses.json`, the artifact the dispatcher actually loads.
 
 ## Evidence
 

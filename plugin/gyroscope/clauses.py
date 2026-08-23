@@ -59,6 +59,14 @@ class Clause:
     # default-dead, never the clause: on the day it lapses the clause enforces again and the
     # lapse is announced, so doing nothing restores the check rather than retiring it.
     waiver: dict[str, Any] | None = None
+    # The clause's positive half: an anchor into the constructions page shipped beside this
+    # table ("POINTS.md#a01"), naming what to build so this guard is never needed again -- or
+    # None with `why_none` stating why no construction is in use. "Every negative followed by
+    # its true positive" is a property this loader checks, not a cross-document convention:
+    # exactly one of the pair is present, and a non-None anchor's fragment is the clause id.
+    # Resolution against the page's actual headings is the test fence's half of the check.
+    construction: str | None = None
+    why_none: str | None = None
 
 
 def waiver_status(clause: Clause, today: date | None = None) -> str:
@@ -416,6 +424,21 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EVENT-UNKNOWN", f"{clause.id}: {clause.event}")
     if not clause.fixtures_pos or not clause.fixtures_neg:
         raise ClauseError("CLAUSE-NO-FIXTURES", clause.id)
+    # The pairing rule: a construction anchor, or a stated reason there is none -- never both,
+    # never neither. The anchor's shape is fixed to the id so a row cannot point at a section
+    # that belongs to a different clause; whether the section EXISTS is checked by the fence,
+    # which owns the page, not by this loader, which owns the row.
+    if clause.construction is None:
+        if not isinstance(clause.why_none, str) or not clause.why_none.strip():
+            raise ClauseError("CLAUSE-NO-CONSTRUCTION",
+                              f"{clause.id}: no construction anchor and no why_none")
+    else:
+        if clause.why_none is not None:
+            raise ClauseError("CLAUSE-CONSTRUCTION-AMBIGUOUS",
+                              f"{clause.id}: both construction and why_none present")
+        if clause.construction != f"POINTS.md#{clause.id.lower()}":
+            raise ClauseError("CLAUSE-CONSTRUCTION-MISKEYED",
+                              f"{clause.id}: {clause.construction!r}")
     _compile(clause.fingerprint, clause.id)
     _compile(clause.activated_by, clause.id)
     _compile(clause.discharged_by, clause.id)
@@ -453,6 +476,8 @@ def _load_object(data: dict[str, Any]) -> Clause:
         activated_by=data.get("activated_by"),
         fixtures_activate=data.get("fixtures_activate"),
         waiver=data.get("waiver"),
+        construction=data.get("construction"),
+        why_none=data.get("why_none"),
     )
     return _admit(clause)
 
