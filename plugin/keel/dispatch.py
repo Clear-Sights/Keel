@@ -231,6 +231,28 @@ def _context(text: str, event_name: str = "SessionStart") -> dict:
     return {"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": text}}
 
 
+def _open_not_evaluable(detail: str) -> dict:
+    """The LOUD half of a fail-open. Its whole job is to reach a seat that can act.
+
+    `systemMessage` is the universal output field the host actually surfaces. Everything else a
+    hook can say on exit 0 -- stderr above all -- goes to the debug log, so a fail-open written
+    only to stderr is, from every seat, byte-identical to a clean pass. That is not a hypothesis:
+    `docs/FAIL-DIRECTION.md` §3 records 30 such allows in one day going unnoticed, and says of
+    itself that the rule "was written down and still not true in practice."
+
+    It was still not true here. The three fail-open exits below printed a bare `{}`, and the
+    unreadable-event one runs BEFORE the event name is known -- so an unparseable `PreToolUse`
+    was allowed with no user-visible trace at all. The rule was already implemented one layer
+    out, in the shim, and asserted by `tests/test_shim_visibility.py`; one boundary had it and
+    the next did not.
+
+    One helper rather than three call sites, because three spellings of one rule is how the next
+    fail-open gets added without this one.
+    """
+    return {"systemMessage": f"{_PREFIX}: this call was ALLOWED WITHOUT BEING CHECKED -- "
+                             f"{detail}. NOT-EVALUABLE, not a pass."}
+
+
 def _closed_not_evaluable(event: dict, detail: str) -> dict | None:
     """Return the closed wire for a known event; None means only exit status can express it."""
     reason = f"keel could not evaluate this event: {detail} -- NOT-EVALUABLE, not a pass"
@@ -643,7 +665,8 @@ def main() -> int:
     except Exception as exc:
         print(f"keel: unreadable event ({type(exc).__name__}) -- NOT-EVALUABLE", file=sys.stderr)
         journal.note_fault({}, "unreadable_event", type(exc).__name__, failed_closed=False)
-        print("{}")
+        print(json.dumps(_open_not_evaluable(f"the event could not be read "
+                                             f"({type(exc).__name__})")))
         return 0
     if repaired or escaped:
         # Recorded, and NOT a fault: the event WAS evaluated, on a repaired payload. Conflating the
@@ -677,22 +700,27 @@ def main() -> int:
                 return 0
         out = HANDLERS.get(event.get("hook_event_name"), pre_tool_use)(table, Ledger(), event)
     except Exception as exc:
-        print(f"keel: {type(exc).__name__} -- NOT-EVALUABLE, failing closed", file=sys.stderr)
         out = _closed_not_evaluable(event, type(exc).__name__)
+        print(f"keel: {type(exc).__name__} -- NOT-EVALUABLE, failing "
+              f"{'closed' if out is not None else 'open'}", file=sys.stderr)
         journal.note_fault(event, "evaluation", type(exc).__name__, failed_closed=out is not None)
         if out is None:
-            print("{}")
+            print(json.dumps(_open_not_evaluable(
+                f"{event.get('hook_event_name') or 'this event'} raised "
+                f"{type(exc).__name__} and has no deny wire")))
             return 0
     try:
         encoded = json.dumps(out)
     except Exception as exc:
-        print(f"keel: {type(exc).__name__} while serializing -- NOT-EVALUABLE, failing closed",
-              file=sys.stderr)
         closed = _closed_not_evaluable(event, f"serialization {type(exc).__name__}")
+        print(f"keel: {type(exc).__name__} while serializing -- NOT-EVALUABLE, failing "
+              f"{'closed' if closed is not None else 'open'}", file=sys.stderr)
         journal.note_fault(event, "serialization", type(exc).__name__,
                            failed_closed=closed is not None)
         if closed is None:
-            print("{}")
+            print(json.dumps(_open_not_evaluable(
+                f"the verdict could not be serialized ({type(exc).__name__}) and "
+                f"{event.get('hook_event_name') or 'this event'} has no deny wire")))
             return 0
         encoded = json.dumps(closed)
     _record(event, out if isinstance(out, dict) else {})
