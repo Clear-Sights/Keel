@@ -132,6 +132,41 @@ jobs:
           suite
           echo "restored, and green again"
 
+      # The images are a generated view too, and the only one whose source is not under $PAGES:
+      # `docs/img/*.svg` renders to the PNGs the README shows. Same discipline, its own step
+      # because the files it plants live outside the page set restored above.
+      - name: A stale rendering must be loud
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPATH: plugin
+          IMAGES: docs/img
+        run: |
+          set -eu
+          BAK=$(mktemp -d)
+          cp -r "$IMAGES"/. "$BAK"
+          restore() { cp -r "$BAK"/. "$IMAGES"; }
+          trap restore EXIT
+          only() { python3 -m unittest tests.test_fence.RenderedImagesTrackTheirSource; }
+
+          sed -i 's/viewBox="0 0 1200 210"/viewBox="0 0 1200 260"/' "$IMAGES/keel-hero.svg"
+          if only >/dev/null 2>&1; then
+            echo "::error::VACUOUS -- a resized source left its stale rendering green" >&2
+            exit 1
+          fi
+          restore
+          echo "  source resized, rendering stale -> red"
+
+          rm "$IMAGES/ledger-flow-dark.png"
+          if only >/dev/null 2>&1; then
+            echo "::error::VACUOUS -- a missing rendering left the check green" >&2
+            exit 1
+          fi
+          restore
+          echo "  rendering absent -> red"
+
+          only >/dev/null
+          echo "restored, and green again"
+
       # Absence is a failure, never a skip: with an input gone the fence has nothing to check,
       # and reporting that as a pass is the exact shape this repository exists to refuse.
       - name: A missing input must be loud

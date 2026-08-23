@@ -12,13 +12,15 @@ between them and `keel/clauses.json`:
   (d) whether the vendored vocabulary still matches its pinned provenance, and the pages still
       speak it;
   (e) whether the pages have acquired the vocabulary of obligation -- the pages advise, only the
-      hooks deny.
+      hooks deny;
+  (f) whether the rendered images still match the size of the SVGs they are rendered from.
 
 Standard library only, `unittest` discovery, like the rest of the suite.
 """
 from pathlib import Path
 import json
 import re
+import struct
 import subprocess
 import sys
 import unittest
@@ -90,10 +92,10 @@ def _clause_rows() -> list:
 class TheConstructionJoin(unittest.TestCase):
     """Every negative followed by its true positive, as a checked property of the tree.
 
-    The loader already pins each row's anchor SHAPE to its id (see clauses._admit). This half
-    resolves the anchors against the page they point into, in both directions: an anchor into a
-    heading that is gone, an entry belonging to no clause, and a clause whose entry was silently
-    dropped are all red here, not a thing a reader must catch.
+    The loader checks each row's anchor SHAPE and stops there (see clauses._admit), because rows
+    may legitimately share a point. This half owns the page and resolves the anchors against it in
+    both directions: an anchor into a heading that is gone, a heading no row claims, and a clause
+    whose entry was silently dropped are all red here, not a thing a reader must catch.
     """
 
     def setUp(self) -> None:
@@ -450,6 +452,55 @@ class SkillIsLoadable(unittest.TestCase):
         self.assertTrue(targets, "SKILL.md references no detail pages at all")
         missing = [t for t in targets if not (PLUGIN / t).is_file()]
         self.assertEqual(missing, [], f"SKILL.md points at files that do not exist: {missing}")
+
+
+class RenderedImagesTrackTheirSource(unittest.TestCase):
+    """The README shows PNGs; `tools/render_readme_images.py` renders them from the SVGs beside
+    them. That is a generated view like any other, and it was the only one in this tree with no
+    mechanical consumer joining it to its source -- exactly the shape that let a "GENERATED, do
+    not edit" page rot unnoticed, one file type over.
+
+    WHAT THIS CHECKS, AND WHAT IT DOES NOT. Dimensions only. It catches an SVG resized without
+    its PNGs re-rendered; it does NOT catch a colour or wording change inside an unchanged
+    viewBox. The obvious stronger check -- re-render and byte-compare -- is not here on purpose:
+    rendering goes through a headless browser, and the same bytes on two different runners is
+    unproven. A check that can go red without a defect teaches people to ignore it, which costs
+    more than the coverage it would add. Stated rather than left for a reader to discover, so
+    this cannot be mistaken for "the images are verified".
+    """
+
+    def _scale(self) -> int:
+        # Read from the renderer, never retyped here. A second copy of this number is a second
+        # writer of one fact, and it would drift silently in the direction that makes this test
+        # agree with a stale rendering.
+        sys.path.insert(0, str(REPO / "tools"))
+        import render_readme_images
+        return render_readme_images.SCALE
+
+    def _png_size(self, path: Path) -> tuple[int, int]:
+        # IHDR is the first chunk and its width/height are big-endian at a fixed offset, so the
+        # header alone answers this -- no imaging library, and none in CI.
+        header = path.read_bytes()[:24]
+        self.assertEqual(header[:8], b"\x89PNG\r\n\x1a\n", f"{path.name} is not a PNG")
+        return struct.unpack(">II", header[16:24])
+
+    def test_every_svg_has_both_renderings_at_the_declared_scale(self) -> None:
+        sources = sorted((REPO / "docs" / "img").glob("*.svg"))
+        self.assertTrue(sources, "no SVG sources found, so this checked nothing")
+        for svg in sources:
+            box = re.search(r'viewBox="([\d.\s-]+)"', svg.read_text(encoding="utf-8"))
+            self.assertIsNotNone(box, f"{svg.name} has no viewBox to compare against")
+            _, _, width, height = (float(n) for n in box.group(1).split())
+            scale = self._scale()
+            for variant in ("light", "dark"):
+                png = svg.with_name(f"{svg.stem}-{variant}.png")
+                self.assertTrue(png.is_file(),
+                                f"{svg.name} has no {variant} rendering at {png.name}")
+                self.assertEqual(
+                    self._png_size(png), (int(width * scale), int(height * scale)),
+                    f"{png.name} does not match {svg.name}'s viewBox at {scale}x -- the source "
+                    f"was resized and the rendering was not regenerated",
+                )
 
 
 if __name__ == "__main__":

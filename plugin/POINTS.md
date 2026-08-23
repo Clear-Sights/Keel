@@ -144,7 +144,9 @@ wanted. Splitting by which ground is missing describes the same failure twice.
   discharged, and what discharges them is evidence already recorded: the **digest of the bytes a
   read actually returned**, or the **answer actually received** to a question that was asked. A
   step resting on nothing has no rendered form, so a plan built on nothing is not a plan that
-  fails review — it is a plan that cannot be written down.
+  fails review — it is a plan that cannot be written down. "Read something first" as a checklist
+  item is the added ritual exactly, and the plan still presents when nobody reads; the obligation
+  has to be what the step is *made of*, not something checked about it afterwards.
 - **Why a digest and not a `path:line` anchor.** A coordinate can be guessed and still resolve;
   resolution proves the place exists, not that it was read. A digest of what came back cannot be
   produced without having had the bytes. That is the whole difference between construction 1 and
@@ -154,19 +156,14 @@ wanted. Splitting by which ground is missing describes the same failure twice.
   arrive when nobody asks — it makes the step unconstructible without one. A demand that never
   discharges is the correct outcome: the step does not render. That is demand-and-discharge, the
   same mechanism as every other row in the table, applied one level down.
-- **Why the obvious answer fails:** "read something first" as a checklist item is the added ritual
-  exactly. The plan still presents when nobody reads. The obligation has to be what the step is
-  *made of*, not something checked about it afterwards.
 - **Steps are declared, never parsed.** The step and its obligations are supplied as data
   (construction 5, declared count). Recovering them by pattern-matching the plan's prose would put
   a predicate on prose, which is the one thing this mechanism refuses everywhere else.
-- **Where this comes from:** the execution prompt's "Absence is a claim: name where you looked and
-  where it could remain", and the ask prompt — both resident prompts of the imperative half,
-  quoted whole in the private dev-record — made typeable. What looking can settle is settled by
-  looking; a fork about the request reaches the owner, one question per fork, batched, never
-  serial; and the decision *not* to ask is recorded with its reason, so judgement cannot be read
-  as oversight. Under the construction those records stop being discipline and become the step's
-  input.
+- **Where this comes from:** two resident prompts of the imperative half, quoted whole in the
+  private dev-record — "Absence is a claim: name where you looked and where it could remain", and
+  the ask prompt's rule that a fork about the request reaches the owner while what looking can
+  settle is settled by looking. The construction is those made typeable: what was discipline a
+  reader had to keep becomes the step's input.
 - **The limit, stated because it is this plugin's own:** the two rows above key on
   `subject: session_id`, so they raise one demand per *session*, not one per step — a single read
   discharges `P01` for a plan of any length. The construction is per step and needs nothing from
