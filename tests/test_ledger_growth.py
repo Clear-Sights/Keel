@@ -102,5 +102,50 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
                       "test_TEETH_forty_identical_guards_write_one_row_per_clause", "an empty clause table makes the bound below vacuous")
 
 
+class TheChainDetectsWhatItClaims(unittest.TestCase):
+    """The README advertises exactly one power for the hash chain -- altered rows, truncated
+    writes, bit-rot; never deliberate forgery -- and until this class nothing had ever observed
+    `verify_chain` report any of it. A checker never seen failing is the exact shape clause
+    C08-check-can-fail refuses to trust, and a TRACE pass over this tree found the method on no
+    input-to-output chain at all: an advertised property whose checker was dead code. Both
+    directions live here as residents: a sound ledger reads clean, and each planted corruption
+    is named -- with nobody remembering to plant anything.
+    """
+
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+        self.ledger = Ledger(root=pathlib.Path(self._temp.name))
+        for n in range(3):
+            self.ledger.demand(Demand(id=f"d{n}", session="s", agent="",
+                                      clause_id="A01", subject="s", reason="r"))
+        self.ledger.discharge("s", "", "d1", "guard observed")
+
+    def test_a_sound_chain_reads_clean(self) -> None:
+        self.assertIsNone(self.ledger.verify_chain())
+
+    def test_an_altered_row_is_named(self) -> None:
+        lines = self.ledger.path.read_text(encoding="utf-8").splitlines()
+        # Alter row content without recomputing its hash -- the accidental-corruption shape.
+        # `_canon` writes compact separators, and a replace that misses writes nothing: require
+        # the mutation to have landed before trusting what the checker says about it.
+        mutated = lines[1].replace('"clause_id":"A01"', '"clause_id":"A99"')
+        self.assertNotEqual(mutated, lines[1], "the plant never reached the row")
+        lines[1] = mutated
+        self.ledger.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        divergent = self.ledger.verify_chain()
+        self.assertIsNotNone(divergent, "an altered row read back as a sound chain")
+        self.assertIn(divergent, lines[1], "the reported hash is not the altered row's")
+
+    def test_a_missing_hash_is_named(self) -> None:
+        import json as _json
+        lines = self.ledger.path.read_text(encoding="utf-8").splitlines()
+        row = _json.loads(lines[2])
+        del row["hash"]
+        lines[2] = _json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        self.ledger.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assertEqual(self.ledger.verify_chain(), "<missing>")
+
+
 if __name__ == "__main__":
     unittest.main()

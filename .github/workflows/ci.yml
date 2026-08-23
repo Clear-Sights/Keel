@@ -124,6 +124,7 @@ jobs:
           plant "vendored list unsupplied"    "sed -i 's/\"supplies\": \"shapes\"/\"supplies\": \"shpaes\"/' $D/vocabulary.json"
           plant "frontmatter loses its trigger" "sed -i 's/^description:/described:/' $D/SKILL.md"
           plant "body overruns its budget"    "seq -f 'padding line %g of the budget plant' 500 >> $D/SKILL.md"
+          plant "construction block mistagged" "sed -i '0,/\`\`\`sh/s//\`\`\`python/' $D/POINTS.md"
 
           restore
           suite

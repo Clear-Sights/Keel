@@ -332,6 +332,59 @@ class AdvisoryByConstruction(unittest.TestCase):
         )
 
 
+class ConstructionCodeParses(unittest.TestCase):
+    """U14's own guard, applied to the product's pages: run the block in parse-only mode.
+
+    A construction whose example cannot parse is advice that fails the person who takes it, at
+    the moment they take it -- and nothing else would report it, because prose is never
+    executed. Only language-tagged fences are judged: the untagged before/after illustrations
+    are annotated fragments, not programs, and pretending to parse them would be coverage
+    theatre.
+    """
+
+    # Blocks sit indented inside list entries, so the fence markers carry leading space and the
+    # code carries the list's indentation -- dedent before parsing, or an indented python block
+    # is a SyntaxError about markdown, not about the example.
+    FENCE_RX = re.compile(r"^[ \t]*```(\w+)\n(.*?)^[ \t]*```$", re.MULTILINE | re.DOTALL)
+
+    def test_every_tagged_code_block_parses(self) -> None:
+        import tempfile
+        import textwrap
+        found = 0
+        for page in PAGES:
+            for lang, code in self.FENCE_RX.findall(_load(page)):
+                code = textwrap.dedent(code)
+                found += 1
+                if lang in ("sh", "bash"):
+                    with tempfile.NamedTemporaryFile("w", suffix=".sh") as handle:
+                        handle.write(code)
+                        handle.flush()
+                        done = subprocess.run(["bash", "-n", handle.name],
+                                              capture_output=True, text=True, check=False)
+                    self.assertEqual(
+                        done.returncode, 0,
+                        f"{page.name}: a {lang} construction block does not parse:\n"
+                        f"{code}\n{done.stderr}",
+                    )
+                elif lang in ("python", "py"):
+                    try:
+                        compile(code, f"{page.name}:{lang}-block", "exec")
+                    except SyntaxError as exc:
+                        self.fail(f"{page.name}: a python construction block does not parse: "
+                                  f"{exc}\n{code}")
+                elif lang == "toml":
+                    import tomllib
+                    try:
+                        tomllib.loads(code)
+                    except tomllib.TOMLDecodeError as exc:
+                        self.fail(f"{page.name}: a toml construction block does not parse: "
+                                  f"{exc}\n{code}")
+                else:
+                    self.fail(f"{page.name}: tagged block language {lang!r} has no parser "
+                              f"here; add one rather than shipping an unchecked example")
+        self.assertGreater(found, 0, "no tagged construction blocks found, so nothing was checked")
+
+
 class SkillIsLoadable(unittest.TestCase):
     """A skill that the host cannot parse never fires, and never says why."""
 
