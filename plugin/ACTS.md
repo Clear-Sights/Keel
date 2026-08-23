@@ -116,7 +116,9 @@ maximise only the safe part.
 **The moment.** Fixing a plan for adoption. A plan is followed by default — nobody decides to follow
 it — which makes it the highest-leverage thing in a run.
 
-Points `P01` and `P02` cover reading and asking, and both are listed as unsolved.
+Points `P01` and `P02` cover reading and asking. They are two enforcement rows over one point —
+a step adopted on ground never established — and share one construction, written under
+[P01](POINTS.md#p01).
 
 **Construction (5).** Make the plan's done-bar a list of calls, each returning nonzero when its claim
 does not hold, rather than a list of sentences. Then finishing is evaluable by anyone, including later you, without reconstructing what

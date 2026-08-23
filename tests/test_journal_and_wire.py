@@ -323,6 +323,10 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
             id = "A02"
             deny_reason = "list the set first"
             subject = {"extract": "path"}
+            # Every loaded clause carries an anchor -- the loader refuses one that does not, so
+            # a double without it stands in for a row that cannot exist. `_keyed_reason` appends
+            # the pointer on every path, and the round trip has to read back past it.
+            construction = "POINTS.md#a02"
 
         return dispatch._subject_of(dispatch._keyed_reason(Clause(), subject))
 
@@ -345,6 +349,7 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
             id = "T01"
             deny_reason = "run git status first"
             subject = "session_id"
+            construction = "POINTS.md#t01"
 
         self.assertEqual(
             dispatch._subject_of(dispatch._keyed_reason(SessionClause(), "drive")), "")
@@ -364,6 +369,7 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
             deny_reason = ("prerequisite keyed on `wrong`, so the guard must name `wrong` "
                            "too; spelled exactly as the renderer spells it")
             subject = {"extract": "path"}
+            construction = "POINTS.md#x01"
 
         reason = dispatch._keyed_reason(TalkativeClause(), "real-target")
         self.assertIn("must name `real-target`", reason)

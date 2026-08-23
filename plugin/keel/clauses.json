@@ -339,8 +339,7 @@
     },
     "window": "session",
     "deny_reason": "present a plan with no read, glob or grep on record; a plan is followed by default, so a plan built on assumption defines the whole path before anything is checked",
-    "construction": null,
-    "why_none": "unsolved -- no construction is in use. POINTS.md#p01 records the one candidate (an anchor-resolving plan renderer) and the limit that keeps it a candidate.",
+    "construction": "POINTS.md#p01",
     "fixtures_pos": [
       "ExitPlanMode"
     ],
@@ -375,8 +374,7 @@
     },
     "window": "session",
     "deny_reason": "present a plan with no question asked this session; reading files resolves what the repository is, never what was wanted, and a plan is followed by default",
-    "construction": null,
-    "why_none": "unsolved, and likely unsolvable locally -- asking needs a second party. POINTS.md#p02 records the protocol used meanwhile.",
+    "construction": "POINTS.md#p01",
     "fixtures_pos": [
       "ExitPlanMode"
     ],

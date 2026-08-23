@@ -2,8 +2,11 @@
 
 The exact moments this plugin's clauses name. The hooks stop the run and name a guard; the guard
 buys one session. Each entry below names what to build so the guard's outcome arrives on every
-later turn with nobody running anything — except two, `P01` and `P02`, which record an unsolved
-gap instead.
+later turn with nobody running anything.
+
+One entry is shared: `P01` and `P02` are two enforcement rows over a single point — a plan step
+adopted on ground that was never established — so they anchor to the same construction and are
+written once, under [P01](#p01).
 
 The trigger text lives verbatim in `keel/clauses.json` beside this page, which is the authority:
 each clause row's `construction` field anchors into this page, and the test fence resolves every
@@ -18,8 +21,8 @@ Construction numbers refer to [SKILL.md](SKILL.md): **1** data dependency, **2**
 | | | | |
 |---|---|---|---|
 | [A01](#a01) push | [A02](#a02) bulk delete | [A03](#a03) force-push | [C03](#c03-verify-what-returns) what returned |
-| [C08](#c08-check-can-fail) checker teeth | [C09](#c09-checker-excludes-self) self in ps | [D01](#d01) dispatch | [P01](#p01) plan from nothing |
-| [P02](#p02) guessed reading | [T01](#t01) declaring done | [T02](#t02) push landed | [U01](#u01) nested worker |
+| [C08](#c08-check-can-fail) checker teeth | [C09](#c09-checker-excludes-self) self in ps | [D01](#d01) dispatch | [P01](#p01) plan on no ground |
+| [P02](#p01) guessed reading | [T01](#t01) declaring done | [T02](#t02) push landed | [U01](#u01) nested worker |
 | [U02](#u02) re-launch | [U03](#u03) signal a pid | [U06](#u06) external mutation | [U08](#u08) signed commit |
 | [U09](#u09) checkout a ref | [U10](#u10) traverse JSON | [U12](#u12) apply a patch | [U13](#u13) generated patch |
 | [U19](#u19) in-place rewrite | [U20](#u20) behaviour mutation | [U24](#u24) release | [U25](#u25) scanner |
@@ -123,44 +126,52 @@ Construction numbers refer to [SKILL.md](SKILL.md): **1** data dependency, **2**
   result of a bad brief is inherited whole.
 
 ## P01
-**Presenting a plan built on nothing read.**
+**Adopting a plan step that rests on ground never established.**
 
-- **Denies:** adopt a plan built on nothing read.
-- **Its guard:** read something first, so the plan describes this repository and not a remembered one.
-- **Construction: unsolved.**
-- **Candidate, untried:** require every claim in a plan to carry a `path:line` anchor, and render the
-  plan through a tool that resolves each anchor against the tree and refuses any that does not
-  resolve. That would be construction 1 — a plan citing nothing that resolves would not render.
-- **The candidate's own limit:** an anchor can be guessed and still resolve — resolution proves the
-  place exists, not that it was read — so the candidate narrows the failure rather than removing
-  it. The vendored guard shares the softness: it observes that a read-shaped call happened, not
-  that it landed or mattered.
+Two clause rows enforce this one point, because a step can lack either of two grounds:
+
+- `P01` — **Denies:** adopt a plan built on nothing read. **Its guard:** read something first, so
+  the plan describes this repository and not a remembered one.
+- `P02` — **Denies:** adopt a plan built on a guessed reading of the request. **Its guard:** ask
+  one question about the ambiguity before the plan is fixed.
+
+They are not two points. A plan is not one act — it has many steps, and *each step incurs its own
+obligation*: this step claims something about the repository, or it rests on a reading of what was
+wanted. Splitting by which ground is missing describes the same failure twice.
+
+- **Construction 1 (data dependency), per step.** Render the plan from the ledger, not beside it.
+  Each step declares the obligations it rests on; a step renders only if every one of them is
+  discharged, and what discharges them is evidence already recorded: the **digest of the bytes a
+  read actually returned**, or the **answer actually received** to a question that was asked. A
+  step resting on nothing has no rendered form, so a plan built on nothing is not a plan that
+  fails review — it is a plan that cannot be written down.
+- **Why a digest and not a `path:line` anchor.** A coordinate can be guessed and still resolve;
+  resolution proves the place exists, not that it was read. A digest of what came back cannot be
+  produced without having had the bytes. That is the whole difference between construction 1 and
+  loudness, and it is why the earlier `path:line` proposal stayed a proposal: it narrowed the
+  failure instead of removing it.
+- **Why asking is not the exception it looks like.** Construction 1 never claims to make an answer
+  arrive when nobody asks — it makes the step unconstructible without one. A demand that never
+  discharges is the correct outcome: the step does not render. That is demand-and-discharge, the
+  same mechanism as every other row in the table, applied one level down.
 - **Why the obvious answer fails:** "read something first" as a checklist item is the added ritual
-  exactly. The plan still presents when nobody reads.
-- **Where the candidate comes from:** the execution prompt's "Absence is a claim: name where you
-  looked and where it could remain" — a resident prompt of the imperative half, quoted whole in
-  the private dev-record — made typeable: the anchor field is where you looked, and a plan that
-  cannot fill it does not render.
-
-## P02
-**Presenting a plan whose ambiguity was settled by guessing.**
-
-- **Denies:** adopt a plan built on a guessed reading of the request.
-- **Its guard:** ask one question about the ambiguity before the plan is fixed.
-- **Construction: unsolved, and likely unsolvable here.** Asking is a communicative act with a second party;
-  no local construction makes an answer arrive when nobody asks. Reading files resolves what the
-  repository is, never what was wanted.
-- **Nearest miss:** give the plan a section that states, per fork, the reading taken and the reason
-  it was taken without asking. An unrecorded fork is then a visible hole rather than an invisible
-  assumption. That is loudness, not construction, and it depends on a reader.
-- **The protocol worth following meanwhile:** the ask prompt — a resident prompt of the
-  imperative half, quoted whole in the private dev-record — in one breath:
-  what looking can settle is settled by looking; a fork between
-  two defensible ways to do the work climbs to a more capable executor; only a fork about the
-  request reaches the owner — one question per fork, every open fork batched, never serial. Record
-  the decision not to ask with its reason, so judgement cannot be read as oversight, and treat a
-  reaffirmed instruction as the fork's decision: proceed with the full request. The record is the
-  one part that leaves a resting state behind.
+  exactly. The plan still presents when nobody reads. The obligation has to be what the step is
+  *made of*, not something checked about it afterwards.
+- **Steps are declared, never parsed.** The step and its obligations are supplied as data
+  (construction 5, declared count). Recovering them by pattern-matching the plan's prose would put
+  a predicate on prose, which is the one thing this mechanism refuses everywhere else.
+- **Where this comes from:** the execution prompt's "Absence is a claim: name where you looked and
+  where it could remain", and the ask prompt — both resident prompts of the imperative half,
+  quoted whole in the private dev-record — made typeable. What looking can settle is settled by
+  looking; a fork about the request reaches the owner, one question per fork, batched, never
+  serial; and the decision *not* to ask is recorded with its reason, so judgement cannot be read
+  as oversight. Under the construction those records stop being discipline and become the step's
+  input.
+- **The limit, stated because it is this plugin's own:** the two rows above key on
+  `subject: session_id`, so they raise one demand per *session*, not one per step — a single read
+  discharges `P01` for a plan of any length. The construction is per step and needs nothing from
+  this plugin to build; these rows are the coarse backstop until the clause schema can yield one
+  subject per declared step rather than one per event.
 
 ## T01
 **Declaring the run finished without ever asking the tree.**

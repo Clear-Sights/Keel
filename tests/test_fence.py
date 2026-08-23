@@ -108,46 +108,44 @@ class TheConstructionJoin(unittest.TestCase):
         self.assertEqual(len(self.ids), 24, "the table moved; every spelled-out count moves with it")
         self.assertEqual(len(set(self.ids)), len(self.ids), "duplicate id in clauses.json")
 
-    def test_every_clause_has_an_entry_and_no_entry_is_orphaned(self) -> None:
-        """Set equality both directions between clause ids and POINTS.md's headings."""
+    def test_no_entry_is_duplicated_or_empty(self) -> None:
+        """What POINTS.md owes on its own, independent of which rows point at it.
+
+        The clause-to-section map used to be asserted here as set equality AND again in
+        `test_every_construction_anchor_resolves`. Two writers of one claim, and set equality is
+        now the wrong claim besides: rows may share a section, so P02 has no heading of its own.
+        The map lives entirely in the anchor test, in both directions. What is left here is what
+        that test cannot see -- a heading that appears twice, and a heading over nothing.
+        """
         headings = [h for h in re.findall(r"^## (\S+)$", self.points_md, re.MULTILINE)
                     if h != "Contents"]
-        # A list, not a set: two entries under one id would survive set equality, and "one entry
-        # per clause" is the claim being checked.
+        # A list, not a set: two entries under one id would survive set equality, and one entry
+        # per heading is the claim being checked.
         self.assertEqual(len(headings), len(set(headings)), f"duplicate entry heading: {headings}")
-        # A heading over an empty section would satisfy set equality while covering nothing.
+        # A heading over an empty section resolves perfectly well while covering nothing, so the
+        # anchor test would pass on it.
         for chunk in re.split(r"^## ", self.points_md, flags=re.MULTILINE)[1:]:
             name, _, body = chunk.partition("\n")
             if name.strip() != "Contents":
                 self.assertTrue(
                     body.strip(), f"the {name.strip()} entry is an empty section under a heading"
                 )
-        self.assertEqual(
-            set(headings), set(self.ids),
-            f"clauses.json and POINTS.md disagree about which moments exist: "
-            f"entry with no clause {sorted(set(headings) - set(self.ids))}, "
-            f"clause with no entry {sorted(set(self.ids) - set(headings))}",
-        )
 
     def test_every_construction_anchor_resolves(self) -> None:
         """An anchor that does not resolve does not ship -- the product's own rule, applied to
-        itself. The loader pins anchor shape to the id; this resolves the fragment against the
-        page's actual headings, and requires the two unsolved rows to name their empty slot."""
+        itself. The loader checks anchor SHAPE and nothing more; this owns the page, so it
+        resolves every fragment against the actual headings and, in the other direction, refuses
+        a section no row claims. Rows may share a section -- P01 and P02 are one plan point split
+        by which ground a step is missing -- so this is a total map both ways, never a bijection.
+        """
         headings = {h.lower() for h in re.findall(r"^## (\S+)$", self.points_md, re.MULTILINE)}
+        headings.discard("contents")
+        claimed = set()
         for row in self.rows:
             anchor = row.get("construction")
-            if anchor is None:
-                why = row.get("why_none") or ""
-                self.assertTrue(why.strip(), f"{row['id']}: null construction with no why_none")
-                self.assertIn(
-                    f"POINTS.md#{row['id'].lower()}", why,
-                    f"{row['id']}: why_none does not name the clause's honest empty slot",
-                )
-                self.assertIn(row["id"].lower(), headings,
-                              f"{row['id']}: the empty slot's section is itself missing")
-                continue
+            self.assertTrue(anchor, f"{row['id']}: no construction anchor")
             self.assertNotIn("why_none", row,
-                             f"{row['id']}: both an anchor and a why_none")
+                             f"{row['id']}: why_none is gone from the schema; this row kept one")
             page, _, fragment = anchor.partition("#")
             self.assertEqual(page, "POINTS.md", f"{row['id']}: anchor into the wrong page")
             self.assertIn(
@@ -155,6 +153,14 @@ class TheConstructionJoin(unittest.TestCase):
                 f"{row['id']}: construction anchor #{fragment} resolves to no heading in "
                 f"POINTS.md -- a pairing that does not resolve does not ship",
             )
+            claimed.add(fragment)
+        # The other direction. Without this, deleting a row silently orphans its section and the
+        # page keeps prose nothing enforces -- the exact rot the generated-view comparison exists
+        # to catch, one document over.
+        self.assertEqual(
+            headings - claimed, set(),
+            f"POINTS.md sections no clause row anchors to: {sorted(headings - claimed)}",
+        )
 
     def test_the_contents_table_reaches_every_entry(self) -> None:
         """POINTS.md is past 100 lines, so a partial read has to still show what is in it."""
@@ -163,14 +169,32 @@ class TheConstructionJoin(unittest.TestCase):
         self.assertIsNotNone(contents, "POINTS.md has no Contents section")
         table_rows = [l for l in contents.group(1).splitlines() if l.startswith("|")]
         self.assertTrue(table_rows, "the Contents section carries no table rows at all")
-        linked = set(re.findall(r"\]\(#([a-z0-9-]+)\)", "\n".join(table_rows)))
-        expected = {clause_id.lower() for clause_id in self.ids}
+        # Label and target separately, because they are no longer the same claim. Every clause
+        # must be LISTED (its own id is the label a reader scans for), but a listed clause may
+        # link to a section it shares -- P02 is listed under its own name and points at #p01.
+        links = re.findall(r"\[([A-Za-z0-9-]+)\]\(#([a-z0-9-]+)\)", "\n".join(table_rows))
+        # A label may be a clause's full id or its short form -- the table lists `C03` for
+        # `C03-verify-what-returns` so the row fits. A short form counts only when it resolves
+        # to exactly ONE shipped clause; an ambiguous one names nothing in particular.
+        labelled = set()
+        for label, _ in links:
+            hits = [i for i in self.ids if i == label or i.startswith(f"{label}-")]
+            self.assertEqual(len(hits), 1,
+                             f"contents label {label!r} resolves to {sorted(hits)}, not one clause")
+            labelled.add(hits[0])
+        expected = set(self.ids)
         self.assertEqual(
-            linked, expected,
+            labelled, expected,
             f"the contents table and the entries disagree: "
-            f"linked but absent {sorted(linked - expected)}, "
-            f"present but unlinked {sorted(expected - linked)}",
+            f"listed but absent {sorted(labelled - expected)}, "
+            f"present but unlisted {sorted(expected - labelled)}",
         )
+        # And every one of those links has to land somewhere. A row listing a clause and
+        # pointing at nothing reads as coverage from the table of contents alone.
+        headings = {h.lower() for h in re.findall(r"^## (\S+)$", self.points_md, re.MULTILINE)}
+        for label, target in links:
+            self.assertIn(target, headings,
+                          f"contents row {label} links to #{target}, which is no heading")
 
 
 class TheSevenActs(unittest.TestCase):

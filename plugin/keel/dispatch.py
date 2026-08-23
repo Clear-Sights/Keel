@@ -137,13 +137,10 @@ def _keyed_reason(clause, subject: str) -> str:
 # is never needed again. A pointer, never an inlined command: the construction is authored prose
 # with its own caveats, and a one-line paraphrase here would be a second writer of that fact.
 # Composed at render time from the clause's own `construction` field, so the pointer cannot
-# drift from the table -- one writer, read twice. The two unsolved points name their honest
-# empty slot instead, derived from the id the same way the loader pins anchors to ids.
+# drift from the table -- one writer, read twice. Every row carries an anchor and the loader
+# refuses one that does not, so there is no absent case for this to paper over.
 def _construction(clause) -> str:
-    anchor = getattr(clause, "construction", None)
-    if anchor:
-        return f" Construction: {anchor}."
-    return f" Construction: none yet -- POINTS.md#{clause.id.lower()} records why."
+    return f" Construction: {clause.construction}."
 
 
 def _segments(command: str) -> list[str]:

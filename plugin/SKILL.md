@@ -76,9 +76,10 @@ again.
 divergence. A rewrite that matched nothing, or forty places instead of one, stops being
 survivable.
 
-Each point's entry in [POINTS.md](POINTS.md) names which construction it takes; `P01` and `P02`
-carry none and say so — two points out of twenty-four are recorded unsolved rather than filled
-with something that merely reads like a construction.
+Each point's entry in [POINTS.md](POINTS.md) names which construction it takes. Every clause row
+carries one; there is no null case. Rows may share an entry when they are one point enforced
+twice — `P01` and `P02` are the same failure (a plan step adopted on ground never established)
+split by which ground is missing, so they anchor to one construction rather than restating it.
 
 ## The clause routes
 
@@ -97,8 +98,8 @@ this page cannot quietly lag the table it describes.
 | `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | observe a nonzero PostToolUse result from the same normalized checker invocation | [POINTS.md#c08-check-can-fail](POINTS.md#c08-check-can-fail) |
 | `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | run a process listing filtered by the shell or checker PID before trusting the match | [POINTS.md#c09-checker-excludes-self](POINTS.md#c09-checker-excludes-self) |
 | `D01` | fan out work with nothing probed first | probe the ground first with a read or a search, so the brief describes what is there | [POINTS.md#d01](POINTS.md#d01) |
-| `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | unsolved — [POINTS.md#p01](POINTS.md#p01) |
-| `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | unsolved — [POINTS.md#p02](POINTS.md#p02) |
+| `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | [POINTS.md#p01](POINTS.md#p01) |
+| `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | [POINTS.md#p01](POINTS.md#p01) |
 | `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](POINTS.md#t01) |
 | `T02` | end the run treating a push report as a landing | fetch or `git ls-remote` the ref after pushing | [POINTS.md#t02](POINTS.md#t02) |
 | `U01` | launch a nested worker | run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write` | [POINTS.md#u01](POINTS.md#u01) |
