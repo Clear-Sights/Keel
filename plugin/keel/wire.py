@@ -1,10 +1,10 @@
-"""gyroscope.wire -- the byte boundary: raw hook stdin -> a str the clause table can be run on.
+"""keel.wire -- the byte boundary: raw hook stdin -> a str the clause table can be run on.
 
 PORTED BY SHAPE from the sibling plugins, not imported. These three ship and version
 independently; a shared runtime import would make one plugin's install failure the whole bench's
 outage.
 
-WHY THIS EXISTS, IN GYROSCOPE'S OWN TERMS
+WHY THIS EXISTS, IN KEEL'S OWN TERMS
 `main()` opened with `sys.stdin.read()`. A hook subprocess inherits no LANG, so CPython enables
 UTF-8 mode and gives stdin the `surrogateescape` handler: a host byte that is not valid UTF-8
 enters as a lone surrogate rather than raising or being replaced. Nothing rejects it, and it flows
@@ -119,8 +119,8 @@ def _decode_counting(data: bytes):
     # utf-8-sig)"), so a structurally perfect payload took `main`'s unreadable_event path --
     # NOT-EVALUABLE, the whole clause table skipped for that call, the action allowed, and the
     # recorded reason ("unreadable event") false of the payload. Reproduced two-sided against
-    # a BOM-prefixed PreToolUse envelope: makoto parses, gyroscope refused. Makoto fixed this
-    # at the wire layer and Ward at its dispatch layer (`raw.lstrip("﻿")`); gyroscope was
+    # a BOM-prefixed PreToolUse envelope: makoto parses, keel refused. Makoto fixed this
+    # at the wire layer and Ward at its dispatch layer (`raw.lstrip("﻿")`); keel was
     # the one door in the family that never got it. A BOM is a legitimate encoding artifact,
     # not damage, so it does not count as a repair.
     try:

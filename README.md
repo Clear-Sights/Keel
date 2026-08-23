@@ -1,11 +1,14 @@
-# Gyroscope
+# Keel
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/gyroscope-hero-dark.png">
-  <img src="docs/img/gyroscope-hero-light.png" alt="Gyroscope — do not let the session derail irreversibly">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/keel-hero-dark.png">
+  <img src="docs/img/keel-hero-light.png" alt="Keel — do not let the session capsize irreversibly">
 </picture>
 
-**One purpose: do not let the session derail irreversibly.**
+**One purpose: do not let the session capsize irreversibly.**
+
+*Formerly Gyroscope; renamed at v2.0.0, when the positive half merged in. The mechanism is
+unchanged — GitHub redirects the old repository name.*
 
 The drift it opposes is the one where the DEFAULT is the unhealing issue. Not where an act
 is dangerous, not where something ends badly — where *doing nothing* lands you somewhere that
@@ -16,7 +19,7 @@ greenness is what ends the run, so investigating requires first reversing "it's 
 
 ## How it heals: reversal
 
-Gyroscope reverses that default. Where the session would otherwise capsize — the costly act just
+Keel reverses that default. Where the session would otherwise capsize — the costly act just
 runs, the cheap guard is forgotten — it makes denial the resting state, so what happens when
 nobody acts is the safe fate instead of the unhealing one. The method is a repricing, not a
 prohibition:
@@ -31,15 +34,24 @@ produces the safe outcome, so the rule is not defeated by ordinary forgetting, a
 mode is loud rather than silent: the thing you wanted requires an artifact that is either there
 or is not.
 
-## Why a gyroscope
+The repricing buys one session at a time. The pages shipped beside the clause table carry the
+other half: for each denied moment, the authored **construction** that makes the guard's outcome
+a property of the path — so on a path built right, the deny stops firing at all. Every clause row
+anchors its construction, and the fence refuses a pairing that does not resolve.
+
+## Why a keel
 
 A session is a flow — the default toward *proceed, it looks complete, keep going* reasserts at
 every turn, not once at entry, so one instruction at the entrance is spent by turn three. What
-holds a flow is a gyroscope: spun up once and then continuously present, opposing drift with
-matched force at every moment, requiring no attention and no trigger. It does not choose the
-direction — it prevents tumbling off the axis you set. That is why this is a hook registered on
-every event rather than something that runs at session start, and why there is a ledger: the
-ledger is the stored state that keeps the gyroscope spun up across turns, so each turn inherits
+holds a hull against standing pressure is a keel: built once, below the waterline, permanently
+there. It needs no spin, no attention and no trigger — being present is its whole job, which is
+why this is a hook registered on every event rather than something that runs at session start.
+And a keel does two things with the same wind. It keeps the hull from being capsized or shoved
+sideways — the deny half — and it is what makes sailing *toward* something possible at all: the
+same pressure that would only push the boat off course becomes headway — the construction half,
+where the default that used to cost you is turned into the thing that carries the work forward.
+It does not choose the course; it makes the course you set holdable. The ledger is the ballast
+bolted along it: the stored state that keeps the keel biting across turns, so each turn inherits
 the opposition instead of re-earning it.
 
 ## The mechanism
@@ -52,7 +64,7 @@ the opposition instead of re-earning it.
 A `PreToolUse` deny records a **demand**; a later call matching the clause's guard records a
 **discharge**; at `Stop` anything still open blocks. That is the whole model — the nine things
 that looked like separate Stop checks are one ledger read
-([`gyroscope/ledger.py`](plugin/gyroscope/ledger.py) states this where the mechanism is defined).
+([`keel/ledger.py`](plugin/keel/ledger.py) states this where the mechanism is defined).
 A licence is an **observed discharge**, never an absent demand — the absence of evidence is never
 treated as permission. Four properties of the ledger, each stated in the code it constrains:
 
@@ -76,17 +88,20 @@ treated as permission. Four properties of the ledger, each stated in the code it
   rather than papered over, because a scope that silently pools is worse than one that says it
   pools.
 
-This package carries two arms:
+`plugin/` is the whole package — exactly what the marketplace installs:
 
-- **`plugin/`** — the dispatcher (`gyroscope/`), the shipped clause table
-  (`gyroscope/clauses.json`, 24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook
-  manifests for both supported hosts. Every fingerprint is an exact predicate over command, tool,
-  or path identity — no clause infers intent from prose. The hook fails open: if the dispatcher
-  cannot run, it stays silent rather than blocking the host.
-- **`skill/`** — `SKILL.md` plus session hooks, wired via `hooks/settings.fragment.json`. This
-  arm covers the guards that leave no mark in a call sequence (clarify before committing to a
-  plan, confirm a checker can fail, run the entrypoint a user runs);
-  `gyroscope-sessionstart.sh` prints `SKILL.md` into context at session start.
+- **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,
+  24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both
+  supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity
+  — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it
+  stays silent rather than blocking the host.
+- **one skill** ([`plugin/SKILL.md`](plugin/SKILL.md), with
+  [`POINTS.md`](plugin/POINTS.md) and [`ACTS.md`](plugin/ACTS.md) beside it) — the positive
+  half. For each denied moment it names the construction that makes the guard unnecessary from
+  then on, and for the moments that leave no mark in a call sequence — budgets, plans, defaults,
+  reports — the seven acts carry the same reading. Each clause row's `construction` field
+  anchors into `POINTS.md`, so every negative is followed by its positive as a schema property
+  the loader checks, not a cross-document convention.
 
 ### Install
 
@@ -97,7 +112,7 @@ This package carries two arms:
 
 ### Manual bypass
 
-If serialized `tool_input` contains `gyroscope-allow:` followed by non-whitespace text,
+If serialized `tool_input` contains `keel-allow:` followed by non-whitespace text,
 `PreToolUse` returns an empty decision before evaluating any clause.
 
 ## Honest limitations
@@ -124,15 +139,15 @@ Limits before capability claims — read these before the clause table below.
   live-model measured; the replay proves where the dispatcher fires, not what an agent does about
   it.
 
-## What Gyroscope writes down
+## What Keel writes down
 
 `obligations.jsonl` is a **ledger**, not a log: it records outstanding obligations, so a session in
 which every clause passed leaves nothing behind — and so does a session in which the plugin never
-ran. "Did Gyroscope catch anything?" therefore had no answer at all. Not "no": *unanswerable*,
+ran. "Did Keel catch anything?" therefore had no answer at all. Not "no": *unanswerable*,
 which is indistinguishable from never-installed, and which is the same absence-reads-as-green
 failure this plugin refuses to accept from a session.
 
-`gyroscope/journal.py` closes that. It appends to `decisions.jsonl` beside the ledger: one
+`keel/journal.py` closes that. It appends to `decisions.jsonl` beside the ledger: one
 `session` row the first time a session is seen, carrying the loaded **clause count** — a row saying
 `clauses: 0` is a gate that checked nothing while everyone believes it is on — plus one row per
 `deny`, per terminal `block` (including clean reconciliations, which are a positive result a
@@ -140,54 +155,54 @@ fires-only log would erase), per `fault`, and per repaired envelope. There is de
 per allowed call.
 
 Every row names `plugin`, `session_id`, `agent_id` and `tool_name`, and every deny and block on the
-wire is now prefixed `gyroscope:`. Three plugins register `PreToolUse` and the host shows the user
+wire is now prefixed `keel:`. Three plugins register `PreToolUse` and the host shows the user
 a reason but never a source.
 
-`fault` rows carry `failed_closed`, which makes Gyroscope's split direction — carriage open,
+`fault` rows carry `failed_closed`, which makes Keel's split direction — carriage open,
 decision closed — checkable against the record rather than against its docstrings. See
 [Courthouse docs/FAIL-DIRECTION.md](https://github.com/Clear-Sights/Courthouse/blob/main/docs/FAIL-DIRECTION.md).
 
 ## The shipped clause table
 
-The dispatcher loads `plugin/gyroscope/clauses.json` — 24 admitted clauses, every one carrying
-positive and negative fixtures checked at load. Two tiers, split by whether the guard is a
-universal command or names environment-specific tooling.
+The dispatcher loads `plugin/keel/clauses.json` — 24 admitted clauses, every one carrying
+positive and negative fixtures checked at load. The table below is a generated view of that
+file, byte-compared against it by the test fence on every push, so it cannot quietly lag the
+artifact the dispatcher loads. Each row's construction column anchors the clause's positive
+half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
-### Portable (guards are universal commands)
+<!-- BEGIN GENERATED: clause-routes | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
 
-| ID | Costly fate | Guard |
-| --- | --- | --- |
-| `A01` | `git push` with nothing on record about what is staged | `git status` first |
-| `A02` | bulk delete (`rm -rf`, `find -delete`, `git clean -f`) over a set never listed | `ls`, `find` (without `-delete`), `du`, or `git status` first |
-| `A03` | `git push --force` over a ref never fetched (`--force-with-lease` is exempt) | `git fetch` first |
-| `C03-verify-what-returns` | Stop after delegated work returned, with no returned artifact read | a `Read` after dispatch, before stopping |
-| `C08-check-can-fail` | Stop after a checker ran whose PASS may be cited as evidence | an observed **nonzero** exit from the same normalized checker invocation |
-| `C09-checker-excludes-self` | infer process presence from `ps \| grep` where the checker can match itself | a listing that excludes the shell/checker PID (`grep -v $$`, awk `!=`) |
-| `D01` | dispatch work to a subagent with no ground probed | a `Read`, `Glob`, or `Grep` first |
-| `P01` | present a plan with nothing read from this repository | a `Read`, `Glob`, or `Grep` first |
-| `P02` | present a plan whose ambiguities were settled by guessing | one `AskUserQuestion` first |
-| `T01` | Stop with `git status` never run this session | `git status` at least once |
-| `T02` | Stop after a push whose landing was never checked | `git fetch` or `git ls-remote` after pushing |
-| `U03` | use a PID in a signal operation (`kill`, `pkill`, `killall`) | `ps` or `pgrep` first |
-| `U06` | `curl -X POST/PUT/PATCH/DELETE` to an external service | an authenticated read canary (`curl -H 'Authorization: ...'`) |
-| `U08` | create a signed git commit (`-S`/`--gpg-sign`) | a signer canary (`gpg --clearsign` / `--detach-sign`) |
-| `U09` | `git switch`/`checkout` of a ref not known to exist | `git rev-parse --verify REF`, or creating it (`-b`/`-B`, `git branch REF`) |
-| `U10` | traverse structured JSON blind (`jq .field` with no assertion) | a `jq` structure assertion (`-e`, `keys`, `type`, `has(...)`) on the same file |
-| `U12` | apply a patch to unread context | `rg`/`grep` for the patch context first |
-| `U13` | apply a `.patch`/`.diff` file unchecked | `git apply --check PATCH` first |
-| `U19` | in-place text rewrite (`sed -i`, `perl -pi`) | `rg`/`grep` the pattern, or `cmp`/checksum the file first |
-| `U20` | destructive behavior-changing mutation (`rm`, `git reset --hard`, `truncate`) | an independent behavior observer (the relevant test or probe) first |
-| `U24` | publish/release (`npm publish`, `twine upload`, `cargo publish`) | the suite with warnings promoted to errors |
+| ID | Costly fate | Guard | Construction |
+| --- | --- | --- | --- |
+| `A01` | push without knowing what is staged or which branch is current | run `git status` first | [POINTS.md#a01](plugin/POINTS.md#a01) |
+| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first (`ls`, `find` without -delete, or `git status`) | [POINTS.md#a02](plugin/POINTS.md#a02) |
+| `A03` | overwrite remote history that was never read, discarding commits with no local copy | fetch the ref first (`git fetch`) | [POINTS.md#a03](plugin/POINTS.md#a03) |
+| `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](plugin/POINTS.md#c03-verify-what-returns) |
+| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | observe a nonzero PostToolUse result from the same normalized checker invocation | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
+| `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | run a process listing filtered by the shell or checker PID before trusting the match | [POINTS.md#c09-checker-excludes-self](plugin/POINTS.md#c09-checker-excludes-self) |
+| `D01` | fan out work with nothing probed first | probe the ground first with a read or a search, so the brief describes what is there | [POINTS.md#d01](plugin/POINTS.md#d01) |
+| `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | [POINTS.md#p01](plugin/POINTS.md#p01) |
+| `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | [POINTS.md#p01](plugin/POINTS.md#p01) |
+| `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](plugin/POINTS.md#t01) |
+| `T02` | end the run treating a push report as a landing | fetch or `git ls-remote` the ref after pushing | [POINTS.md#t02](plugin/POINTS.md#t02) |
+| `U01` | launch a nested worker | run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write` | [POINTS.md#u01](plugin/POINTS.md#u01) |
+| `U02` | re-launch a nested-worker target | run `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change` | [POINTS.md#u02](plugin/POINTS.md#u02) |
+| `U03` | use a PID in a signal operation | run `ps`, `pgrep`, or an equivalent observer-namespace process listing | [POINTS.md#u03](plugin/POINTS.md#u03) |
+| `U06` | send a mutating request to an external service | run an authenticated read canary such as `curl ... -H 'Authorization: ...'` | [POINTS.md#u06](plugin/POINTS.md#u06) |
+| `U08` | create a signed git commit | run a signer canary such as `printf test \| gpg --clearsign` | [POINTS.md#u08](plugin/POINTS.md#u08) |
+| `U09` | switch or check out a git ref | know the ref exists: `git rev-parse --verify REF`, or have created it yourself with `git checkout -b/-B REF` or `git branch REF` | [POINTS.md#u09](plugin/POINTS.md#u09) |
+| `U10` | traverse structured JSON data | look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file | [POINTS.md#u10](plugin/POINTS.md#u10) |
+| `U12` | apply a patch | run `rg`/`grep` for the patch context and read the target immediately before applying | [POINTS.md#u12](plugin/POINTS.md#u12) |
+| `U13` | apply a generated patch | run `git apply --check PATCH` first | [POINTS.md#u13](plugin/POINTS.md#u13) |
+| `U19` | perform an in-place text rewrite | look at the text you are about to rewrite: `rg`/`grep` for the pattern, or `cmp`/checksum the file | [POINTS.md#u19](plugin/POINTS.md#u19) |
+| `U20` | make a destructive behavior-changing mutation | run an independent behavior observer such as the relevant test or probe first | [POINTS.md#u20](plugin/POINTS.md#u20) |
+| `U24` | publish or release an artifact after runtime testing | run the suite with warnings promoted to errors on a supported runtime | [POINTS.md#u24](plugin/POINTS.md#u24) |
+| `U25` | run a scanner as an acceptance check | run its prefix-distractor regression test first | [POINTS.md#u25](plugin/POINTS.md#u25) |
 
-### Environment-specific (guards or fingerprints name repo-local tooling)
+<!-- END GENERATED: clause-routes -->
 
-| ID | Costly fate | Guard |
-| --- | --- | --- |
-| `U01` | launch a nested worker (`dispatch.sh`) | `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write` |
-| `U02` | re-launch a nested-worker target (`dispatch.sh TARGET`) | `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change` |
-| `U25` | run a scanner (`python3 *scan*.py`, scanner test suites) as an acceptance check | its prefix-distractor regression test first |
-
-What happens when the named tooling does not exist in the current repository — read from the
+Three clauses (`U01`, `U02`, `U25`) name repository-local tooling in their guards or
+fingerprints. What happens when that tooling does not exist in the current repository — read from the
 dispatch code, not guessed:
 
 - **The demand is raised anyway.** `pre_tool_use` demands whenever a clause's fingerprint matches,
@@ -200,14 +215,6 @@ dispatch code, not guessed:
   contains `prefix` or `distractor`. Per the discharge limit above, the ledger records that such a
   command was *invoked*, not that the named regression test exists or passed.
 
-Two clause IDs in the generated [`plugin/SKILL.md`](plugin/SKILL.md) — `U05` ("mutate a filesystem
-target", guarded by `test -w`) and `U18` ("write, move, or delete a filesystem target", guarded by
-`realpath`/`readlink -f`) — read as colliding: their costly-fate domains overlap almost entirely.
-Stated honestly rather than resolved: **neither ID is present in the shipped 24-clause bundle**
-(nor are `U07`, `U11`, `U14`, `U15`, `U17`), so the dispatcher never evaluates them; the overlap
-exists only in the generated skill text, which lags the shipped table. The table above is derived
-from `clauses.json`, the artifact the dispatcher actually loads.
-
 ## Evidence
 
 `python3 eval/replay.py` from the repository root replays recorded sessions through the real
@@ -219,21 +226,21 @@ stays silent — 5/5, standard library only, exit 0 iff every session meets its 
 ## Why this is not a deny list
 
 [Ward](https://github.com/Clear-Sights/Ward), a sibling plugin, is a deny list: its verdict is a
-pure function of one event. For a matching costly call, Gyroscope's decision
+pure function of one event. For a matching costly call, Keel's decision
 is a function of `(event, ledger)`: it is denied before the clause's guard discharge and admitted
-afterward. Gyroscope does not substitute a safer action and does not remove a fate — it changes
+afterward. Keel does not substitute a safer action and does not remove a fate — it changes
 whether the *same* call executes now or waits until its licensing evidence exists.
 
 ## Siblings
 
-Gyroscope is one of three engines that split one taxonomy — act, sequence, statement — and share
+Keel is one of three engines that split one taxonomy — act, sequence, statement — and share
 nothing else. All three install from the [Courthouse](https://github.com/Clear-Sights/Courthouse)
 marketplace: `claude plugin marketplace add Clear-Sights/Courthouse`.
 
 | Engine | Judges | One line |
 |---|---|---|
 | [**Ward**](https://github.com/Clear-Sights/Ward) | the pending **act** | nothing outright bad happens |
-| **Gyroscope** (this repo) | the **sequence** | a session neither capsizes nor gets lost |
+| **Keel** (this repo) | the **sequence** | a session neither capsizes nor gets lost |
 | [**Makoto**](https://github.com/Clear-Sights/Makoto) | the **statement** | words aren't empty |
 
 ## License

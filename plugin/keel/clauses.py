@@ -13,6 +13,11 @@ import sys
 from typing import Any
 
 
+# A construction anchor names a section of the page shipped beside this table. Shape only: the
+# fence resolves it, so anything stricter here would be a second opinion about a fact the fence
+# already owns -- and a wrong one, since rows may legitimately share a section.
+_CONSTRUCTION_ANCHOR = re.compile(r"POINTS\.md#[a-z0-9][a-z0-9-]*")
+
 _EVENTS = {
     "PreToolUse",
     "PostToolUse",
@@ -59,6 +64,18 @@ class Clause:
     # default-dead, never the clause: on the day it lapses the clause enforces again and the
     # lapse is announced, so doing nothing restores the check rather than retiring it.
     waiver: dict[str, Any] | None = None
+    # The clause's positive half: an anchor into the constructions page shipped beside this
+    # table ("POINTS.md#a01"), naming what to build so this guard is never needed again.
+    # "Every negative followed by its true positive" is a property this loader checks, not a
+    # cross-document convention -- every row carries one, with no null case.
+    #
+    # SEVERAL ROWS MAY SHARE ONE ANCHOR. A point can need more than one row to enforce because
+    # the rows key on different discharges, not because it is more than one point: P01 and P02
+    # are one plan point split by which ground a step is missing. Pinning the fragment to the
+    # row's own id would make that unrepresentable and force the page to say it twice. So this
+    # loader checks SHAPE only; resolution against the page's actual headings, and that no
+    # section is left unclaimed, is the test fence's half -- it owns the page, this owns the row.
+    construction: str = ""
 
 
 def waiver_status(clause: Clause, today: date | None = None) -> str:
@@ -300,7 +317,7 @@ def match(clause: Clause, event: dict) -> bool:
     """
     result = _predicate(clause.fingerprint, event)
     if result is None:
-        print(f"gyroscope: [{clause.id}] probe NOT-EVALUABLE -- treating the occasion as live",
+        print(f"keel: [{clause.id}] probe NOT-EVALUABLE -- treating the occasion as live",
               file=sys.stderr)
         return True
     return result
@@ -311,7 +328,7 @@ def discharges(clause: Clause, event: dict) -> bool | None:
         return False
     result = _predicate(clause.discharged_by, event)
     if result is None:
-        print(f"gyroscope: [{clause.id}] probe NOT-EVALUABLE, not a pass", file=sys.stderr)
+        print(f"keel: [{clause.id}] probe NOT-EVALUABLE, not a pass", file=sys.stderr)
     return result
 
 
@@ -416,6 +433,11 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EVENT-UNKNOWN", f"{clause.id}: {clause.event}")
     if not clause.fixtures_pos or not clause.fixtures_neg:
         raise ClauseError("CLAUSE-NO-FIXTURES", clause.id)
+    # The pairing rule: every row names its positive half, with no null case. Shape only --
+    # whether the section EXISTS, and whether any section goes unclaimed, is the fence's half.
+    if not _CONSTRUCTION_ANCHOR.fullmatch(clause.construction or ""):
+        raise ClauseError("CLAUSE-CONSTRUCTION-MISSHAPEN",
+                          f"{clause.id}: {clause.construction!r}")
     _compile(clause.fingerprint, clause.id)
     _compile(clause.activated_by, clause.id)
     _compile(clause.discharged_by, clause.id)
@@ -453,6 +475,7 @@ def _load_object(data: dict[str, Any]) -> Clause:
         activated_by=data.get("activated_by"),
         fixtures_activate=data.get("fixtures_activate"),
         waiver=data.get("waiver"),
+        construction=data.get("construction") or "",
     )
     return _admit(clause)
 

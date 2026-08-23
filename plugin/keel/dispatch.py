@@ -38,7 +38,7 @@ from .ledger import Demand, Ledger, derive_id
 # quoting the documentation. A doc audit against the code caught it. The exemption stays
 # on-the-record and auditable, never a disguise: it must be its own line, in the command being
 # run, and it must carry a reason.
-ALLOW = re.compile(r"(?m)^\s*(?:#|//|--)?\s*gyroscope-allow:\s*(\S.*)$")
+ALLOW = re.compile(r"(?m)^\s*(?:#|//|--)?\s*keel-allow:\s*(\S.*)$")
 ALLOW_FIELDS = ("tool_input.command",)
 
 
@@ -90,13 +90,13 @@ def _subject(clause, event: dict) -> str:
     return str(_get(event, spec) or "")[:200]
 
 
-# THE AUTHOR OF A DENY MUST BE ON THE DENY. Ward, Gyroscope and Makoto all register PreToolUse and
+# THE AUTHOR OF A DENY MUST BE ON THE DENY. Ward, Keel and Makoto all register PreToolUse and
 # all three can refuse a call; the host shows the user a reason, not a source. With three
 # unattributed reasons in play, "which plugin blocked this?" was answerable only by guessing from
 # wording -- and after the fact, not at all. Both siblings already prefix their own name; this is
 # the third. It costs one word and makes every refusal in the transcript joinable to the row in
 # `decisions.jsonl` that recorded it.
-_PREFIX = "gyroscope"
+_PREFIX = "keel"
 
 
 def _deny(reason: str) -> dict:
@@ -126,10 +126,21 @@ def _keyed_reason(clause, subject: str) -> str:
     base = f"[{clause.id}] {clause.deny_reason}"
     if isinstance(clause.subject, dict):
         if not subject:
-            return base
+            return base + _construction(clause)
         return (f"{base} -- keyed on `{subject}`, so the guard must name `{subject}` too; "
-                f"the same guard on another target does not discharge this.")
-    return f"{base} -- discharges once per session, for every target."
+                f"the same guard on another target does not discharge this."
+                + _construction(clause))
+    return f"{base} -- discharges once per session, for every target.{_construction(clause)}"
+
+
+# The deny names the guard that buys THIS session; the pointer names what to build so the guard
+# is never needed again. A pointer, never an inlined command: the construction is authored prose
+# with its own caveats, and a one-line paraphrase here would be a second writer of that fact.
+# Composed at render time from the clause's own `construction` field, so the pointer cannot
+# drift from the table -- one writer, read twice. Every row carries an anchor and the loader
+# refuses one that does not, so there is no absent case for this to paper over.
+def _construction(clause) -> str:
+    return f" Construction: {clause.construction}."
 
 
 def _segments(command: str) -> list[str]:
@@ -170,7 +181,7 @@ def _context(text: str, event_name: str = "SessionStart") -> dict:
 
 def _closed_not_evaluable(event: dict, detail: str) -> dict | None:
     """Return the closed wire for a known event; None means only exit status can express it."""
-    reason = f"gyroscope could not evaluate this event: {detail} -- NOT-EVALUABLE, not a pass"
+    reason = f"keel could not evaluate this event: {detail} -- NOT-EVALUABLE, not a pass"
     name = event.get("hook_event_name")
     if name == "PreToolUse":
         return _deny(reason)
@@ -315,7 +326,7 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     try:
         open_rows = ledger.open_demands(session, agent)
     except Exception as exc:
-        return _block(f"gyroscope could not read its ledger: {type(exc).__name__} "
+        return _block(f"keel could not read its ledger: {type(exc).__name__} "
                       "-- NOT-EVALUABLE, not a pass")
     undischarged = []
     event_name = event.get("hook_event_name", "Stop")
@@ -335,11 +346,11 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
         status = C.waiver_status(cl)
         if status == "live":
             waiver = cl.waiver or {}
-            print(f"gyroscope: [{cl.id}] PARKED by waiver until {waiver.get('until')} -- "
+            print(f"keel: [{cl.id}] PARKED by waiver until {waiver.get('until')} -- "
                   f"{waiver.get('because', '')}", file=sys.stderr)
             continue
         if status == "expired":
-            print(f"gyroscope: [{cl.id}] waiver EXPIRED -- enforcing again. Re-argue the "
+            print(f"keel: [{cl.id}] waiver EXPIRED -- enforcing again. Re-argue the "
                   "research and write a new date, or fix the guard.", file=sys.stderr)
         # Keyed activations materialize their own per-key demand rows as the occasions arrive.
         # They need no synthetic session-wide standing row; open_demands above reconciles them.
@@ -367,7 +378,7 @@ def session_start(table, ledger: Ledger, event: dict) -> dict:
     try:
         rows = " | ".join(f"{c.id}: {c.guard}" for c in table)
         event_name = event.get("hook_event_name", "SessionStart")
-        return _context(f"gyroscope active, {len(table)} clauses. {rows}", event_name)
+        return _context(f"keel active, {len(table)} clauses. {rows}", event_name)
     except Exception:
         return {}
 
@@ -387,7 +398,7 @@ def _record(event: dict, out: dict) -> None:
 
     The decision has already been made by the time this runs, and nothing here can change it -- see
     `journal`'s module docstring for why the log is deliberately powerless. What it buys is that
-    "did Gyroscope catch anything this session?" stops being unanswerable.
+    "did Keel catch anything this session?" stops being unanswerable.
     """
     try:
         hook = event.get("hook_event_name")
@@ -486,12 +497,12 @@ def main() -> int:
         # escape, which json.loads materializes as a real lone surrogate. `read_stdin` cannot see
         # that one -- the escape is plain ASCII in the raw text -- so the parsed object is scrubbed
         # too. Both doors end at the same `derive_id` raise, and a raise there is swallowed by the
-        # per-clause isolation as a SILENT ABSTENTION. See `gyroscope.wire`.
+        # per-clause isolation as a SILENT ABSTENTION. See `keel.wire`.
         # Counted SEPARATELY, never summed into `repaired`: one counts undecodable bytes, the
         # other counts surrogate escapes that were valid ASCII on the wire. See `note_repair`.
         event, escaped = wire.scrub(event)
     except Exception as exc:
-        print(f"gyroscope: unreadable event ({type(exc).__name__}) -- NOT-EVALUABLE", file=sys.stderr)
+        print(f"keel: unreadable event ({type(exc).__name__}) -- NOT-EVALUABLE", file=sys.stderr)
         journal.note_fault({}, "unreadable_event", type(exc).__name__, failed_closed=False)
         print("{}")
         return 0
@@ -512,7 +523,7 @@ def main() -> int:
         # domain, so the floor lives here and not in reconcile(), which owns reconciliation and is
         # legitimately handed an empty table by callers isolating the ledger.
         if not table:
-            print("gyroscope: 0 clauses loaded from "
+            print("keel: 0 clauses loaded from "
                   f"{C.default_dir()} -- NOT-EVALUABLE, nothing was checked", file=sys.stderr)
             # The strongest "nothing was checked" signal there is, and previously it existed only
             # as a stderr line -- i.e. in the debug log, where a hook that exits 0 sends output
@@ -522,12 +533,12 @@ def main() -> int:
                                failed_closed=event.get("hook_event_name") in ("Stop", "SubagentStop"))
             if event.get("hook_event_name") in ("Stop", "SubagentStop"):
                 print(json.dumps(_block(
-                    "gyroscope loaded 0 clauses -- NOT-EVALUABLE, not a pass. Nothing was checked "
+                    "keel loaded 0 clauses -- NOT-EVALUABLE, not a pass. Nothing was checked "
                     "this session, so this is not a clean run.")))
                 return 0
         out = HANDLERS.get(event.get("hook_event_name"), pre_tool_use)(table, Ledger(), event)
     except Exception as exc:
-        print(f"gyroscope: {type(exc).__name__} -- NOT-EVALUABLE, failing closed", file=sys.stderr)
+        print(f"keel: {type(exc).__name__} -- NOT-EVALUABLE, failing closed", file=sys.stderr)
         out = _closed_not_evaluable(event, type(exc).__name__)
         journal.note_fault(event, "evaluation", type(exc).__name__, failed_closed=out is not None)
         if out is None:
@@ -536,7 +547,7 @@ def main() -> int:
     try:
         encoded = json.dumps(out)
     except Exception as exc:
-        print(f"gyroscope: {type(exc).__name__} while serializing -- NOT-EVALUABLE, failing closed",
+        print(f"keel: {type(exc).__name__} while serializing -- NOT-EVALUABLE, failing closed",
               file=sys.stderr)
         closed = _closed_not_evaluable(event, f"serialization {type(exc).__name__}")
         journal.note_fault(event, "serialization", type(exc).__name__,

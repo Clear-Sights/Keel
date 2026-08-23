@@ -2,10 +2,10 @@
 
 TWO DEFECTS.
 
-1. NO LOG. Gyroscope hooks six event families and wrote nothing down unless a demand was actually
+1. NO LOG. Keel hooks six event families and wrote nothing down unless a demand was actually
    raised. `obligations.jsonl` is a LEDGER -- outstanding obligations only -- so a session where
    every clause passed left the state directory empty, and so did a session where the plugin never
-   ran. "Did Gyroscope catch anything?" had no file to consult: not "no", but UNANSWERABLE, which
+   ran. "Did Keel catch anything?" had no file to consult: not "no", but UNANSWERABLE, which
    is indistinguishable from never-installed. This is the plugin's own "absence must never read as
    green" law, which it enforces against the session's clause table, finally applied to itself.
 
@@ -34,8 +34,8 @@ PLUGIN_ROOT = PLUGIN
 
 def run(raw: bytes, state_dir: Path) -> dict:
     env = os.environ.copy()
-    env["GYROSCOPE_STATE_DIR"] = str(state_dir)
-    proc = subprocess.run([sys.executable, "-m", "gyroscope.dispatch"], input=raw,
+    env["KEEL_STATE_DIR"] = str(state_dir)
+    proc = subprocess.run([sys.executable, "-m", "keel.dispatch"], input=raw,
                           capture_output=True, env=env, cwd=str(PLUGIN_ROOT))
     return json.loads(proc.stdout.decode() or "{}")
 
@@ -98,7 +98,7 @@ class TestTheRecord(StateCase):
         run(DESTRUCTIVE, self.state)
         self.assertTrue(rows(self.state))
         for row in rows(self.state):
-            self.assertEqual(row["plugin"], "gyroscope")
+            self.assertEqual(row["plugin"], "keel")
             self.assertIn("session_id", row)
             self.assertIn("tool_name", row)
             self.assertIn("hook_event", row)
@@ -137,7 +137,7 @@ class TestTheRecord(StateCase):
         import contextlib
         import io
 
-        from gyroscope import dispatch
+        from keel import dispatch
 
         class FakeStdin:
             def __init__(self, data):
@@ -154,17 +154,17 @@ class TestTheRecord(StateCase):
         out, err = io.StringIO(), io.StringIO()
         state = tempfile.mkdtemp()
         real_stdin, sys.stdin = sys.stdin, FakeStdin(raw)
-        real_state = os.environ.get("GYROSCOPE_STATE_DIR")
-        os.environ["GYROSCOPE_STATE_DIR"] = state
+        real_state = os.environ.get("KEEL_STATE_DIR")
+        os.environ["KEEL_STATE_DIR"] = state
         try:
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = dispatch.main()
         finally:
             sys.stdin = real_stdin
             if real_state is None:
-                os.environ.pop("GYROSCOPE_STATE_DIR", None)
+                os.environ.pop("KEEL_STATE_DIR", None)
             else:
-                os.environ["GYROSCOPE_STATE_DIR"] = real_state
+                os.environ["KEEL_STATE_DIR"] = real_state
         return code, out.getvalue()
 
     def test_journal_failure_never_changes_a_verdict(self):
@@ -186,7 +186,7 @@ class TestTheRecord(StateCase):
         input -- the verdict then legitimately becomes "could not evaluate", so that version of
         the test would assert the opposite of the property on a system behaving correctly.
         """
-        from gyroscope import journal
+        from keel import journal
 
         healthy_code, healthy = self._main_on(DESTRUCTIVE)
         self.assertEqual(healthy_code, 0)
@@ -203,7 +203,7 @@ class TestTheRecord(StateCase):
 
     def test_every_journal_entry_point_swallows_its_own_failure(self):
         """The other half, kept separate so a raise is attributable to ONE entry point."""
-        from gyroscope import journal
+        from keel import journal
         original = journal._append
         journal._append = lambda *a, **k: (_ for _ in ()).throw(OSError("disk full"))
         self.addCleanup(setattr, journal, "_append", original)
@@ -223,11 +223,11 @@ class TestAttribution(StateCase):
     def test_deny_names_the_plugin_on_the_wire(self):
         body = run(DESTRUCTIVE, self.state)
         reason = body["hookSpecificOutput"]["permissionDecisionReason"]
-        self.assertTrue(reason.startswith("gyroscope: "), reason)
+        self.assertTrue(reason.startswith("keel: "), reason)
 
     def test_terminal_block_names_the_plugin_on_the_wire(self):
         body = run(b'{"hook_event_name":"Stop","session_id":"g-attr"}', self.state)
-        self.assertTrue(body["reason"].startswith("gyroscope: "), body)
+        self.assertTrue(body["reason"].startswith("keel: "), body)
 
 
 class TestByteBoundary(StateCase):
@@ -266,7 +266,7 @@ class TestByteBoundary(StateCase):
         took `main`'s unreadable_event path: NOT-EVALUABLE, the whole 24-clause table skipped for
         that call, the destructive command ALLOWED, and the recorded reason ("unreadable event")
         false of the payload. Makoto closed this at its wire layer and Ward at its dispatch layer;
-        gyroscope was the remaining door. Found by a cross-plugin duplicate index, not by a report.
+        keel was the remaining door. Found by a cross-plugin duplicate index, not by a report.
         """
         body = run(b"\xef\xbb\xbf" + DESTRUCTIVE, self.state)
         self.assertEqual(
@@ -280,7 +280,7 @@ class TestByteBoundary(StateCase):
         self.assertEqual([r for r in rows(self.state) if r["kind"] == "repair"], [])
 
     def test_legitimate_replacement_char_is_not_damage(self):
-        from gyroscope import wire
+        from keel import wire
         _text, n = wire._decode_counting("legit � char".encode("utf-8"))
         self.assertEqual(n, 0, "a payload that genuinely contains U+FFFD is clean, not damaged")
 
@@ -289,18 +289,18 @@ class TestByteBoundary(StateCase):
         RUN, so a truncated three-byte sequence -- two undecodable bytes -- reported 1, under a
         field named "bytes repaired". `surrogateescape` maps each bad BYTE to one surrogate, so the
         count means what the field says."""
-        from gyroscope import wire
+        from keel import wire
         self.assertEqual(wire._decode_counting(b"\xe2\x82")[1], 2)
         self.assertEqual(wire._decode_counting(b"x\x9dy")[1], 1)
 
     def test_scrub_counts_and_removes(self):
-        from gyroscope import wire
+        from keel import wire
         text, n = wire.scrub_text("a\ud89db\udc9dc")
         self.assertEqual(n, 2)
         self.assertFalse(any("\ud800" <= c <= "\udfff" for c in text))
 
     def test_scrub_returns_clean_input_untouched(self):
-        from gyroscope import wire
+        from keel import wire
         original = {"a": ["b", {"c": "d"}]}
         value, n = wire.scrub(original)
         self.assertEqual(n, 0)
@@ -317,12 +317,16 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
 
     def _round_trip(self, subject):
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import dispatch
+        from keel import dispatch
 
         class Clause:
             id = "A02"
             deny_reason = "list the set first"
             subject = {"extract": "path"}
+            # Every loaded clause carries an anchor -- the loader refuses one that does not, so
+            # a double without it stands in for a row that cannot exist. `_keyed_reason` appends
+            # the pointer on every path, and the round trip has to read back past it.
+            construction = "POINTS.md#a02"
 
         return dispatch._subject_of(dispatch._keyed_reason(Clause(), subject))
 
@@ -339,12 +343,13 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
         """The empty answer must stay reachable: a session-scoped clause names no subject, and
         reading one out of its message would point the session at its own id."""
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import dispatch
+        from keel import dispatch
 
         class SessionClause:
             id = "T01"
             deny_reason = "run git status first"
             subject = "session_id"
+            construction = "POINTS.md#t01"
 
         self.assertEqual(
             dispatch._subject_of(dispatch._keyed_reason(SessionClause(), "drive")), "")
@@ -357,13 +362,14 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
         from the one direction the backtick cases could not see.
         """
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import dispatch
+        from keel import dispatch
 
         class TalkativeClause:
             id = "X01"
             deny_reason = ("prerequisite keyed on `wrong`, so the guard must name `wrong` "
                            "too; spelled exactly as the renderer spells it")
             subject = {"extract": "path"}
+            construction = "POINTS.md#x01"
 
         reason = dispatch._keyed_reason(TalkativeClause(), "real-target")
         self.assertIn("must name `real-target`", reason)
@@ -385,7 +391,7 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
         is the opposite direction and the one the backtick cases cannot reach.
         """
         smoke_replace(
-            self, PLUGIN / "gyroscope" / "dispatch.py",
+            self, PLUGIN / "keel" / "dispatch.py",
             b'    r"keyed on `(.{1,2000}?)`, so the guard must name `(.{1,2000}?)` too; ", re.DOTALL)',
             b'    r"keyed on `([^`]{1,200})`, so the guard must name `([^`]{1,200})` too; ")',
             "tests.test_journal_and_wire.TestTheSubjectSurvivesTheRoundTrip"
@@ -394,7 +400,7 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
         # The other half of the same property, planted separately because it fails from the other
         # direction: reading the FIRST match instead of the last.
         smoke_replace(
-            self, PLUGIN / "gyroscope" / "dispatch.py",
+            self, PLUGIN / "keel" / "dispatch.py",
             b'    for last in _KEYED_ON_RX.finditer(reason or ""):\n        pass\n',
             b'    last = _KEYED_ON_RX.search(reason or "")\n',
             "tests.test_journal_and_wire.TestTheSubjectSurvivesTheRoundTrip"
@@ -409,20 +415,20 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
 
     def test_a_message_stating_no_count_reads_as_unknown_not_zero(self):
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import dispatch
+        from keel import dispatch
         self.assertIsNone(
-            dispatch._stated_count("gyroscope: RuntimeError -- NOT-EVALUABLE, failing closed"))
+            dispatch._stated_count("keel: RuntimeError -- NOT-EVALUABLE, failing closed"))
 
     def test_a_message_stating_a_count_still_reads_it(self):
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import dispatch
+        from keel import dispatch
         self.assertEqual(dispatch._stated_count("3 obligations still open [A02] [C08]"), 3)
 
     def test_the_clean_terminal_records_a_real_zero(self):
         """The clean terminal passes its 0 from its own call site, so it stays distinguishable
         from the unknown above."""
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import journal
+        from keel import journal
         journal.note_block({"session_id": "g-clean"}, 0, [], root=self.state_dir)
         journal.note_block({"session_id": "g-clean"}, None, [], root=self.state_dir)
         blocks = [r for r in rows(self.state_dir) if r["kind"] == "block"]
@@ -436,7 +442,7 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
         """Restore the 0 default and the fault block becomes indistinguishable from a clean one."""
         smoke_replace(
-            self, PLUGIN / "gyroscope" / "dispatch.py",
+            self, PLUGIN / "keel" / "dispatch.py",
             b"            return int(digits)\n    return None",
             b"            return int(digits)\n    return 0",
             "tests.test_journal_and_wire.TestABlockRowSaysWhichBlockItWas"
@@ -448,7 +454,7 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
 
     def test_ids_differing_only_in_punctuation_are_not_one_session(self):
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import journal
+        from keel import journal
         journal.note_session({"session_id": "a/b"}, 21, root=self.state)
         journal.note_session({"session_id": "a?b"}, 21, root=self.state)
         got = sorted(r["session_id"] for r in rows(self.state) if r["kind"] == "session")
@@ -456,7 +462,7 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
 
     def test_a_failed_append_does_not_suppress_the_row_forever(self):
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import journal
+        from keel import journal
         original = journal._append
         journal._append = lambda *a, **k: (_ for _ in ()).throw(OSError("disk full"))
         self.addCleanup(setattr, journal, "_append", original)
@@ -474,7 +480,7 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
         independent trials, so a miss needs every round to miss.
         """
         sys.path.insert(0, str(PLUGIN_ROOT))
-        from gyroscope import journal
+        from keel import journal
         for round_no in range(6):
             session = f"race-{round_no}"
             read_fd, write_fd = os.pipe()
@@ -505,7 +511,7 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
         """Drop the digest and two differently-punctuated ids collide onto one marker again."""
         smoke_replace(
-            self, PLUGIN / "gyroscope" / "journal.py",
+            self, PLUGIN / "keel" / "journal.py",
             b"    return f\"{safe}-{hashlib.sha256(session.encode('utf-8')).hexdigest()[:16]}\"",
             b"    return safe",
             "tests.test_journal_and_wire.TestTheSessionRowIsExactlyOnce"
@@ -534,7 +540,7 @@ class TestRepairCountsMeanWhatTheyAreNamed(StateCase):
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
         """Sum the escape count back into the byte count and the field stops meaning bytes."""
         smoke_replace(
-            self, PLUGIN / "gyroscope" / "dispatch.py",
+            self, PLUGIN / "keel" / "dispatch.py",
             b"        event, escaped = wire.scrub(event)\n    except Exception as exc:",
             b"        event, escaped = wire.scrub(event)\n        repaired += escaped\n"
             b"    except Exception as exc:",

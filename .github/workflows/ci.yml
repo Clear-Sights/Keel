@@ -7,7 +7,7 @@
 # repository has minutes again, a red X there is a billing state and a red X HERE is a real defect.
 #
 # WHY THE SUITE IS NOT UNDER `plugin/`. `plugin/` is exactly what the marketplace installs
-# (Courthouse pins gyroscope as `git-subdir` with `path: "plugin"`), so every file under it is a
+# (Courthouse pins keel as `git-subdir` with `path: "plugin"`), so every file under it is a
 # file on every user's machine. The suite lived at `plugin/tests/` and therefore shipped. It now
 # sits at the repository root, outside the installed subtree, and still gates every push from
 # here. The development repository keeps its copy at `plugin/tests/`; the files are byte-identical
@@ -20,7 +20,9 @@
 # This repository ships neither: it carries the compact `clauses.json` that `load_default()`
 # prefers, which is why the plugin loads its 24 clauses here perfectly well while those six modules
 # do not run. Shipping test files that cannot pass in the repository they sit in would be worse
-# than shipping none, so only the six that gate the SHIPPED artifact are here.
+# than shipping none, so only the six that gate the SHIPPED artifact are here -- plus this
+# repository's own `tests/test_fence.py`, which joins the skill pages under `plugin/` to the
+# clause table and byte-compares every generated view against it.
 
 name: CI
 
@@ -64,3 +66,131 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
+
+      # A green fence is evidence only if the same invocation can go red. Proving that here
+      # rather than trusting it: the plants run in the same job as the fence, so a future edit
+      # that quietly makes a planted check vacuous fails the build instead of reporting coverage
+      # it lost. Restore is by copy, never by byte arithmetic, and verified by sha.
+      - name: The fence must be able to fail
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPATH: plugin
+          D: plugin
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json
+        run: |
+          set -eu
+          BAK=$(mktemp -d)
+          ( cd "$D" && cp --parents $PAGES "$BAK" )
+          restore() { local q; for q in $PAGES; do cp "$BAK/$q" "$D/$q"; done; }
+          trap restore EXIT
+
+          suite() { python3 -m unittest discover -s tests; }
+
+          plant() {
+            name="$1"; shift
+            restore
+            before=$(cd "$D" && sha256sum $PAGES)
+            eval "$@"
+            if [ "$(cd "$D" && sha256sum $PAGES)" = "$before" ]; then
+              echo "::error::PLANT NEVER REACHED THE FILE -- '$name' changed nothing" >&2
+              exit 1
+            fi
+            if suite >/dev/null 2>&1; then
+              echo "::error::VACUOUS CHECK -- planted fault '$name' left the suite green" >&2
+              exit 1
+            fi
+            restore
+            if [ "$(cd "$D" && sha256sum $PAGES)" != "$before" ]; then
+              echo "::error::RESTORE NOT BYTE-EXACT after '$name'" >&2
+              exit 1
+            fi
+            echo "  $name -> red, and restored byte-exact"
+          }
+
+          plant "act renamed"                 "sed -i 's/^## push\$/## force_push/' $D/ACTS.md"
+          plant "acts cite an orphan point"   "printf '\nPoint \`U99\` covers none of this.\n' >> $D/ACTS.md"
+          plant "definition mutated"          "sed -i 's/the unhealing issue/the unhealed issue/' $D/SKILL.md"
+          plant "shapes row renamed"          "sed -i 's/^| \*\*repeated\*\* |/| **recurring** |/' $D/SKILL.md && printf '\nA distractor so a substring scan still finds the word repeated outside the renamed row.\n' >> $D/SKILL.md"
+          plant "point entry renamed"         "sed -i 's/^## U25\$/## U26/' $D/POINTS.md"
+          plant "point dropped from contents" "sed -i 's|\[U19\](#u19) in-place rewrite|in-place rewrite|' $D/POINTS.md"
+          plant "clause row dropped"          "jq 'del(.[0])' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
+          plant "construction anchor broken"  "jq 'map(if .id == \"A02\" then .construction = \"POINTS.md#zzz\" else . end)' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
+          plant "row loses its construction" "jq 'map(if .id == \"P01\" then del(.construction) else . end)' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
+          plant "a point nothing anchors to"  "printf '\n## U98\nAn entry no clause row claims.\n' >> $D/POINTS.md"
+          plant "shared anchor goes stale"    "jq 'map(if .id == \"P02\" then .construction = \"POINTS.md#p02\" else . end)' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
+          plant "generated view hand-edited"  "sed -i 's/^| \`A01\` |/| \`A00\` |/' $D/SKILL.md"
+          plant "normative force in SKILL"    "printf '\nA reader MUST follow this.\n' >> $D/SKILL.md"
+          plant "normative force in POINTS"   "printf '\nThe guard SHALL be run.\n' >> $D/POINTS.md"
+          plant "normative force in ACTS"     "printf '\nThis step is REQUIRED.\n' >> $D/ACTS.md"
+          plant "reference points at nothing" "sed -i 's|(POINTS.md)|(MISSING.md)|' $D/SKILL.md"
+          plant "vendored list unsupplied"    "sed -i 's/\"supplies\": \"shapes\"/\"supplies\": \"shpaes\"/' $D/vocabulary.json"
+          plant "frontmatter loses its trigger" "sed -i 's/^description:/described:/' $D/SKILL.md"
+          plant "body overruns its budget"    "seq -f 'padding line %g of the budget plant' 500 >> $D/SKILL.md"
+          plant "construction block mistagged" "sed -i '0,/\`\`\`sh/s//\`\`\`python/' $D/POINTS.md"
+
+          restore
+          suite
+          echo "restored, and green again"
+
+      # The images are a generated view too, and the only one whose source is not under $PAGES:
+      # `docs/img/*.svg` renders to the PNGs the README shows. Same discipline, its own step
+      # because the files it plants live outside the page set restored above.
+      - name: A stale rendering must be loud
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPATH: plugin
+          IMAGES: docs/img
+        run: |
+          set -eu
+          BAK=$(mktemp -d)
+          cp -r "$IMAGES"/. "$BAK"
+          restore() { cp -r "$BAK"/. "$IMAGES"; }
+          trap restore EXIT
+          only() { python3 -m unittest tests.test_fence.RenderedImagesTrackTheirSource; }
+
+          sed -i 's/viewBox="0 0 1200 210"/viewBox="0 0 1200 260"/' "$IMAGES/keel-hero.svg"
+          if only >/dev/null 2>&1; then
+            echo "::error::VACUOUS -- a resized source left its stale rendering green" >&2
+            exit 1
+          fi
+          restore
+          echo "  source resized, rendering stale -> red"
+
+          rm "$IMAGES/ledger-flow-dark.png"
+          if only >/dev/null 2>&1; then
+            echo "::error::VACUOUS -- a missing rendering left the check green" >&2
+            exit 1
+          fi
+          restore
+          echo "  rendering absent -> red"
+
+          only >/dev/null
+          echo "restored, and green again"
+
+      # Absence is a failure, never a skip: with an input gone the fence has nothing to check,
+      # and reporting that as a pass is the exact shape this repository exists to refuse.
+      - name: A missing input must be loud
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPATH: plugin
+          D: plugin
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json
+        run: |
+          set -eu
+          # If anything kills this step between the mv out and the mv back, put the file back --
+          # otherwise the tree is left mutated and every later step reads a lie.
+          trap '[ -f /tmp/absent.tmp ] && mv /tmp/absent.tmp "$D/$target"' EXIT
+          for target in $PAGES; do
+            mv "$D/$target" /tmp/absent.tmp
+            if [ -f "$D/$target" ]; then
+              echo "::error::$target still present -- the move never happened" >&2
+              exit 1
+            fi
+            if python3 -m unittest discover -s tests >/dev/null 2>&1; then
+              mv /tmp/absent.tmp "$D/$target"
+              echo "::error::GREEN ON MISSING -- the fence passed with $target absent" >&2
+              exit 1
+            fi
+            mv /tmp/absent.tmp "$D/$target"
+            echo "  absent $target -> red, as it has to be"
+          done

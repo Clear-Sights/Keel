@@ -1,0 +1,31 @@
+{
+  "_what": "Vocabulary vendored from the development repository's register. Vendored, never imported.",
+  "_why": "The recorded commit and blob shas are what make a refresh checkable by a person instead of silently stale. The source repository is a frozen archive that no longer moves, so these pins are stable by fiat; re-resolve them to prove it rather than to chase it.",
+  "provenance": {
+    "repository": "Clear-Sights/Gyroscope-Dev",
+    "commit": "e520adb8235bcd13bdccc9d71069e0444e6e79dc",
+    "read_on": "2026-08-21",
+    "sources": [
+      {
+        "path": "plugin/clauses/ADMISSION.md",
+        "blob": "85b0c7a74811e72533a73a5769369db0dba15ff9",
+        "supplies": "definition",
+        "note": "line 3; the source line wraps the sentence in ** ** markdown emphasis, which is not part of the sentence"
+      },
+      {
+        "path": "plugin/clauses/ADMISSION.md",
+        "blob": "85b0c7a74811e72533a73a5769369db0dba15ff9",
+        "supplies": "shapes",
+        "note": "the four-row shapes table; the grounding prompt names the same shapes inline, spelling the third repeated/accumulating"
+      }
+    ],
+    "refresh_with": "cd Gyroscope-Dev && git fetch origin && git rev-parse origin/main && git rev-parse origin/main:plugin/clauses/ADMISSION.md"
+  },
+  "definition": "Asymmetry is where the DEFAULT is the unhealing issue.",
+  "shapes": [
+    "built upon",
+    "governing",
+    "repeated",
+    "terminal"
+  ]
+}

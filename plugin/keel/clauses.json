@@ -21,6 +21,7 @@
     },
     "window": "session",
     "deny_reason": "push with no `git status` on record this session; run `git status` first",
+    "construction": "POINTS.md#a01",
     "fixtures_pos": [
       "git push -u origin main",
       "git add -A && git push"
@@ -61,6 +62,7 @@
     },
     "window": "session",
     "deny_reason": "bulk delete with nothing listed first; run `ls` or `find` (without -delete) so the loss has a record",
+    "construction": "POINTS.md#a02",
     "fixtures_pos": [
       "rm -rf build/",
       "find . -name '*.tmp' -delete",
@@ -102,6 +104,7 @@
     },
     "window": "session",
     "deny_reason": "force-push without a prior `git fetch`; fetch first, or use --force-with-lease which carries its own check",
+    "construction": "POINTS.md#a03",
     "fixtures_pos": [
       "git push --force origin main",
       "git push -f origin feature"
@@ -148,6 +151,7 @@
     },
     "window": "session",
     "deny_reason": "ending after delegated work with no artifact read on record; use Read to inspect what returned before accepting it",
+    "construction": "POINTS.md#c03-verify-what-returns",
     "fixtures_pos": [
       "Read"
     ],
@@ -217,6 +221,7 @@
     },
     "window": "session, per normalized checker key",
     "deny_reason": "checker PASS lacks a recorded failing run for this same checker; plant/remove an input and run this checker until it returns nonzero before citing PASS",
+    "construction": "POINTS.md#c08-check-can-fail",
     "fixtures_pos": [
       1,
       "2"
@@ -256,6 +261,7 @@
     },
     "window": "session",
     "deny_reason": "trust a ps pipeline that can match its own checker; first filter the listing with grep -v/rg --invert-match or awk using $$, $BASHPID, or an explicit self_pid",
+    "construction": "POINTS.md#c09-checker-excludes-self",
     "fixtures_pos": [
       "ps aux | grep worker",
       "ps -ef | rg queue-runner",
@@ -295,6 +301,7 @@
     },
     "window": "session",
     "deny_reason": "dispatch a subagent with no read, glob or grep on record; a brief written from assumption returns work built on it, and the result is inherited whole",
+    "construction": "POINTS.md#d01",
     "fixtures_pos": [
       "Agent",
       "Task"
@@ -332,6 +339,7 @@
     },
     "window": "session",
     "deny_reason": "present a plan with no read, glob or grep on record; a plan is followed by default, so a plan built on assumption defines the whole path before anything is checked",
+    "construction": "POINTS.md#p01",
     "fixtures_pos": [
       "ExitPlanMode"
     ],
@@ -366,6 +374,7 @@
     },
     "window": "session",
     "deny_reason": "present a plan with no question asked this session; reading files resolves what the repository is, never what was wanted, and a plan is followed by default",
+    "construction": "POINTS.md#p01",
     "fixtures_pos": [
       "ExitPlanMode"
     ],
@@ -397,6 +406,7 @@
     },
     "window": "session",
     "deny_reason": "ending with no `git status` on record: dirty is unfinished, and an ending nobody checked is the one that looks complete",
+    "construction": "POINTS.md#t01",
     "fixtures_pos": [
       "git status --short",
       "git status"
@@ -427,6 +437,7 @@
     },
     "window": "session",
     "deny_reason": "ending with no fetch or ls-remote on record: a push report is not proof it landed",
+    "construction": "POINTS.md#t02",
     "fixtures_pos": [
       "git ls-remote origin refs/heads/main",
       "git fetch origin main"
@@ -469,6 +480,7 @@
     },
     "window": "session",
     "deny_reason": "launch a nested worker without its guard; run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write`",
+    "construction": "POINTS.md#u01",
     "fixtures_pos": [
       "/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt",
       "dispatch.sh unit-b luna brief-b.txt"
@@ -520,6 +532,7 @@
     },
     "window": "session",
     "deny_reason": "re-launch a nested-worker target without its guard; run `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change`",
+    "construction": "POINTS.md#u02",
     "fixtures_pos": [
       "/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt",
       "dispatch.sh unit-b luna brief-b.txt"
@@ -567,6 +580,7 @@
     },
     "window": "session",
     "deny_reason": "use a PID in a signal operation without its guard; run `ps`, `pgrep`, or an equivalent observer-namespace process listing",
+    "construction": "POINTS.md#u03",
     "fixtures_pos": [
       "kill 4242",
       "pkill -TERM worker"
@@ -602,6 +616,7 @@
     },
     "window": "session",
     "deny_reason": "send a mutating request to an external service without its guard; run an authenticated read canary such as `curl ... -H 'Authorization: ...'`",
+    "construction": "POINTS.md#u06",
     "fixtures_pos": [
       "curl -X POST https://api.example.test/jobs -d @job.json",
       "curl --request DELETE https://api.example.test/items/7"
@@ -649,6 +664,7 @@
     },
     "window": "session",
     "deny_reason": "create a signed git commit without its guard; run a signer canary such as `printf test | gpg --clearsign`",
+    "construction": "POINTS.md#u08",
     "fixtures_pos": [
       "git commit -S -m 'release'",
       "git commit --gpg-sign=ABC123 -m release"
@@ -704,6 +720,7 @@
     },
     "window": "session",
     "deny_reason": "switch or check out a git ref that was never verified or created this session; run `git rev-parse --verify REF`, or create it with `git checkout -b/-B REF`",
+    "construction": "POINTS.md#u09",
     "_natural_guard": "Creating a ref is discharged by work someone actually does: `git checkout -B REF origin/main` is how a session makes the branch it later returns to, and creation is the strongest possible proof the ref exists. Measured on the frozen corpus: the sole U09 denial checked out `claude/gyroscope-terminal-clauses`, a branch the same session had created 12 calls earlier with `git checkout -B` -- the guard was already run, under a name the old discharged_by refused to see. `git rev-parse --verify` remains the explicit probe for refs the session did not make.",
     "fixtures_pos": [
       "git checkout feature/api",
@@ -756,6 +773,7 @@
     },
     "window": "session",
     "deny_reason": "traverse structured JSON whose structure was never once looked at; run `jq 'keys'`, `jq 'type'`, or a `jq -e` type/key assertion on the file first",
+    "construction": "POINTS.md#u10",
     "fixtures_pos": [
       "jq '.items[0].name' response.json",
       "jq '.user.email' payload.json"
@@ -788,6 +806,7 @@
     },
     "window": "session",
     "deny_reason": "apply a patch without its guard; run `rg`/`grep` for the patch context and read the target immediately before applying",
+    "construction": "POINTS.md#u12",
     "fixtures_pos": [
       "git apply fix.patch",
       "patch -p1 < fix.patch"
@@ -843,6 +862,7 @@
     },
     "window": "session",
     "deny_reason": "apply a generated patch without its guard; run `git apply --check PATCH` first",
+    "construction": "POINTS.md#u13",
     "fixtures_pos": [
       "git apply generated.patch",
       "git apply generated.diff --index",
@@ -892,6 +912,7 @@
     },
     "window": "session",
     "deny_reason": "perform an in-place text rewrite without ever looking at the text; `rg`/`grep` the pattern first (or `cmp`/checksum the file)",
+    "construction": "POINTS.md#u19",
     "fixtures_pos": [
       "sed -i 's/old/new/' config.ini",
       "perl -pi -e 's/foo/bar/g' data.txt"
@@ -924,6 +945,7 @@
     },
     "window": "session",
     "deny_reason": "make a destructive behavior-changing mutation without its guard; run an independent behavior observer such as the relevant test or probe first",
+    "construction": "POINTS.md#u20",
     "fixtures_pos": [
       "rm -r generated/state",
       "git reset --hard HEAD~1",
@@ -957,6 +979,7 @@
     },
     "window": "session",
     "deny_reason": "publish or release an artifact after runtime testing without its guard; run the suite with warnings promoted to errors on a supported runtime",
+    "construction": "POINTS.md#u24",
     "fixtures_pos": [
       "npm publish",
       "twine upload dist/*",
@@ -1005,6 +1028,7 @@
     },
     "window": "session",
     "deny_reason": "run a scanner as an acceptance check without its guard; run its prefix-distractor regression test first",
+    "construction": "POINTS.md#u25",
     "fixtures_pos": [
       "python3 tools/scanner.py fixtures/input.txt",
       "go test ./scanner -run Acceptance"

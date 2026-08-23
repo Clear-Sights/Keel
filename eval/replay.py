@@ -38,13 +38,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CORPUS = pathlib.Path(__file__).resolve().parent / "corpus"
 
 DISPATCH_CWD = ROOT / "plugin"
-STATE_ENV = "GYROSCOPE_STATE_DIR"
+STATE_ENV = "KEEL_STATE_DIR"
 
 
 def dispatch(event: dict, state_dir: str) -> dict:
     env = dict(os.environ, **{STATE_ENV: state_dir})
     proc = subprocess.run(
-        [sys.executable, "-m", "gyroscope.dispatch"],
+        [sys.executable, "-m", "keel.dispatch"],
         input=json.dumps(event), capture_output=True, text=True,
         cwd=DISPATCH_CWD, env=env,
     )

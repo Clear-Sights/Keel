@@ -30,8 +30,8 @@ import tempfile
 import unittest
 from datetime import date
 
-from gyroscope import clauses as C, dispatch
-from gyroscope.ledger import Ledger
+from keel import clauses as C, dispatch
+from keel.ledger import Ledger
 
 PRE = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "w", "agent_id": "",
        "tool_input": {"command": "python3 -m pytest -q tests/"}}

@@ -1,5 +1,5 @@
 {
-  "description": "gyroscope \u2014 deny a costly call until its cheap guard is on record [generated from plugin/clauses/ as_of sha256:78e84e3333284c96]",
+  "description": "keel \u2014 deny a costly call until its cheap guard is on record [generated from plugin/clauses/ as_of sha256:78e84e3333284c96]",
   "hooks": {
     "PostToolUse": [
       {
