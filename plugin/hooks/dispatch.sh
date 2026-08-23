@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Always enter the plugin root: a stray "gyroscope" directory in the session
+# Always enter the plugin root: a stray "keel" directory in the session
 # working tree can shadow the package under python3 -m; a shipped plugin saw a
 # 100% hook-failure rate from exactly this.
 if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
@@ -12,7 +12,7 @@ else
 fi
 
 fail_open() {
-    printf '%s\n' "gyroscope hook: $1" >&2
+    printf '%s\n' "keel hook: $1" >&2
     # Stderr from a hook that exits 0 goes to the DEBUG LOG ONLY -- never the transcript, and the
     # model never sees it. So the "loud" half of loud-stderr-plus-{} was silent: a plugin could be
     # 100% non-functional with nothing surfacing anywhere anyone looks, which is the silent wiring
@@ -27,7 +27,7 @@ fail_open() {
         "interpreter not found:"*) visible_fault="interpreter not found" ;;
         *) visible_fault="Python dispatcher failed" ;;
     esac
-    printf '{"systemMessage":"gyroscope hook wiring fault: %s"}\n' "$visible_fault"
+    printf '{"systemMessage":"keel hook wiring fault: %s"}\n' "$visible_fault"
     # Never exit 2 on a WIRING fault. Verified against the current hooks reference:
     # "Exit 2 means a blocking error. On events that can block, exit 2 blocks whether or
     # not you print JSON." That holds on BOTH hosts -- the older note here claimed it was
@@ -40,7 +40,7 @@ fail_open() {
 [ -n "$plugin_root" ] || fail_open "could not resolve plugin root"
 cd "$plugin_root" 2>/dev/null || fail_open "could not enter plugin root: $plugin_root"
 
-python=${GYROSCOPE_PYTHON:-python3}
+python=${KEEL_PYTHON:-python3}
 command -v "$python" >/dev/null 2>&1 || fail_open "interpreter not found: $python"
 
 # Do not exec: it replaces this shell, leaving nothing to emit {} if Python dies;
@@ -54,7 +54,7 @@ command -v "$python" >/dev/null 2>&1 || fail_open "interpreter not found: $pytho
 # because exit 2 is the ONLY closed signal that survives a payload the host refuses to parse
 # ("exit 0 with a parsed object that fails schema validation is a non-blocking error: the action
 # proceeds"), so a future decision path that cannot serialize has somewhere to go.
-"$python" -m gyroscope.dispatch
+"$python" -m keel.dispatch
 status=$?
 [ "$status" -eq 0 ] && exit 0
 [ "$status" -eq 2 ] && exit 2

@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 import unittest
 
-from gyroscope import clauses as C
+from keel import clauses as C
 
 # the pre-fix spelling, kept ONLY so the teeth test below can show this file is not vacuous
 _BROAD_CLASS = r"""[^\s;&|]*"""

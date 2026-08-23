@@ -1,11 +1,14 @@
-# Gyroscope
+# Keel
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/gyroscope-hero-dark.png">
-  <img src="docs/img/gyroscope-hero-light.png" alt="Gyroscope — do not let the session derail irreversibly">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/keel-hero-dark.png">
+  <img src="docs/img/keel-hero-light.png" alt="Keel — do not let the session capsize irreversibly">
 </picture>
 
-**One purpose: do not let the session derail irreversibly.**
+**One purpose: do not let the session capsize irreversibly.**
+
+*Formerly Gyroscope; renamed at v2.0.0, when the positive half merged in. The mechanism is
+unchanged — GitHub redirects the old repository name.*
 
 The drift it opposes is the one where the DEFAULT is the unhealing issue. Not where an act
 is dangerous, not where something ends badly — where *doing nothing* lands you somewhere that
@@ -16,7 +19,7 @@ greenness is what ends the run, so investigating requires first reversing "it's 
 
 ## How it heals: reversal
 
-Gyroscope reverses that default. Where the session would otherwise capsize — the costly act just
+Keel reverses that default. Where the session would otherwise capsize — the costly act just
 runs, the cheap guard is forgotten — it makes denial the resting state, so what happens when
 nobody acts is the safe fate instead of the unhealing one. The method is a repricing, not a
 prohibition:
@@ -31,15 +34,24 @@ produces the safe outcome, so the rule is not defeated by ordinary forgetting, a
 mode is loud rather than silent: the thing you wanted requires an artifact that is either there
 or is not.
 
-## Why a gyroscope
+The repricing buys one session at a time. The pages shipped beside the clause table carry the
+other half: for each denied moment, the authored **construction** that makes the guard's outcome
+a property of the path — so on a path built right, the deny stops firing at all. Every clause row
+anchors its construction, and the fence refuses a pairing that does not resolve.
+
+## Why a keel
 
 A session is a flow — the default toward *proceed, it looks complete, keep going* reasserts at
 every turn, not once at entry, so one instruction at the entrance is spent by turn three. What
-holds a flow is a gyroscope: spun up once and then continuously present, opposing drift with
-matched force at every moment, requiring no attention and no trigger. It does not choose the
-direction — it prevents tumbling off the axis you set. That is why this is a hook registered on
-every event rather than something that runs at session start, and why there is a ledger: the
-ledger is the stored state that keeps the gyroscope spun up across turns, so each turn inherits
+holds a hull against standing pressure is a keel: built once, below the waterline, permanently
+there. It needs no spin, no attention and no trigger — being present is its whole job, which is
+why this is a hook registered on every event rather than something that runs at session start.
+And a keel does two things with the same wind. It keeps the hull from being capsized or shoved
+sideways — the deny half — and it is what makes sailing *toward* something possible at all: the
+same pressure that would only push the boat off course becomes headway — the construction half,
+where the default that used to cost you is turned into the thing that carries the work forward.
+It does not choose the course; it makes the course you set holdable. The ledger is the ballast
+bolted along it: the stored state that keeps the keel biting across turns, so each turn inherits
 the opposition instead of re-earning it.
 
 ## The mechanism
@@ -52,7 +64,7 @@ the opposition instead of re-earning it.
 A `PreToolUse` deny records a **demand**; a later call matching the clause's guard records a
 **discharge**; at `Stop` anything still open blocks. That is the whole model — the nine things
 that looked like separate Stop checks are one ledger read
-([`gyroscope/ledger.py`](plugin/gyroscope/ledger.py) states this where the mechanism is defined).
+([`keel/ledger.py`](plugin/keel/ledger.py) states this where the mechanism is defined).
 A licence is an **observed discharge**, never an absent demand — the absence of evidence is never
 treated as permission. Four properties of the ledger, each stated in the code it constrains:
 
@@ -78,7 +90,7 @@ treated as permission. Four properties of the ledger, each stated in the code it
 
 `plugin/` is the whole package — exactly what the marketplace installs:
 
-- **the dispatcher** (`gyroscope/`) and the shipped clause table (`gyroscope/clauses.json`,
+- **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,
   24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both
   supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity
   — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it
@@ -100,7 +112,7 @@ treated as permission. Four properties of the ledger, each stated in the code it
 
 ### Manual bypass
 
-If serialized `tool_input` contains `gyroscope-allow:` followed by non-whitespace text,
+If serialized `tool_input` contains `keel-allow:` followed by non-whitespace text,
 `PreToolUse` returns an empty decision before evaluating any clause.
 
 ## Honest limitations
@@ -127,15 +139,15 @@ Limits before capability claims — read these before the clause table below.
   live-model measured; the replay proves where the dispatcher fires, not what an agent does about
   it.
 
-## What Gyroscope writes down
+## What Keel writes down
 
 `obligations.jsonl` is a **ledger**, not a log: it records outstanding obligations, so a session in
 which every clause passed leaves nothing behind — and so does a session in which the plugin never
-ran. "Did Gyroscope catch anything?" therefore had no answer at all. Not "no": *unanswerable*,
+ran. "Did Keel catch anything?" therefore had no answer at all. Not "no": *unanswerable*,
 which is indistinguishable from never-installed, and which is the same absence-reads-as-green
 failure this plugin refuses to accept from a session.
 
-`gyroscope/journal.py` closes that. It appends to `decisions.jsonl` beside the ledger: one
+`keel/journal.py` closes that. It appends to `decisions.jsonl` beside the ledger: one
 `session` row the first time a session is seen, carrying the loaded **clause count** — a row saying
 `clauses: 0` is a gate that checked nothing while everyone believes it is on — plus one row per
 `deny`, per terminal `block` (including clean reconciliations, which are a positive result a
@@ -143,22 +155,22 @@ fires-only log would erase), per `fault`, and per repaired envelope. There is de
 per allowed call.
 
 Every row names `plugin`, `session_id`, `agent_id` and `tool_name`, and every deny and block on the
-wire is now prefixed `gyroscope:`. Three plugins register `PreToolUse` and the host shows the user
+wire is now prefixed `keel:`. Three plugins register `PreToolUse` and the host shows the user
 a reason but never a source.
 
-`fault` rows carry `failed_closed`, which makes Gyroscope's split direction — carriage open,
+`fault` rows carry `failed_closed`, which makes Keel's split direction — carriage open,
 decision closed — checkable against the record rather than against its docstrings. See
 [Courthouse docs/FAIL-DIRECTION.md](https://github.com/Clear-Sights/Courthouse/blob/main/docs/FAIL-DIRECTION.md).
 
 ## The shipped clause table
 
-The dispatcher loads `plugin/gyroscope/clauses.json` — 24 admitted clauses, every one carrying
+The dispatcher loads `plugin/keel/clauses.json` — 24 admitted clauses, every one carrying
 positive and negative fixtures checked at load. The table below is a generated view of that
 file, byte-compared against it by the test fence on every push, so it cannot quietly lag the
 artifact the dispatcher loads. Each row's construction column anchors the clause's positive
 half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
-<!-- BEGIN GENERATED: clause-routes | source: plugin/gyroscope/clauses.json | regenerate: python3 tools/render_views.py --write -->
+<!-- BEGIN GENERATED: clause-routes | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
 
 | ID | Costly fate | Guard | Construction |
 | --- | --- | --- | --- |
@@ -214,21 +226,21 @@ stays silent — 5/5, standard library only, exit 0 iff every session meets its 
 ## Why this is not a deny list
 
 [Ward](https://github.com/Clear-Sights/Ward), a sibling plugin, is a deny list: its verdict is a
-pure function of one event. For a matching costly call, Gyroscope's decision
+pure function of one event. For a matching costly call, Keel's decision
 is a function of `(event, ledger)`: it is denied before the clause's guard discharge and admitted
-afterward. Gyroscope does not substitute a safer action and does not remove a fate — it changes
+afterward. Keel does not substitute a safer action and does not remove a fate — it changes
 whether the *same* call executes now or waits until its licensing evidence exists.
 
 ## Siblings
 
-Gyroscope is one of three engines that split one taxonomy — act, sequence, statement — and share
+Keel is one of three engines that split one taxonomy — act, sequence, statement — and share
 nothing else. All three install from the [Courthouse](https://github.com/Clear-Sights/Courthouse)
 marketplace: `claude plugin marketplace add Clear-Sights/Courthouse`.
 
 | Engine | Judges | One line |
 |---|---|---|
 | [**Ward**](https://github.com/Clear-Sights/Ward) | the pending **act** | nothing outright bad happens |
-| **Gyroscope** (this repo) | the **sequence** | a session neither capsizes nor gets lost |
+| **Keel** (this repo) | the **sequence** | a session neither capsizes nor gets lost |
 | [**Makoto**](https://github.com/Clear-Sights/Makoto) | the **statement** | words aren't empty |
 
 ## License

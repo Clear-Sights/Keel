@@ -31,16 +31,16 @@ jobs:
       - name: Build the install bundle (no eval, no tooling)
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          STAGE="gyroscope-$VERSION"
+          STAGE="keel-$VERSION"
           mkdir "$STAGE"
           cp -r plugin LICENSE README.md "$STAGE"/
-          zip -qr "gyroscope-$VERSION.zip" "$STAGE"
+          zip -qr "keel-$VERSION.zip" "$STAGE"
           # Both exclusions asserted, not assumed: a bundle that quietly regained either of them
           # would look exactly like a correct one. The tests assertion no longer has a matching
           # `rm` above it, and that is the point -- the suite is outside `plugin/` now, so this
           # copy cannot pick it up. Keeping the assertion is what would catch it moving back.
-          unzip -l "gyroscope-$VERSION.zip" | grep -q "eval/" && exit 1 || true
-          unzip -l "gyroscope-$VERSION.zip" | grep -q "plugin/tests/" && exit 1 || true
+          unzip -l "keel-$VERSION.zip" | grep -q "eval/" && exit 1 || true
+          unzip -l "keel-$VERSION.zip" | grep -q "plugin/tests/" && exit 1 || true
 
       - name: Create tag and GitHub Release
         env:
@@ -50,9 +50,9 @@ jobs:
           TAG="v$VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "gyroscope $VERSION"
+          git tag -a "$TAG" -m "keel $VERSION"
           git push origin "$TAG"
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes "Obligation-ledger hook for Claude Code and Codex: a costly call is denied until its cheap guard is on record, then the same call executes — and one skill whose pages carry each clause's positive construction. Verified at release time: the 5/5 corpus replay (\`python3 eval/replay.py\`). Install from \`gyroscope-$VERSION.zip\` — it carries \`plugin/\` only (dispatcher, clause table, hooks, and the skill pages in one arm); the eval corpus lives in the repository, not the release bundle." \
-            "gyroscope-$VERSION.zip"
+            --notes "Obligation-ledger hook for Claude Code and Codex: a costly call is denied until its cheap guard is on record, then the same call executes — and one skill whose pages carry each clause's positive construction. Verified at release time: the 5/5 corpus replay (\`python3 eval/replay.py\`). Install from \`keel-$VERSION.zip\` — it carries \`plugin/\` only (dispatcher, clause table, hooks, and the skill pages in one arm); the eval corpus lives in the repository, not the release bundle." \
+            "keel-$VERSION.zip"

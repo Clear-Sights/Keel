@@ -308,7 +308,7 @@ def match(clause: Clause, event: dict) -> bool:
     """
     result = _predicate(clause.fingerprint, event)
     if result is None:
-        print(f"gyroscope: [{clause.id}] probe NOT-EVALUABLE -- treating the occasion as live",
+        print(f"keel: [{clause.id}] probe NOT-EVALUABLE -- treating the occasion as live",
               file=sys.stderr)
         return True
     return result
@@ -319,7 +319,7 @@ def discharges(clause: Clause, event: dict) -> bool | None:
         return False
     result = _predicate(clause.discharged_by, event)
     if result is None:
-        print(f"gyroscope: [{clause.id}] probe NOT-EVALUABLE, not a pass", file=sys.stderr)
+        print(f"keel: [{clause.id}] probe NOT-EVALUABLE, not a pass", file=sys.stderr)
     return result
 
 

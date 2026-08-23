@@ -1,7 +1,7 @@
 """The plant harness, and the two roots every plant needs to find.
 
 WHY THE ROOTS ARE SEARCHED FOR RATHER THAN COUNTED. These exact bytes run from two different
-places. In the development repository the suite sits at `plugin/tests/`, beside the `gyroscope`
+places. In the development repository the suite sits at `plugin/tests/`, beside the `keel`
 package. Here it sits at `tests/`, at the repository root and OUTSIDE `plugin/` -- because
 `plugin/` is precisely what the marketplace installs (`git-subdir`, `path: "plugin"`), so a test
 file inside it is a test file on every user's machine. Every module in this suite used to open
@@ -22,15 +22,15 @@ from pathlib import Path
 # A child running `python3 -m unittest tests.…` needs this as its cwd for the target to resolve.
 TESTS_CWD = Path(__file__).resolve().parents[1]
 
-# The directory holding the `gyroscope` package. The same directory in both layouts, reached
+# The directory holding the `keel` package. The same directory in both layouts, reached
 # differently: it IS `TESTS_CWD` in development, and `TESTS_CWD / "plugin"` when shipped.
-PLUGIN = TESTS_CWD if (TESTS_CWD / "gyroscope").is_dir() else TESTS_CWD / "plugin"
+PLUGIN = TESTS_CWD if (TESTS_CWD / "keel").is_dir() else TESTS_CWD / "plugin"
 
 # The repository root, for the gates that read COMMITTED bytes through `git show`.
 REPO = PLUGIN.parent
 
 if str(PLUGIN) not in sys.path:
-    # So `import gyroscope` does not depend on which directory the runner was started from.
+    # So `import keel` does not depend on which directory the runner was started from.
     sys.path.insert(0, str(PLUGIN))
 
 
@@ -40,7 +40,7 @@ def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
 
     The child's environment is set explicitly rather than inherited, because the two directories
     it needs are no longer the same one: `TESTS_CWD` is where `tests.…` resolves from, `PLUGIN` is
-    where `gyroscope` resolves from, and in the shipped layout those are parent and child. A plant
+    where `keel` resolves from, and in the shipped layout those are parent and child. A plant
     that ran only when the parent happened to be launched from the right directory would report a
     green seam for the wrong reason.
 

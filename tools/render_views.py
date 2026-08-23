@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One generator, every tabular view of the clause facts.
 
-`plugin/gyroscope/clauses.json` is the single authoritative home of the clause facts -- it is
+`plugin/keel/clauses.json` is the single authoritative home of the clause facts -- it is
 the artifact the dispatcher loads. Every tabular appearance of those facts anywhere in this
 repository is a region this script renders between markers, and CI byte-compares the committed
 regions against a fresh rendering. A generated view that silently rots (the shipped SKILL.md
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-CLAUSES = REPO / "plugin" / "gyroscope" / "clauses.json"
+CLAUSES = REPO / "plugin" / "keel" / "clauses.json"
 MARKER = "clause-routes"
 
 # Every view: (file, link prefix that makes POINTS.md anchors resolve from that file's place).

@@ -7,7 +7,7 @@
 # repository has minutes again, a red X there is a billing state and a red X HERE is a real defect.
 #
 # WHY THE SUITE IS NOT UNDER `plugin/`. `plugin/` is exactly what the marketplace installs
-# (Courthouse pins gyroscope as `git-subdir` with `path: "plugin"`), so every file under it is a
+# (Courthouse pins keel as `git-subdir` with `path: "plugin"`), so every file under it is a
 # file on every user's machine. The suite lived at `plugin/tests/` and therefore shipped. It now
 # sits at the repository root, outside the installed subtree, and still gates every push from
 # here. The development repository keeps its copy at `plugin/tests/`; the files are byte-identical
@@ -76,7 +76,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
           D: plugin
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json gyroscope/clauses.json
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json
         run: |
           set -eu
           BAK=$(mktemp -d)
@@ -113,9 +113,9 @@ jobs:
           plant "shapes row renamed"          "sed -i 's/^| \*\*repeated\*\* |/| **recurring** |/' $D/SKILL.md && printf '\nA distractor so a substring scan still finds the word repeated outside the renamed row.\n' >> $D/SKILL.md"
           plant "point entry renamed"         "sed -i 's/^## U25\$/## U26/' $D/POINTS.md"
           plant "point dropped from contents" "sed -i 's|\[U19\](#u19) in-place rewrite|in-place rewrite|' $D/POINTS.md"
-          plant "clause row dropped"          "jq 'del(.[0])' $D/gyroscope/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/gyroscope/clauses.json"
-          plant "construction anchor broken"  "jq 'map(if .id == \"A02\" then .construction = \"POINTS.md#zzz\" else . end)' $D/gyroscope/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/gyroscope/clauses.json"
-          plant "unsolved row loses why_none" "jq 'map(if .id == \"P01\" then del(.why_none) else . end)' $D/gyroscope/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/gyroscope/clauses.json"
+          plant "clause row dropped"          "jq 'del(.[0])' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
+          plant "construction anchor broken"  "jq 'map(if .id == \"A02\" then .construction = \"POINTS.md#zzz\" else . end)' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
+          plant "unsolved row loses why_none" "jq 'map(if .id == \"P01\" then del(.why_none) else . end)' $D/keel/clauses.json > /tmp/cl.json && mv /tmp/cl.json $D/keel/clauses.json"
           plant "generated view hand-edited"  "sed -i 's/^| \`A01\` |/| \`A00\` |/' $D/SKILL.md"
           plant "normative force in SKILL"    "printf '\nA reader MUST follow this.\n' >> $D/SKILL.md"
           plant "normative force in POINTS"   "printf '\nThe guard SHALL be run.\n' >> $D/POINTS.md"
@@ -136,7 +136,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
           D: plugin
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json gyroscope/clauses.json
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json
         run: |
           set -eu
           # If anything kills this step between the mv out and the mv back, put the file back --

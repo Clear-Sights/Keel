@@ -5,7 +5,7 @@ buys one session. Each entry below names what to build so the guard's outcome ar
 later turn with nobody running anything — except two, `P01` and `P02`, which record an unsolved
 gap instead.
 
-The trigger text lives verbatim in `gyroscope/clauses.json` beside this page, which is the authority:
+The trigger text lives verbatim in `keel/clauses.json` beside this page, which is the authority:
 each clause row's `construction` field anchors into this page, and the test fence resolves every
 anchor against these headings. The `Denies` and `guard` lines here restate the row in prose. The
 construction itself is authored — judgement lives here, and nothing generates it.

@@ -1,12 +1,12 @@
-"""gyroscope.journal -- the persisted record: what Gyroscope did, per session, per tool.
+"""keel.journal -- the persisted record: what Keel did, per session, per tool.
 
-WHY THIS EXISTS. Gyroscope hooks PreToolUse, PostToolUse, Stop, SessionStart, SubagentStart and
+WHY THIS EXISTS. Keel hooks PreToolUse, PostToolUse, Stop, SessionStart, SubagentStart and
 SubagentStop -- six event families, every one of them evaluated against the clause table -- and
 wrote nothing down unless a demand was actually raised. `obligations.jsonl` is a LEDGER, not a log:
 it records outstanding obligations, so a session in which every clause passed leaves the state
 directory empty, and so does a session in which the plugin never ran at all.
 
-That means the question "did Gyroscope catch anything this session?" had no answer. Not "no" --
+That means the question "did Keel catch anything this session?" had no answer. Not "no" --
 UNANSWERABLE, which is strictly worse, because absence-of-record is exactly what a healthy session,
 a mis-wired plugin, and an uninstalled plugin all look like. This module's whole job is to make
 those three distinguishable.
@@ -20,7 +20,7 @@ FOUR ROW KINDS, deliberately not five:
 
   * `session` -- ONE row the first time a session is seen, carrying the clause count. The liveness
     proof, and the reason the log answers "did it run" separately from "did it find anything". A
-    row saying `clauses: 0` is a Gyroscope that checked nothing while everyone believes it is on.
+    row saying `clauses: 0` is a Keel that checked nothing while everyone believes it is on.
   * `deny`    -- a PreToolUse refusal, naming the clause and the subject it is keyed on.
   * `block`   -- a Stop/SubagentStop reconciliation block, naming the unreconciled count.
   * `fault`   -- an event that could not be evaluated, and which way it fell.
@@ -28,9 +28,9 @@ FOUR ROW KINDS, deliberately not five:
 There is deliberately NO row per allowed call: a sibling plugin measured that policy and found the
 log ran 99%+ noise. A log nobody can read is a log nobody reads.
 
-EVERY ROW NAMES ITS PLUGIN. Ward, Gyroscope and Makoto all register PreToolUse and all three can
+EVERY ROW NAMES ITS PLUGIN. Ward, Keel and Makoto all register PreToolUse and all three can
 deny; the host does not tell the user which one spoke. `plugin` is that name, and the deny reason
-on the wire carries the same `gyroscope` prefix, so transcript and log can be joined afterwards.
+on the wire carries the same `keel` prefix, so transcript and log can be joined afterwards.
 
 FAILURE POSTURE: observability, never policy. Every entry point swallows everything. A gate that
 denied because its logger could not write would be a worse defect than the missing log.
@@ -44,7 +44,7 @@ import pathlib
 import time
 from datetime import datetime, timezone
 
-PLUGIN = "gyroscope"
+PLUGIN = "keel"
 
 
 def _root(root=None) -> pathlib.Path:
@@ -173,7 +173,7 @@ def _claim(marker: pathlib.Path) -> bool:
 
 
 def note_session(event: dict, clause_count: int, root=None) -> None:
-    """Record ONCE per session that Gyroscope was live, and with how many clauses.
+    """Record ONCE per session that Keel was live, and with how many clauses.
 
     A marker file per session id is the whole mechanism. An unwritable marker degrades to
     re-noting -- noisy, still correct -- never to silence and never to raising.
@@ -240,7 +240,7 @@ def note_fault(event: dict, stage: str, detail: str, *, failed_closed: bool, roo
     """Record an event that could not be evaluated, and which way it fell.
 
     `failed_closed` is not decoration: it is what makes the suite's fail-direction policy auditable
-    rather than merely documented. Gyroscope's answer is split by design -- carriage open, decision
+    rather than merely documented. Keel's answer is split by design -- carriage open, decision
     closed -- and this field is where that split becomes a fact somebody can count.
     """
     try:

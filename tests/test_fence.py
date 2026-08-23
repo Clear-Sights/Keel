@@ -2,7 +2,7 @@
 
 The dispatcher's own suite proves the deny half. What rots silently if nothing watches it is the
 positive half shipped beside it -- the skill page and its supporting pages -- and the joins
-between them and `gyroscope/clauses.json`:
+between them and `keel/clauses.json`:
 
   (a) whether every clause's `construction` anchor resolves to a real heading in POINTS.md, and
       every POINTS.md entry belongs to a real clause -- no point silently dropped, none invented;
@@ -30,11 +30,11 @@ SKILL = PLUGIN / "SKILL.md"
 POINTS_MD = PLUGIN / "POINTS.md"
 ACTS_MD = PLUGIN / "ACTS.md"
 VOCABULARY = PLUGIN / "vocabulary.json"
-CLAUSES = PLUGIN / "gyroscope" / "clauses.json"
+CLAUSES = PLUGIN / "keel" / "clauses.json"
 
 PAGES = (SKILL, POINTS_MD, ACTS_MD)
 
-SKILL_NAME = "gyroscope"
+SKILL_NAME = "keel"
 
 # The seven acts. This literal is the fence's half of the single-home rule: ACTS.md's headings
 # are the one place the list lives as content, and this pin is what makes losing or inventing

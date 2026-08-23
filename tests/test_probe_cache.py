@@ -16,7 +16,7 @@ from __future__ import annotations
 import unittest
 from tests.plant_support import PLUGIN, smoke_replace
 
-from gyroscope import clauses as C, dispatch
+from keel import clauses as C, dispatch
 
 PROBE = {"cmd": ["git", "status", "--porcelain"], "timeout_ms": 5000, "expect": "empty"}
 
@@ -59,7 +59,7 @@ class ProbeRunsOncePerEvent(unittest.TestCase):
         self.assertEqual(1, self._scan(), "the same probe was measured more than once per event")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
-        path = PLUGIN / "gyroscope" / "clauses.py"
+        path = PLUGIN / "keel" / "clauses.py"
         smoke_replace(self, path, b"    key = json.dumps(spec, sort_keys=True, separators=(\",\", \":\"))\n",
                       b"    return _measure_probe(spec)\n", "tests.test_probe_cache."
                       "ProbeRunsOncePerEvent.test_TEETH_eight_segments_two_directions_measure_once", "same probe was measured more than once per event")

@@ -1,5 +1,5 @@
 ---
-name: gyroscope
+name: keel
 description: >-
   Use before a call that decides what the rest of the run inherits — pushing, force-pushing,
   deleting files or rules, checking out a ref, applying a patch, rewriting text in place, signing
@@ -14,7 +14,7 @@ description: >-
   anything.
 ---
 
-# Gyroscope
+# Keel
 
 One sentence underneath both halves of this package:
 
@@ -82,11 +82,11 @@ with something that merely reads like a construction.
 
 ## The clause routes
 
-The table below is a generated view of `gyroscope/clauses.json`, the artifact the dispatcher
+The table below is a generated view of `keel/clauses.json`, the artifact the dispatcher
 actually loads — one writer, and the build compares this rendering against it byte for byte, so
 this page cannot quietly lag the table it describes.
 
-<!-- BEGIN GENERATED: clause-routes | source: gyroscope/clauses.json | regenerate: python3 tools/render_views.py --write -->
+<!-- BEGIN GENERATED: clause-routes | source: keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
 
 | ID | Costly fate | Guard | Construction |
 | --- | --- | --- | --- |
@@ -155,7 +155,7 @@ was moved, not removed.
   run inherits, whether or not a clause fires.
 - **[vocabulary.json](vocabulary.json)** — the definition sentence and the four shapes, vendored
   from the development repository's register with the commit and blob shas they were taken from.
-- **`gyroscope/clauses.json`** — the clause table itself: fingerprints, guards, deny reasons,
+- **`keel/clauses.json`** — the clause table itself: fingerprints, guards, deny reasons,
   fixtures, and each row's `construction` anchor into POINTS.md.
 
 ## Limits

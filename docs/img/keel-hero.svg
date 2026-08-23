@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="210" viewBox="0 0 1200 210" role="img" aria-labelledby="title desc">
+  <title id="title">Keel</title>
+  <desc id="desc">Keel — do not let the session capsize irreversibly</desc>
+  <style>
+    .background { fill: #f6f8fa; }
+    .border { fill: none; stroke: #d0d7de; }
+    .grid { stroke: #d8dee4; }
+    .keel { stroke: #1a7f37; }
+    .hull { stroke: #59636e; }
+    .ballast { fill: #1a7f37; }
+    .name { fill: #1f2328; }
+    .purpose { fill: #59636e; }
+    .rule { stroke: #1a7f37; }
+    @media (prefers-color-scheme: dark) {
+      .background { fill: #0d1117; }
+      .border { stroke: #30363d; }
+      .grid { stroke: #21262d; }
+      .keel { stroke: #3fb950; }
+      .hull { stroke: #b1bac4; }
+      .ballast { fill: #3fb950; }
+      .name { fill: #f0f6fc; }
+      .purpose { fill: #b1bac4; }
+      .rule { stroke: #3fb950; }
+    }
+  </style>
+
+  <rect class="background" x="1" y="1" width="1198" height="208" rx="18"/>
+  <rect class="border" x="1" y="1" width="1198" height="208" rx="18"/>
+
+  <g class="grid" opacity="0.62" stroke-width="1">
+    <path d="M24 36H1176 M24 174H1176"/>
+    <path d="M214 18V192 M1080 18V192"/>
+  </g>
+
+  <g transform="translate(111 105)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- waterline -->
+    <line class="hull" x1="-78" y1="-14" x2="78" y2="-14" stroke-width="2" opacity="0.7"/>
+    <!-- mast -->
+    <line class="hull" x1="0" y1="-78" x2="0" y2="-26" stroke-width="3"/>
+    <!-- hull cross-section -->
+    <path class="hull" d="M-58 -26 C-56 4 -30 22 0 22 C30 22 56 4 58 -26" stroke-width="4"/>
+    <line class="hull" x1="-58" y1="-26" x2="58" y2="-26" stroke-width="3"/>
+    <!-- the keel, below the waterline -->
+    <line class="keel" x1="0" y1="22" x2="0" y2="62" stroke-width="6"/>
+    <ellipse class="ballast" cx="0" cy="66" rx="16" ry="7" stroke="none"/>
+  </g>
+
+  <line class="rule" x1="240" y1="62" x2="305" y2="62" stroke-width="5" stroke-linecap="round"/>
+  <text class="name" x="238" y="125" font-family="system-ui, sans-serif" font-size="66" font-weight="800" letter-spacing="6">KEEL</text>
+  <text class="purpose" x="243" y="166" font-family="system-ui, sans-serif" font-size="27" font-weight="500" letter-spacing="0.5">do not let the session capsize irreversibly</text>
+
+  <g transform="translate(1010 74)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle class="border" cx="35" cy="31" r="30" stroke-width="2"/>
+    <path class="rule" d="M35 13V31L48 40" stroke-width="5"/>
+  </g>
+</svg>

@@ -19,8 +19,8 @@ import tempfile
 import unittest
 
 from tests.plant_support import PLUGIN, smoke_replace
-from gyroscope import clauses as C, dispatch
-from gyroscope.ledger import Demand, Ledger, derive_id
+from keel import clauses as C, dispatch
+from keel.ledger import Demand, Ledger, derive_id
 
 
 def rows_written(state: str) -> int:
@@ -33,11 +33,11 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
         self._temp = tempfile.TemporaryDirectory()
         self.addCleanup(self._temp.cleanup)
         self.state = self._temp.name
-        previous = os.environ.get("GYROSCOPE_STATE_DIR")
+        previous = os.environ.get("KEEL_STATE_DIR")
         self.addCleanup(
-            lambda: os.environ.pop("GYROSCOPE_STATE_DIR", None)
-            if previous is None else os.environ.__setitem__("GYROSCOPE_STATE_DIR", previous))
-        os.environ["GYROSCOPE_STATE_DIR"] = self.state
+            lambda: os.environ.pop("KEEL_STATE_DIR", None)
+            if previous is None else os.environ.__setitem__("KEEL_STATE_DIR", previous))
+        os.environ["KEEL_STATE_DIR"] = self.state
 
     def test_TEETH_forty_identical_guards_write_one_row_per_clause(self) -> None:
         # `load_default()`, NOT `load_dir(default_dir())`, and a floor under the table -- because
@@ -78,7 +78,7 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
     # the file is byte-identical again afterwards. Observed failing: removing the dedup
     # guard makes this test red with `plant seam changed`.
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
-        path = PLUGIN / "gyroscope" / "ledger.py"
+        path = PLUGIN / "keel" / "ledger.py"
         smoke_replace(self, path,
                       b"        if self.is_licensed(session, agent, demand_id):\n            return\n",
                       b"", "tests.test_ledger_growth.RepeatedGuardsDoNotGrowTheLedger."
@@ -95,7 +95,7 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
         # empty table. Reading zero clauses satisfied the `<= 10` bound perfectly while exercising
         # nothing. The upper bound cannot tell that apart from a correct deduplication; only the
         # floor can, so the floor gets its own proof that it fires.
-        smoke_replace(self, PLUGIN / "gyroscope" / "clauses.py",
+        smoke_replace(self, PLUGIN / "keel" / "clauses.py",
                       b"    return load_bundle(bundle) if bundle.is_file() else load_dir(default_dir())",
                       b"    return []", "tests.test_ledger_growth."
                       "RepeatedGuardsDoNotGrowTheLedger."

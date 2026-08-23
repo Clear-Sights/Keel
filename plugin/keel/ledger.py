@@ -39,12 +39,12 @@ OPEN, DISCHARGED = "open", "discharged"
 
 def state_dir() -> pathlib.Path:
     """Own store, not a host-provided one -- no CLAUDE_PLUGIN_DATA equivalent exists on codex."""
-    env = os.environ.get("GYROSCOPE_STATE_DIR")
+    env = os.environ.get("KEEL_STATE_DIR")
     if env:
         return pathlib.Path(env)
     if os.environ.get("CODEX_PLUGIN_ROOT") or os.environ.get("CODEX_HOME"):
-        return pathlib.Path.home() / ".codex" / "gyroscope_state"
-    return pathlib.Path.home() / ".claude" / "gyroscope_state"
+        return pathlib.Path.home() / ".codex" / "keel_state"
+    return pathlib.Path.home() / ".claude" / "keel_state"
 
 
 def _canon(obj) -> str:
