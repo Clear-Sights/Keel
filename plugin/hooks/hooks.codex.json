@@ -13,6 +13,18 @@
         "matcher": "^(Bash|Read)$"
       }
     ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "./hooks/dispatch.sh",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "auto"
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -70,6 +82,17 @@
           }
         ],
         "matcher": "*"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "./hooks/dispatch.sh",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
       }
     ]
   }

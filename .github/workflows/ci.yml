@@ -79,7 +79,7 @@ jobs:
           # `hooks/hooks.json` joined this set because three dead pointers lived in it through a
           # whole rename -- a directory, a module and a digest of the two, none of which existed --
           # and nothing read any of them, which is exactly why nothing noticed.
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json hooks/hooks.json
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json keel/compaction.json hooks/hooks.json
         run: |
           set -eu
           BAK=$(mktemp -d)
@@ -160,6 +160,7 @@ jobs:
           # No `${CLAUDE_PLUGIN_ROOT}` in the planted value: under `set -u` the eval would expand
           # it and abort on an unbound variable before reaching the file. A bare relative path
           # exercises the same assertion -- the file the command names is not there.
+          plant "the preserve list drifts from its digest" "jq '.preserve = \"cut whatever you like\"' $D/keel/compaction.json > /tmp/cj.json && mv /tmp/cj.json $D/keel/compaction.json"
           plant "a hook command points at nothing" "jq '.hooks.Stop[0].hooks[0].command = \"hooks/gone.sh\"' $D/hooks/hooks.json > /tmp/hj.json && mv /tmp/hj.json $D/hooks/hooks.json"
 
           restore
@@ -211,7 +212,7 @@ jobs:
           # The two hook files joined the list once the fence started resolving what they name:
           # a shim that is gone, and a hooks map that is gone, are both absences the suite can
           # now see -- and an absence it can see is an absence it has to go red on.
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json hooks/hooks.json hooks/dispatch.sh
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json keel/compaction.json hooks/hooks.json hooks/dispatch.sh
         run: |
           set -eu
           # If anything kills this step between the mv out and the mv back, put the file back --

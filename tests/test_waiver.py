@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import hashlib
 import io
+import json
 import os
 import pathlib
 import tempfile
 import unittest
 from datetime import date
+from unittest import mock
 
 from tests.plant_support import PLUGIN, smoke_replace
 
@@ -279,3 +282,84 @@ class TheRenameOwesTheOldNameASentence(unittest.TestCase):
                       b"", "tests.test_waiver.TheRenameOwesTheOldNameASentence."
                       "test_TEETH_the_old_variable_being_ignored_is_announced",
                       "the old variable was ignored silently")
+
+
+class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
+    """A compaction is a report that gets cut, and the cut decides what survives.
+
+    The pages already said so; nothing did anything about it. The preserve list was typed by hand
+    into `/compact` every time it was wanted, which is the recurring guard this whole package
+    exists to retire -- a guard that works exactly as often as somebody remembers it.
+
+    WHY THIS HANGS OFF `UserPromptSubmit` AND NOT `PreCompact`. `PreCompact` is the obvious home
+    and it cannot do the job: its `additionalContext` is documented as explicitly not affecting
+    compaction, and its stdout goes to the debug log, so the only lever it holds is blocking.
+    `UserPromptSubmit` is one of three events whose output becomes context the model acts on, and
+    it sees the raw `/compact` before expansion. The earlier event is the one with the reach.
+
+    Both directions are asserted, and the silences matter more than the speech: this hook fires on
+    EVERY prompt, so a line it adds needlessly is paid on every turn of every session -- which is
+    the recurring noise that gets a gate switched off.
+    """
+
+    def _submit(self, text: str) -> dict:
+        return dispatch.user_prompt_submit(
+            [], Ledger(), {"hook_event_name": "UserPromptSubmit", "session_id": "k",
+                           "user_input": text})
+
+    def test_TEETH_a_bare_compact_receives_the_preserve_list(self) -> None:
+        out = self._submit("/compact")
+        context = out.get("hookSpecificOutput", {}).get("additionalContext", "")
+        self.assertIn("Preserve verbatim", context, f"the cut got no preserve list: {out}")
+        self.assertEqual(dispatch._preserve_list(), context,
+                         "the injected text is not the vendored list, byte for byte")
+
+    def test_TEETH_an_authored_preserve_list_is_never_overridden(self) -> None:
+        # Supplying a missing guard and overruling a present one are different acts. An author
+        # who stated what to keep has decided; a default that replaced it would be the mandate
+        # counterfeit, not a construction.
+        self.assertEqual({}, self._submit("/compact keep only the shas and the error strings"))
+
+    def test_TEETH_an_ordinary_prompt_is_untouched(self) -> None:
+        for text in ("fix the parser", "compact", "please /compact later", "/compactify"):
+            with self.subTest(prompt=text):
+                self.assertEqual({}, self._submit(text), f"{text!r} drew a response")
+
+    def test_TEETH_a_missing_vendored_list_does_not_eat_the_prompt(self) -> None:
+        # Fails OPEN. The worst a broken vendored file may cost is the preserve list itself;
+        # swallowing the user's `/compact` would be a wiring fault deciding a user's command.
+        with mock.patch.object(dispatch, "_preserve_list", side_effect=OSError("gone")):
+            self.assertEqual({}, self._submit("/compact"))
+
+    def test_TEETH_an_automatic_cut_says_it_was_not_steered(self) -> None:
+        out = dispatch.pre_compact([], Ledger(), {"hook_event_name": "PreCompact",
+                                                  "compact_trigger": "auto"})
+        self.assertIn("automatic compaction", out.get("systemMessage", ""),
+                      f"an unsteered automatic cut passed silently: {out}")
+        # And it must NOT block. An automatic cut happens because the window is full; refusing it
+        # to protect a summary wedges the session, which is a worse fate than a worse summary.
+        self.assertNotIn("hookSpecificOutput", out)
+        self.assertNotIn("decision", out)
+
+    def test_TEETH_a_manual_cut_is_not_reported_twice(self) -> None:
+        self.assertEqual({}, dispatch.pre_compact([], Ledger(),
+                         {"hook_event_name": "PreCompact", "compact_trigger": "manual"}))
+
+    def test_TEETH_the_vendored_list_matches_its_own_digest(self) -> None:
+        """The provenance is a digest of the bytes, not a coordinate into a frozen repository.
+
+        A commit pin would name a tree this body no longer matches the moment the prompt set is
+        edited, and nothing here could tell. A digest is checkable by this repository alone.
+        """
+        doc = json.loads((PLUGIN / "keel" / "compaction.json").read_text(encoding="utf-8"))
+        self.assertEqual(doc["_provenance"]["sha256"],
+                         hashlib.sha256(doc["preserve"].encode()).hexdigest(),
+                         "the vendored preserve list no longer matches its recorded digest")
+
+    def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
+        smoke_replace(self, PLUGIN / "keel" / "dispatch.py",
+                      b'_BARE_COMPACT = re.compile(r"^\\s*/compact\\s*$")',
+                      b'_BARE_COMPACT = re.compile(r"^\\s*/never-matches-this\\s*$")',
+                      "tests.test_waiver.TheCutGetsItsPreserveListWithoutBeingAsked."
+                      "test_TEETH_a_bare_compact_receives_the_preserve_list",
+                      "the cut got no preserve list")

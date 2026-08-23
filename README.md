@@ -110,6 +110,15 @@ treated as permission. Four properties of the ledger, each stated in the code it
 - **Codex** — copy `hooks/hooks.codex.json` to the location Codex reads (`.codex/hooks.json` in a
   project).
 
+### The cut
+
+A bare `/compact` asks for a compaction with no preserve list. `UserPromptSubmit` supplies the
+vendored one (`plugin/keel/compaction.json`, pinned by a digest of its own bytes) as context the
+model acts on; a `/compact` that already carries instructions is left untouched. An automatic
+compaction submits no prompt and cannot be instructed — `PreCompact`'s context is documented as
+not affecting the cut, and blocking it would wedge a session whose window is already full — so
+that path only reports that it ran unsteered.
+
 ### Manual bypass
 
 A Bash command whose **leading comment block** carries `# keel-allow:` followed by a reason makes
