@@ -55,13 +55,30 @@ def render_table(rows: list[dict], prefix: str) -> list[str]:
 
 
 def _region(text: str, path: Path) -> tuple[int, int, list[str]]:
-    """Line index just after BEGIN, line index of END, and the file's lines."""
+    """Line index just after BEGIN, line index of the matching END, and the file's lines.
+
+    A MATCHED PAIR, not the last of each. The loop here used to rebind `begin` and `end` on every
+    hit and never stop, so with two BEGIN markers in a file the region silently became the LAST
+    BEGIN to the LAST END -- which is not a region either marker delimits. Everything between the
+    first BEGIN and the last one would then be left untouched by `--write` and unexamined by
+    `--check`: a stale table sitting inside what reads, to anyone looking at the page, like
+    generated territory. The generator's whole job is that a view cannot quietly lag its source,
+    so "quietly" is the word it cannot afford anywhere, least of all in the function that decides
+    what it is allowed to look at.
+
+    A second BEGIN is an error rather than a silent choice, because there is no reading of two
+    openers that is obviously right, and guessing one is how the last-wins behaviour arrived.
+    """
     lines = text.split("\n")
     begin = end = None
     for index, line in enumerate(lines):
         if line.startswith(f"<!-- BEGIN GENERATED: {MARKER}"):
+            if begin is not None:
+                raise SystemExit(
+                    f"{path}: a second {MARKER} BEGIN marker at line {index + 1} -- one view, "
+                    f"one region, and which of the two this one closes is not a guess to make")
             begin = index
-        elif line.startswith(f"<!-- END GENERATED: {MARKER}"):
+        elif line.startswith(f"<!-- END GENERATED: {MARKER}") and end is None:
             end = index
     if begin is None or end is None or end <= begin:
         raise SystemExit(f"{path}: no {MARKER} marker region -- the view has lost its home")

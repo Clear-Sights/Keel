@@ -12,12 +12,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\|)\\s*git\\s+push\\b"
+      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+push\\b"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\|)\\s*git\\s+status\\b"
+      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+status\\b"
     },
     "window": "session",
     "deny_reason": "push with no `git status` on record this session; run `git status` first",
@@ -50,14 +50,14 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\|)\\s*(ls\\b|find\\b|git\\s+status\\b|du\\b)",
+      "pattern": "(^|&&|;|\\||\\n)\\s*(ls\\b|find\\b|git\\s+status\\b|du\\b)",
       "unless": [
-        "(^|&&|;|\\|)\\s*find\\b[^|;]*-delete"
+        "(^|&&|;|\\||\\n)\\s*find\\b[^|;]*-delete"
       ]
     },
     "window": "session",
@@ -92,15 +92,15 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*git\\s+push\\b[^|;]*(--force|\\s-f\\b)",
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b[^|;]*(--force|\\s-f\\b)",
       "unless": [
-        "(?:^|[;&|]\\s*)\\s*git\\s+push\\b[^|;]*--force-with-lease"
+        "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b[^|;]*--force-with-lease"
       ]
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\|)\\s*git\\s+fetch\\b"
+      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+fetch\\b"
     },
     "window": "session",
     "deny_reason": "force-push without a prior `git fetch`; fetch first, or use --force-with-lease which carries its own check",
@@ -197,7 +197,7 @@
       "pattern": "(?:^|\\s)((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
       "key_from": {
         "on": "tool_input.command",
-        "pattern": "(?:^|[;&|]\\s*)\\s*((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
+        "pattern": "(?:^|[;&|\\n]\\s*)\\s*((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
         "group": 1
       }
     },
@@ -215,7 +215,7 @@
       "on": "tool_response.exit_code",
       "key_from": {
         "on": "tool_input.command",
-        "pattern": "(?:^|[;&|]\\s*)\\s*((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
+        "pattern": "(?:^|[;&|\\n]\\s*)\\s*((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
         "group": 1
       }
     },
@@ -252,7 +252,7 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*ps\\b[^;\\n]*\\|\\s*(?:grep|rg)\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*ps\\b[^;\\n]*\\|\\s*(?:grep|rg)\\b"
     },
     "discharged_by": {
       "kind": "regex",
@@ -402,7 +402,7 @@
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\|)\\s*git\\s+status\\b"
+      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+status\\b"
     },
     "window": "session",
     "deny_reason": "ending with no `git status` on record: dirty is unfinished, and an ending nobody checked is the one that looks complete",
@@ -450,7 +450,7 @@
     "activated_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*git\\s+push\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b"
     },
     "_activation": "A terminal demand with fingerprint `always` fires at every Stop, so a read-only session that never pushed was asked for a fetch it had no reason to run -- a firing-rate cost on every session end, measured: reconcile([T02], empty ledger, read-only Stop) returned decision=block. `activated_by` makes the demand CONDITIONAL on an observed push, which is the deferred-demand shape this clause needed. Quarantining T02 instead was declined: a false block costs one cheap fetch, while losing the landing check costs an unverified push, and only the second is unrecoverable.",
     "fixtures_activate": [
@@ -471,7 +471,7 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)/?(?:tmp/sect/run/)?dispatch\\.sh\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)/?(?:tmp/sect/run/)?dispatch\\.sh\\b"
     },
     "discharged_by": {
       "kind": "regex",
@@ -523,7 +523,7 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)/?(?:tmp/sect/run/)?dispatch\\.sh\\s+[A-Za-z0-9][\\w.-]*\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)/?(?:tmp/sect/run/)?dispatch\\.sh\\s+[A-Za-z0-9][\\w.-]*\\b"
     },
     "discharged_by": {
       "kind": "regex",
@@ -571,12 +571,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:sudo\\s+)?(?:kill(?:all)?|pkill)\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:sudo\\s+)?(?:kill(?:all)?|pkill)\\b"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:ps\\b|pgrep\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:ps\\b|pgrep\\b)"
     },
     "window": "session",
     "deny_reason": "use a PID in a signal operation without its guard; run `ps`, `pgrep`, or an equivalent observer-namespace process listing",
@@ -607,7 +607,7 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*curl\\b[^\\n]*(?:-X|--request)\\s*(?:POST|PUT|PATCH|DELETE)\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*curl\\b[^\\n]*(?:-X|--request)\\s*(?:POST|PUT|PATCH|DELETE)\\b"
     },
     "discharged_by": {
       "kind": "regex",
@@ -655,12 +655,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*git\\s+commit\\b[^\\n]*(?:\\s-S(?:\\s|$)|--gpg-sign\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+commit\\b[^\\n]*(?:\\s-S(?:\\s|$)|--gpg-sign\\b)"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:printf\\b[^\\n]*\\|\\s*gpg\\s+--clearsign\\b|gpg\\s+--detach-sign\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:printf\\b[^\\n]*\\|\\s*gpg\\s+--clearsign\\b|gpg\\s+--detach-sign\\b)"
     },
     "window": "session",
     "deny_reason": "create a signed git commit without its guard; run a signer canary such as `printf test | gpg --clearsign`",
@@ -707,16 +707,16 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*git\\s+(?:switch|checkout)\\s+[\\w./-]+\\b",
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+(?:switch|checkout)\\s+[\\w./-]+\\b",
       "unless": [
-        "(?:^|[;&|]\\s*)\\s*git\\s+(?:switch|checkout)\\s+-(?:q|b|B)(?:\\s|$)",
-        "(?:^|[;&|]\\s*)\\s*git\\s+checkout\\s+[\\w./-]*\\.[A-Za-z][A-Za-z0-9]{0,9}(?:\\s|[;&|]|$)"
+        "(?:^|[;&|\\n]\\s*)\\s*git\\s+(?:switch|checkout)\\s+-(?:q|b|B)(?:\\s|$)",
+        "(?:^|[;&|\\n]\\s*)\\s*git\\s+checkout\\s+[\\w./-]*\\.[A-Za-z][A-Za-z0-9]{0,9}(?:\\s|[;&|\\n]|$)"
       ]
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*git\\s+(?:rev-parse\\b[^\\n]*--verify\\b|(?:checkout|switch)\\s+(?:-q\\s+)?-[bB]\\s|branch\\s+[\\w./-]+)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+(?:rev-parse\\b[^\\n]*--verify\\b|(?:checkout|switch)\\s+(?:-q\\s+)?-[bB]\\s|branch\\s+[\\w./-]+)"
     },
     "window": "session",
     "deny_reason": "switch or check out a git ref that was never verified or created this session; run `git rev-parse --verify REF`, or create it with `git checkout -b/-B REF`",
@@ -761,15 +761,15 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*jq\\b[^\\n]*(?:\\.[A-Za-z_][\\w]*|\\[)",
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*jq\\b[^\\n]*(?:\\.[A-Za-z_][\\w]*|\\[)",
       "unless": [
-        "(?:^|[;&|]\\s*)\\s*jq\\b[^\\n]*\\s-e\\b"
+        "(?:^|[;&|\\n]\\s*)\\s*jq\\b[^\\n]*\\s-e\\b"
       ]
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*jq\\b[^\\n]*(?:\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*jq\\b[^\\n]*(?:\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
     },
     "window": "session",
     "deny_reason": "traverse structured JSON whose structure was never once looked at; run `jq 'keys'`, `jq 'type'`, or a `jq -e` type/key assertion on the file first",
@@ -797,12 +797,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:git\\s+apply|patch\\s+-p\\d+)\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:git\\s+apply|patch\\s+-p\\d+)\\b"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:rg|grep)\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rg|grep)\\b"
     },
     "window": "session",
     "deny_reason": "apply a patch without its guard; run `rg`/`grep` for the patch context and read the target immediately before applying",
@@ -858,7 +858,7 @@
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*git\\s+apply\\b[^\\n]*--check\\b"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+apply\\b[^\\n]*--check\\b"
     },
     "window": "session",
     "deny_reason": "apply a generated patch without its guard; run `git apply --check PATCH` first",
@@ -903,12 +903,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:sed\\s+-i|perl\\s+-pi|python3?\\b[^\\n]*\\b(?:rewrite|replace)\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:sed\\s+-i|perl\\s+-pi|python3?\\b[^\\n]*\\b(?:rewrite|replace)\\b)"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:cmp\\b|sha256sum\\b|shasum\\b|rg\\b|grep\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:cmp\\b|sha256sum\\b|shasum\\b|rg\\b|grep\\b)"
     },
     "window": "session",
     "deny_reason": "perform an in-place text rewrite without ever looking at the text; `rg`/`grep` the pattern first (or `cmp`/checksum the file)",
@@ -936,12 +936,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:pytest\\b|go\\s+test\\b|cargo\\s+test\\b|npm\\s+test\\b|curl\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:pytest\\b|go\\s+test\\b|cargo\\s+test\\b|npm\\s+test\\b|curl\\b)"
     },
     "window": "session",
     "deny_reason": "make a destructive behavior-changing mutation without its guard; run an independent behavior observer such as the relevant test or probe first",
@@ -970,12 +970,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:npm\\s+publish\\b|twine\\s+upload\\b|cargo\\s+publish\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:npm\\s+publish\\b|twine\\s+upload\\b|cargo\\s+publish\\b)"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:python\\s+-W\\s*error\\b|PYTHONWARNINGS=error\\b|RUSTFLAGS=[\"']?-Dwarnings|NODE_OPTIONS=[\"']?--throw-deprecation)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:python\\s+-W\\s*error\\b|PYTHONWARNINGS=error\\b|RUSTFLAGS=[\"']?-Dwarnings|NODE_OPTIONS=[\"']?--throw-deprecation)"
     },
     "window": "session",
     "deny_reason": "publish or release an artifact after runtime testing without its guard; run the suite with warnings promoted to errors on a supported runtime",
@@ -1019,12 +1019,12 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:python3?\\b[^\\n]*(?:scan|scanner)\\w*\\.py\\b|(?:npm|go|cargo)\\s+test\\b[^\\n]*scanner)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:python3?\\b[^\\n]*(?:scan|scanner)\\w*\\.py\\b|(?:npm|go|cargo)\\s+test\\b[^\\n]*scanner)"
     },
     "discharged_by": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|]\\s*)\\s*(?:pytest|python3?\\s+-m\\s+pytest|go\\s+test|cargo\\s+test|npm\\s+test)\\b[^\\n]*(?:prefix|distractor)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:pytest|python3?\\s+-m\\s+pytest|go\\s+test|cargo\\s+test|npm\\s+test)\\b[^\\n]*(?:prefix|distractor)"
     },
     "window": "session",
     "deny_reason": "run a scanner as an acceptance check without its guard; run its prefix-distractor regression test first",

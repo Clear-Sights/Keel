@@ -424,6 +424,22 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
         from keel import dispatch
         self.assertEqual(dispatch._stated_count("3 obligations still open [A02] [C08]"), 3)
 
+    def test_a_non_ascii_digit_does_not_kill_the_row(self):
+        """`str.isdigit` and `int` disagree, and this parser had one of each.
+
+        `'\u00b2'.isdigit()` is True; `int('\u00b2')` raises. The selector therefore handed the
+        converter something it could not convert, the ValueError landed in `note_block`'s blanket
+        except, and the row vanished -- from the log whose whole job is telling a clean terminal
+        apart from a faulted one. Reading as "no count stated" is the honest answer: there is no
+        count here that this parser can read.
+        """
+        sys.path.insert(0, str(PLUGIN_ROOT))
+        from keel import dispatch
+        self.assertIsNone(dispatch._stated_count("\u00b2 obligations open"))
+        # And a real count later in the same message is still found, so the fix is a narrower
+        # selector rather than an early return.
+        self.assertEqual(dispatch._stated_count("\u00b2 3 obligations"), 3)
+
     def test_the_clean_terminal_records_a_real_zero(self):
         """The clean terminal passes its 0 from its own call site, so it stays distinguishable
         from the unknown above."""

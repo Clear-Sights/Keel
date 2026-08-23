@@ -39,8 +39,25 @@ jobs:
           # would look exactly like a correct one. The tests assertion no longer has a matching
           # `rm` above it, and that is the point -- the suite is outside `plugin/` now, so this
           # copy cannot pick it up. Keeping the assertion is what would catch it moving back.
-          unzip -l "keel-$VERSION.zip" | grep -q "eval/" && exit 1 || true
-          unzip -l "keel-$VERSION.zip" | grep -q "plugin/tests/" && exit 1 || true
+          #
+          # THE LISTING IS TAKEN ONCE, INTO A FILE, and that is what makes these two lines
+          # assertions at all. They used to read `unzip -l ... | grep -q "eval/" && exit 1 ||
+          # true`, whose status is the status of the `|| true`: with no `pipefail`, an `unzip`
+          # that failed for ANY reason -- missing binary, unreadable archive, a zip step that
+          # never produced the file -- left `grep` reading empty input, finding nothing, and the
+          # step passing. The two checks the comment above argues hardest for could not fail. A
+          # separate `unzip` under `set -e` fails the step when the listing cannot be taken, and
+          # grepping a file has no pipe to swallow anything.
+          unzip -l "keel-$VERSION.zip" > bundle-listing.txt
+          if grep -q "eval/" bundle-listing.txt; then
+            echo "the bundle contains eval/" >&2
+            exit 1
+          fi
+          if grep -q "plugin/tests/" bundle-listing.txt; then
+            echo "the bundle contains plugin/tests/" >&2
+            exit 1
+          fi
+          rm -f bundle-listing.txt
 
       - name: Create tag and GitHub Release
         env:

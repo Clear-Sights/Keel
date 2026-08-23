@@ -16,10 +16,10 @@
 #
 # WHAT IT RUNS, AND WHY NOT MORE. The dev suite has twelve test modules; six of them are bound to
 # the DEVELOPMENT layout -- they import `gyroscope.generate` / `gyroscope.provenance`, which are
-# dev-only modules, or they read clauses through `load_dir(default_dir())`, the loose-file path.
-# This repository ships neither: it carries the compact `clauses.json` that `load_default()`
-# prefers, which is why the plugin loads its 24 clauses here perfectly well while those six modules
-# do not run. Shipping test files that cannot pass in the repository they sit in would be worse
+# dev-only modules, or they read clauses from the archive's folder of loose per-clause files.
+# This repository ships neither: it carries the compact `clauses.json` that `load_default()` is now
+# the single loader for, which is why the plugin loads its 24 clauses here perfectly well while
+# those six modules do not run. Shipping test files that cannot pass in the repository they sit in would be worse
 # than shipping none, so only the six that gate the SHIPPED artifact are here -- plus this
 # repository's own `tests/test_fence.py`, which joins the skill pages under `plugin/` to the
 # clause table and byte-compares every generated view against it.
@@ -76,7 +76,10 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
           D: plugin
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json
+          # `hooks/hooks.json` joined this set because three dead pointers lived in it through a
+          # whole rename -- a directory, a module and a digest of the two, none of which existed --
+          # and nothing read any of them, which is exactly why nothing noticed.
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json hooks/hooks.json
         run: |
           set -eu
           BAK=$(mktemp -d)
@@ -128,6 +131,37 @@ jobs:
           plant "body overruns its budget"    "seq -f 'padding line %g of the budget plant' 500 >> $D/SKILL.md"
           plant "construction block mistagged" "sed -i '0,/\`\`\`sh/s//\`\`\`python/' $D/POINTS.md"
 
+          # A comment line in front of a command used to turn the entire fence off, because a
+          # newline did not separate segments and thirty-seven predicates spell "where a command
+          # starts" by hand. This plant asks the question the way the suite asks it -- of the
+          # table's own fixtures -- so a predicate spelled a fourth way is judged too.
+          # A SCRIPT, NOT AN INLINE `sed`. This plant has to survive YAML quoting, shell quoting
+          # and `eval`, and the pattern it edits is made mostly of the characters all three of
+          # those layers care about. The first attempt reached the file and changed nothing, which
+          # the harness caught and reported -- the failure mode a plant is supposed to have, but
+          # not one worth re-earning on every edit. It asserts its own seam, so a plant that has
+          # gone stale says so instead of quietly narrowing what it tests.
+          cat > /tmp/narrow-separators.py <<'PLANT'
+          import pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text()
+          # Both spellings of "where a command starts", because it was the SECOND that kept the
+          # bypass open after the first was fixed.
+          pairs = ((r"[;&|\\n]", "[;&|]"), (r"(^|&&|;|\\||\\n)", r"(^|&&|;|\\|)"))
+          for wide, narrow in pairs:
+              assert wide in text, f"plant seam changed: {wide!r} is no longer in the table"
+              text = text.replace(wide, narrow)
+          path.write_text(text)
+          PLANT
+          sed -i 's/^          //' /tmp/narrow-separators.py
+
+          plant "a separator stops seeing newlines" "python3 /tmp/narrow-separators.py $D/keel/clauses.json"
+          plant "a hook file names the old package" "jq '. + {_provenance: {recompute_with: \"python3 -m gyroscope.generate\"}}' $D/hooks/hooks.json > /tmp/hj.json && mv /tmp/hj.json $D/hooks/hooks.json"
+          # No `${CLAUDE_PLUGIN_ROOT}` in the planted value: under `set -u` the eval would expand
+          # it and abort on an unbound variable before reaching the file. A bare relative path
+          # exercises the same assertion -- the file the command names is not there.
+          plant "a hook command points at nothing" "jq '.hooks.Stop[0].hooks[0].command = \"hooks/gone.sh\"' $D/hooks/hooks.json > /tmp/hj.json && mv /tmp/hj.json $D/hooks/hooks.json"
+
           restore
           suite
           echo "restored, and green again"
@@ -174,7 +208,10 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
           D: plugin
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json
+          # The two hook files joined the list once the fence started resolving what they name:
+          # a shim that is gone, and a hooks map that is gone, are both absences the suite can
+          # now see -- and an absence it can see is an absence it has to go red on.
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json hooks/hooks.json hooks/dispatch.sh
         run: |
           set -eu
           # If anything kills this step between the mv out and the mv back, put the file back --

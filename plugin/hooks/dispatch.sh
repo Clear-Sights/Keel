@@ -54,8 +54,27 @@ command -v "$python" >/dev/null 2>&1 || fail_open "interpreter not found: $pytho
 # because exit 2 is the ONLY closed signal that survives a payload the host refuses to parse
 # ("exit 0 with a parsed object that fails schema validation is a non-blocking error: the action
 # proceeds"), so a future decision path that cannot serialize has somewhere to go.
-"$python" -m keel.dispatch
+# THE OUTPUT IS CAPTURED, and the reason is that a hook speaks by writing one JSON object. The
+# dispatcher used to write straight to stdout and this shim used to append `fail_open`'s object
+# on any nonzero exit -- so a dispatcher that printed its decision and THEN died put TWO objects
+# on the wire:
+#
+#     {"hookSpecificOutput": {... "permissionDecision": "deny" ...}}
+#     {"systemMessage":"keel hook wiring fault: Python dispatcher failed"}
+#
+# A host reading the last object, or the concatenation, gets something that is not a decision --
+# and by the rule quoted above, "exit 0 with a parsed object that fails schema validation is a
+# non-blocking error: the action proceeds". A deny became an allow because the process died after
+# saying deny. Capturing costs a buffer the size of one decision and removes the case entirely:
+# if the child produced any output, that output is the answer and the shim adds nothing to it.
+# `fail_open` is for a child that said NOTHING, which is the only state it was ever describing.
+out=$("$python" -m keel.dispatch)
 status=$?
+if [ -n "$out" ]; then
+    printf '%s\n' "$out"
+    [ "$status" -eq 2 ] && exit 2
+    exit 0
+fi
 [ "$status" -eq 0 ] && exit 0
 [ "$status" -eq 2 ] && exit 2
 fail_open "Python dispatcher failed"

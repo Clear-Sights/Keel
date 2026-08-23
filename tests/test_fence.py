@@ -26,8 +26,14 @@ import sys
 import unittest
 
 
-REPO = Path(__file__).resolve().parent.parent
-PLUGIN = REPO / "plugin"
+# The roots are IMPORTED, not re-derived. This module used to open with
+# `REPO = Path(__file__).resolve().parent.parent`, which is precisely the line `plant_support`
+# exists to have deleted: it names a DIFFERENT directory in each of the two layouts these bytes
+# run from, so the copy that was supposed to be portable was the one file pinning itself to one
+# layout. One derivation, one home, and its docstring is where the reasoning lives.
+from tests.plant_support import PLUGIN, REPO
+from keel import clauses as C_MOD
+
 SKILL = PLUGIN / "SKILL.md"
 POINTS_MD = PLUGIN / "POINTS.md"
 ACTS_MD = PLUGIN / "ACTS.md"
@@ -35,6 +41,20 @@ VOCABULARY = PLUGIN / "vocabulary.json"
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 
 PAGES = (SKILL, POINTS_MD, ACTS_MD)
+
+
+def _headings(text: str) -> list[str]:
+    """Every `## ` heading in a page, in order.
+
+    `(.+)`, never `(\S+)`, and the difference is not cosmetic. Three scanners in this module
+    matched word-shaped headings only, so a heading with a space in it was INVISIBLE to them: it
+    could be duplicated, it could sit over an empty section, a contents row could link to it, and
+    every one of those checks passed by never seeing it. A heading the pattern cannot see is a
+    heading the assertion never judges. `TheSevenActs` already knew this and wrote it down -- it
+    was the one of the four copies that got it right, which is what four copies of one job
+    produce. There is one copy now, and it is the right one.
+    """
+    return [h.strip() for h in re.findall(r"^## (.+)$", text, re.MULTILINE)]
 
 SKILL_NAME = "keel"
 
@@ -119,8 +139,7 @@ class TheConstructionJoin(unittest.TestCase):
         The map lives entirely in the anchor test, in both directions. What is left here is what
         that test cannot see -- a heading that appears twice, and a heading over nothing.
         """
-        headings = [h for h in re.findall(r"^## (\S+)$", self.points_md, re.MULTILINE)
-                    if h != "Contents"]
+        headings = [h for h in _headings(self.points_md) if h != "Contents"]
         # A list, not a set: two entries under one id would survive set equality, and one entry
         # per heading is the claim being checked.
         self.assertEqual(len(headings), len(set(headings)), f"duplicate entry heading: {headings}")
@@ -135,17 +154,29 @@ class TheConstructionJoin(unittest.TestCase):
 
     def test_every_construction_anchor_resolves(self) -> None:
         """An anchor that does not resolve does not ship -- the product's own rule, applied to
-        itself. The loader checks anchor SHAPE and nothing more; this owns the page, so it
-        resolves every fragment against the actual headings and, in the other direction, refuses
-        a section no row claims. Rows may share a section -- P01 and P02 are one plan point split
-        by which ground a step is missing -- so this is a total map both ways, never a bijection.
+        itself. This is now the ONLY place the rule is enforced, and that move is deliberate: the
+        loader used to check anchor shape too, at dispatch time, where one row's typo made the
+        whole table unloadable and denied every tool call in the session. A documentation pointer
+        cannot change between the build and the call, so the build is the only boundary that
+        needs to judge it -- and this test judges more than the loader did, resolving every
+        fragment against a real heading and, in the other direction, refusing a section no row
+        claims. Rows may share a section -- P01 and P02 are one plan point split by which ground
+        a step is missing -- so this is a total map both ways, never a bijection.
         """
-        headings = {h.lower() for h in re.findall(r"^## (\S+)$", self.points_md, re.MULTILINE)}
+        headings = {h.lower() for h in _headings(self.points_md)}
         headings.discard("contents")
         claimed = set()
         for row in self.rows:
             anchor = row.get("construction")
             self.assertTrue(anchor, f"{row['id']}: no construction anchor")
+            # The shape assertion the loader gave up, held against the pattern the loader still
+            # owns -- so "what an anchor looks like" keeps one definition even though the check
+            # moved to the other end of the build.
+            # `fullmatch`, not `assertRegex`: the pattern carries no anchors of its own, so a
+            # search would accept `see POINTS.md#a01 for details` as an anchor. The loader used
+            # fullmatch; moving the check must not weaken it.
+            self.assertTrue(C_MOD.CONSTRUCTION_ANCHOR.fullmatch(anchor),
+                            f"{row['id']}: {anchor!r} is not an anchor shape")
             self.assertNotIn("why_none", row,
                              f"{row['id']}: why_none is gone from the schema; this row kept one")
             page, _, fragment = anchor.partition("#")
@@ -193,7 +224,7 @@ class TheConstructionJoin(unittest.TestCase):
         )
         # And every one of those links has to land somewhere. A row listing a clause and
         # pointing at nothing reads as coverage from the table of contents alone.
-        headings = {h.lower() for h in re.findall(r"^## (\S+)$", self.points_md, re.MULTILINE)}
+        headings = {h.lower() for h in _headings(self.points_md)}
         for label, target in links:
             self.assertIn(target, headings,
                           f"contents row {label} links to #{target}, which is no heading")
@@ -212,7 +243,7 @@ class TheSevenActs(unittest.TestCase):
         the equality never judges. And a list, not a set -- a duplicated section is two homes
         for one act, and sets erase exactly that.
         """
-        indexed = re.findall(r"^## (.+)$", self.acts, re.MULTILINE)
+        indexed = _headings(self.acts)
         self.assertEqual(len(indexed), len(set(indexed)), f"duplicate act heading: {indexed}")
         self.assertEqual(
             set(indexed), set(SEVEN_ACTS),
@@ -505,3 +536,52 @@ class RenderedImagesTrackTheirSource(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheShippedFilesNameOnlyThingsThatExist(unittest.TestCase):
+    """A pointer nothing resolves is how three dead references survived a whole rename.
+
+    `plugin/hooks/hooks.json` carried a `_provenance` block for a year of edits after the thing it
+    described stopped existing:
+
+        "live_source_of_truth": "plugin/clauses/"        no such directory in this repository
+        "recompute_with": "python3 -m gyroscope.generate" no such module, under either name
+        "as_of": "sha256:78e84e3333284c96"               a digest of the above, so of nothing
+
+    Nothing read any of it, which is exactly why nothing noticed. The block is gone -- these hooks
+    are authored here, not generated, so a provenance claim about a generator was false as well as
+    stale -- and this class is what stops the next one. It resolves the pointers the shipped files
+    DO make, and refuses the pre-rename identifiers outright: `gyroscope` names nothing in this
+    tree any more, so any occurrence of it in a shipped file is a reference to something that is
+    not there.
+    """
+
+    SHIPPED = ("hooks/hooks.json", "hooks/hooks.codex.json", "hooks/dispatch.sh",
+               ".claude-plugin/plugin.json")
+
+    def test_TEETH_no_shipped_file_names_the_pre_rename_package(self) -> None:
+        for name in self.SHIPPED:
+            path = PLUGIN / name
+            with self.subTest(file=name):
+                self.assertTrue(path.is_file(), f"{name} is not where this test expects it")
+                text = path.read_text(encoding="utf-8")
+                self.assertNotIn(
+                    "gyroscope", text.lower(),
+                    f"{name} still names the pre-rename package -- a pointer to nothing")
+
+    def test_TEETH_every_hook_command_reaches_a_file_that_exists(self) -> None:
+        seen = 0
+        for name in ("hooks/hooks.json", "hooks/hooks.codex.json"):
+            data = json.loads((PLUGIN / name).read_text(encoding="utf-8"))
+            for event, entries in (data.get("hooks") or {}).items():
+                for entry in entries:
+                    for hook in entry.get("hooks") or []:
+                        command = hook.get("command", "")
+                        # Both spellings of "beside this plugin": the host substitutes the
+                        # variable, and the codex file uses a relative path from the plugin root.
+                        relative = re.sub(r"^\$\{[A-Z_]+\}/|^\./", "", command)
+                        seen += 1
+                        self.assertTrue(
+                            (PLUGIN / relative).is_file(),
+                            f"{name} {event}: command {command!r} names no file in the plugin")
+        self.assertGreater(seen, 5, f"only {seen} hook commands reached the assertion")

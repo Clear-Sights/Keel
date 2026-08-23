@@ -13,6 +13,20 @@ one -- the direction that fails silent.
 
 POSIX gives backslash no special meaning inside single quotes; it escapes only within double
 quotes. An `&` following `<` or `>` is a redirect, not a control operator.
+
+And the third, found after the other two and worse than either, because it needed no crafted
+quoting at all -- a NEWLINE did not separate:
+
+  # note\nrm -rf build/   ->  ['# note\nrm -rf build/']   one segment, beginning with `#`
+
+A shell starts a new command at a newline exactly as it does at `;`. Because the splitter did
+not, and because thirty-seven predicates in the clause table spell "where a command starts" by
+hand, prefixing ANY command with a comment line turned the whole fence off. Measured on the
+shipped table: `rm -rf build/`, `git push --force origin main`, `kill -9 1234`,
+`curl -X POST ...` and `git checkout main` all went from deny to allow behind `# note` and a
+newline. The last class here is what makes that loud instead of quiet next time -- it asks the
+question of the TABLE, per row, from the rows' own fixtures, so a new predicate spelled a new
+way cannot reopen the hole by being spelled a new way.
 """
 
 from __future__ import annotations
@@ -28,6 +42,11 @@ CASES = [
     ("git push && git status", ["git push", "git status"]),
     ("grep 'a|b' f", ["grep 'a|b' f"]),
     ('echo "a\\"b" ; rm x', ['echo "a\\"b"', "rm x"]),
+    ("# note\nrm -rf build/", ["# note", "rm -rf build/"]),
+    ("a\n\nb", ["a", "b"]),
+    # A newline inside quotes is text, not a separator -- the same rule the other operators
+    # already follow, and the reason the quote branch has to come first.
+    ("echo 'a\nb' ; rm x", ["echo 'a\nb'", "rm x"]),
 ]
 
 
@@ -53,3 +72,61 @@ class SegmentsSplitOnControlOperatorsOnly(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ACommentLineDoesNotDisarmTheTable(unittest.TestCase):
+    """Every row that fires on a command must still fire when the command has a comment above it.
+
+    THE POINT IS THAT THIS ASKS THE TABLE, NOT THE PATTERNS. Thirty-seven predicates in
+    `clauses.json` write "where a command starts" by hand, in three different spellings. When the
+    newline was added to two of the three, the third kept the bypass open -- six predicates,
+    including `git push`, still allowed a commented command while the other thirty-one had been
+    fixed. A syntactic check would have had to know all three spellings, and would go quiet the
+    day someone invents a fourth.
+
+    So the question is behavioural and comes from each row's OWN positive fixtures: whatever this
+    row says fires, must still fire with `# note` and a newline in front of it. A new predicate
+    spelled a new way is judged the same as the old ones, because nothing here reads a pattern.
+    """
+
+    PREFIX = "# note\n"
+
+    def test_TEETH_every_command_fixture_still_fires_behind_a_comment_line(self) -> None:
+        checked = 0
+        for clause in C.load_default():
+            for name in ("fingerprint", "activated_by", "discharged_by"):
+                predicate = getattr(clause, name, None)
+                if not isinstance(predicate, dict):
+                    continue
+                if predicate.get("kind") != "regex":
+                    continue
+                if predicate.get("on") != "tool_input.command":
+                    continue
+                for fixture in self._positives(clause, name):
+                    if not isinstance(fixture, str):
+                        continue
+                    bare = C._fixture_event(predicate, fixture)
+                    if not C._base_predicate(predicate, bare):
+                        # This fixture is not a positive for THIS predicate; only the ones the
+                        # row already claims fire are evidence about the newline.
+                        continue
+                    commented = C._fixture_event(predicate, self.PREFIX + fixture)
+                    checked += 1
+                    self.assertTrue(
+                        C._base_predicate(predicate, commented),
+                        f"{clause.id}.{name}: {fixture!r} fires, but the same command behind a "
+                        f"comment line does not -- a comment line disarms this row",
+                    )
+        # A floor, for the same reason every other count in this suite has one: a loop that
+        # examined nothing passes every assertion inside it.
+        self.assertGreater(checked, 20, f"only {checked} command fixtures reached the assertion")
+
+    @staticmethod
+    def _positives(clause, name: str) -> list:
+        if name == "activated_by":
+            return list(clause.fixtures_activate or [])
+        if name == "discharged_by":
+            # A discharge fixture set is not authored separately; the row's positives are the
+            # commands it names, and the guard predicate is checked against them the same way.
+            return list(clause.fixtures_pos or [])
+        return list(clause.fixtures_pos or [])
