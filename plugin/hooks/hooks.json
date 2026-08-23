@@ -12,6 +12,18 @@
         "matcher": "Bash|Read"
       }
     ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh",
+            "timeout": 20,
+            "type": "command"
+          }
+        ],
+        "matcher": "auto"
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -69,6 +81,17 @@
           }
         ],
         "matcher": "*"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
       }
     ]
   }

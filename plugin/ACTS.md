@@ -33,6 +33,15 @@ inherits it whole, so the cut decides what survives. Give the cut a preserve lis
 advance — what has to survive verbatim, failures with their root causes, the done-bar as a check
 that can fail — and the provenance fields above complete that list as a report format.
 
+**Construction (2).** This one the hooks now build for you, and where they cannot they say so. A
+bare `/compact` is a cut asked for with no preserve list, so `UserPromptSubmit` supplies the
+vendored one before the request reaches the model; a `/compact` that already carries instructions
+is left alone, because supplying a missing guard and overruling a stated one are different acts.
+An automatic cut submits no prompt and cannot be steered at all — the event that fires there
+cannot instruct the summarizer, and blocking it would trade a wedged session for a better
+summary — so that path only reports that it ran unsteered. One door for the cut you ask for; a
+sentence for the cut that arrives on its own.
+
 **And run the un-planted control first.** A probe that reports the expected failure without the fault
 planted has not reached its predicate — it is reporting something else. The control costs one run and
 it is what stops a wrong finding from being reported as a real one.

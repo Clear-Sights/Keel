@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 
 from . import clauses as C
 from . import journal, wire
@@ -457,8 +458,65 @@ def session_start(table, ledger: Ledger, event: dict) -> dict:
         return {}
 
 
+def _preserve_list() -> str:
+    """The vendored preserve list, and the digest that says it is the vendored one."""
+    path = Path(__file__).resolve().with_name("compaction.json")
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    return doc["preserve"]
+
+
+# A BARE `/compact`, and nothing else. `\S` after the command means the author typed their own
+# preserve list, and an author who stated one is not to be overridden by a default -- that is the
+# whole difference between supplying a missing guard and overruling a present one.
+_BARE_COMPACT = re.compile(r"^\s*/compact\s*$")
+
+
+def user_prompt_submit(table, ledger: Ledger, event: dict) -> dict:
+    """Supply the preserve list when a compaction is asked for without one.
+
+    THE ONLY EVENT THAT CAN REACH THE SUMMARIZER. `PreCompact` fires closer to the cut and is the
+    obvious place to put this, and it does not work: its `additionalContext` is documented as
+    explicitly NOT affecting compaction, and its stdout goes to the debug log. `UserPromptSubmit`
+    is one of three events whose output becomes context the model acts on, and it sees the raw
+    `/compact` before expansion. So the earlier event is the one with the reach.
+
+    This fires on EVERY prompt, which makes silence the load-bearing behaviour: a line added to
+    every turn is the recurring noise that gets a gate switched off. It speaks only when the
+    prompt is a bare `/compact`.
+    """
+    text = event.get("user_input")
+    if not isinstance(text, str) or not _BARE_COMPACT.match(text):
+        return {}
+    try:
+        return _context(_preserve_list(), "UserPromptSubmit")
+    except Exception:
+        # A missing or unreadable vendored list must not eat the user's `/compact`.
+        return {}
+
+
+def pre_compact(table, ledger: Ledger, event: dict) -> dict:
+    """Report an automatic cut that no preserve list steered. It cannot do more than report.
+
+    An automatic compaction submits no prompt, so `user_prompt_submit` never runs, and this event
+    cannot supply instructions to the summarizer -- the documented behaviour is that context added
+    here does not affect the compaction. Blocking is the one lever it does have, and it is the
+    wrong one: an automatic cut happens because the window is full, so refusing it wedges the
+    session to protect a summary.
+
+    What is left is making the loss non-silent, which is the second tier and is stated as such:
+    the manual path gets the construction, the automatic path gets a sentence saying it did not.
+    """
+    if event.get("compact_trigger") != "auto":
+        return {}
+    return {"systemMessage":
+            "keel: automatic compaction -- the preserve list was not applied, because this event "
+            "cannot instruct the summarizer. Run `/compact` yourself to cut with it."}
+
+
 HANDLERS = {
     "PreToolUse": pre_tool_use,
+    "UserPromptSubmit": user_prompt_submit,
+    "PreCompact": pre_compact,
     "PostToolUse": post_tool_use,
     "Stop": reconcile,
     "SubagentStop": reconcile,

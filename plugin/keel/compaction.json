@@ -1,0 +1,9 @@
+{
+  "_provenance": {
+    "what": "The COMPACTION prompt body from the owner's resident prompt set.",
+    "source": "prompts/PROMPTS.md, section COMPACTION, fenced body",
+    "why_a_digest_and_not_a_commit": "The upstream repository is frozen and this text is edited in the prompt set itself, so a commit pin would name a tree this body no longer matches. A digest of the bytes is checkable here, by this repository, with no second party -- and a coordinate that cannot be checked is not provenance.",
+    "sha256": "bb16a4001bcfa28e0b2051b77335c474e6af02f7165325b6f913986ae1bbe6d7"
+  },
+  "preserve": "Preserve verbatim: user instructions and corrections, paths, branches, shas,\nworking commands, numbers with units, and errors. Keep the done-bar falsifiable;\ndecisions with reasons; failures with causes; and verified facts distinct from\nbeliefs. Put user blockers first and name running work plus its check command.\nDrop transcripts, dumps, resolved threads, and narration; retain one line per\ndead end. Keep only the corrected form of a corrected fact and mark it corrected."
+}
