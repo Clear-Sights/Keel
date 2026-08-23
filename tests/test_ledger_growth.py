@@ -40,7 +40,7 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
         os.environ["KEEL_STATE_DIR"] = self.state
 
     def test_TEETH_forty_identical_guards_write_one_row_per_clause(self) -> None:
-        # `load_default()`, NOT `load_dir(default_dir())`, and a floor under the table -- because
+        # `load_default()`, the one loader production uses, and a floor under the table -- because
         # an upper bound alone is satisfied perfectly by a table that loaded NOTHING. This ran in
         # a layout with no loose clause directory, took an empty table, wrote zero rows, and
         # passed its `<= 10` assertion having exercised no deduplication at all; it went on
@@ -96,7 +96,7 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
         # nothing. The upper bound cannot tell that apart from a correct deduplication; only the
         # floor can, so the floor gets its own proof that it fires.
         smoke_replace(self, PLUGIN / "keel" / "clauses.py",
-                      b"    return load_bundle(bundle) if bundle.is_file() else load_dir(default_dir())",
+                      b"    return load_bundle(default_bundle())",
                       b"    return []", "tests.test_ledger_growth."
                       "RepeatedGuardsDoNotGrowTheLedger."
                       "test_TEETH_forty_identical_guards_write_one_row_per_clause", "an empty clause table makes the bound below vacuous")

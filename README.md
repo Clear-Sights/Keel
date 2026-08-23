@@ -112,8 +112,19 @@ treated as permission. Four properties of the ledger, each stated in the code it
 
 ### Manual bypass
 
-If serialized `tool_input` contains `keel-allow:` followed by non-whitespace text,
-`PreToolUse` returns an empty decision before evaluating any clause.
+A Bash command whose **leading comment block** carries `# keel-allow:` followed by a reason makes
+`PreToolUse` return an empty decision before evaluating any clause:
+
+```
+# keel-allow: reviewed with the owner, the build directory is generated
+rm -rf build/
+```
+
+The scan starts at the first line and stops at the first line that is not blank and not a `#`
+comment, so the marker is a header an author types above the command — never something the
+command supplies for itself. A marker in a heredoc body, inside a quoted string, in an appended
+segment, or on a trailing comment is payload, and payload does not exempt anything. `//` and `--`
+are not comment introducers here; the field is a shell command.
 
 ## Honest limitations
 

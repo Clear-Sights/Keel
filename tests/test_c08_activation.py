@@ -48,10 +48,10 @@ LOOKALIKES = [
 def c08() -> C.Clause:
     """The C08 row as the RUNTIME loads it.
 
-    `load_default` rather than `load_dir(default_dir())`: the dev repo authors one file per clause
-    under plugin/clauses/, while the shipped package carries the built clauses.json, and only
-    load_default resolves both. Reading the authoring form would have tested a file the installed
-    plugin never sees -- which is the same mistake this whole finding is about.
+    `load_default`, which is the one loader there is: the frozen dev archive authors one file per
+    clause under plugin/clauses/, while the shipped package carries the built clauses.json, and it
+    is the built table the runtime reads. Reading the authoring form would have tested a file the
+    installed plugin never sees -- which is the same mistake this whole finding is about.
     """
     for clause in C.load_default():
         if clause.id.startswith("C08"):

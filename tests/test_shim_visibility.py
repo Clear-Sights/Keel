@@ -63,3 +63,72 @@ class WiringFaultsAreOpenButVisible(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExactlyOneObjectReachesTheWire(unittest.TestCase):
+    """A hook speaks by writing ONE JSON object, and a second one erases the first.
+
+    The shim wrote the child's output straight through and then appended `fail_open`'s object on
+    any nonzero exit. A dispatcher that printed its decision and then died therefore put two
+    objects on stdout:
+
+        {"hookSpecificOutput": {... "permissionDecision": "deny" ...}}
+        {"systemMessage":"keel hook wiring fault: Python dispatcher failed"}
+
+    By the rule the shim itself quotes, "exit 0 with a parsed object that fails schema validation
+    is a non-blocking error: the action proceeds" -- so a host reading the last object, or the
+    concatenation, allows the call. A deny became an allow because the process died AFTER saying
+    deny, which is the one failure a fail-open shim must not turn into a decision.
+
+    The stub interpreter is the whole apparatus: `KEEL_PYTHON` already exists as a seam, so the
+    child's behaviour can be chosen without touching the shipped package.
+    """
+
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+
+    def _python(self, body: str) -> str:
+        """A stand-in interpreter that ignores `-m keel.dispatch` and does `body` instead."""
+        path = os.path.join(self._temp.name, "fake-python")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/sh\n" + body + "\n")
+        os.chmod(path, 0o755)
+        return path
+
+    def test_TEETH_a_decision_printed_before_death_is_the_only_object(self) -> None:
+        deny = '{"hookSpecificOutput":{"permissionDecision":"deny"}}'
+        done = run({"KEEL_PYTHON": self._python(f"printf '%s\\n' '{deny}'\nexit 7")})
+        self.assertEqual(0, done.returncode, "carriage must fail OPEN")
+        # `json.loads` on the whole stream is the assertion: two objects do not parse as one.
+        payload = json.loads(done.stdout)
+        # Read defensively rather than subscripting: a dropped decision must arrive as THIS
+        # assertion's message, not as a KeyError, or the plant below proves the seam went red
+        # while saying nothing about why.
+        decision = payload.get("hookSpecificOutput", {}).get("permissionDecision")
+        self.assertEqual("deny", decision,
+                         f"the decision did not survive the death: {done.stdout!r}")
+        self.assertNotIn("wiring fault", done.stdout,
+                         f"a second object was appended to a real decision: {done.stdout!r}")
+
+    def test_TEETH_a_silent_death_still_reports_the_wiring_fault(self) -> None:
+        # The other direction, so the fix cannot be "never report anything". `fail_open` is for a
+        # child that said nothing, which is the only state it was ever describing.
+        done = run({"KEEL_PYTHON": self._python("exit 7")})
+        self.assertEqual(0, done.returncode, "carriage must fail OPEN")
+        self.assertIn("wiring fault", json.loads(done.stdout).get("systemMessage", ""))
+
+    def test_TEETH_a_closed_decision_keeps_its_exit_status(self) -> None:
+        # Exit 2 is the only closed signal that survives a payload the host refuses to parse, so
+        # capturing the output must not swallow it.
+        block = '{"decision":"block"}'
+        done = run({"KEEL_PYTHON": self._python(f"printf '%s\\n' '{block}'\nexit 2")})
+        self.assertEqual(2, done.returncode, done.stdout)
+        self.assertEqual("block", json.loads(done.stdout)["decision"])
+
+    def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
+        smoke_replace(self, SHIM,
+                      b'if [ -n "$out" ]; then\n', b'if false; then\n',
+                      "tests.test_shim_visibility.ExactlyOneObjectReachesTheWire."
+                      "test_TEETH_a_decision_printed_before_death_is_the_only_object",
+                      "the decision did not survive the death")

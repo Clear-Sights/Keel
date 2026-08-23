@@ -29,17 +29,65 @@ import sys
 
 from . import clauses as C
 from . import journal, wire
-from .ledger import Demand, Ledger, derive_id
+from .ledger import Demand, Ledger, derive_id, legacy_state, state_dir
 
-# LINE-BOUND, and only on the fields an author types deliberately.
+# A HEADER ON THE COMMAND, and nowhere else. The exemption is the one thing that turns the whole
+# fence off for a call, so where it is allowed to appear is the whole of its security.
 #
-# This used to search the whole serialized tool_input, which meant a Write whose CONTENT merely
-# contained the marker disabled every clause for that call -- an exemption anyone could trip by
-# quoting the documentation. A doc audit against the code caught it. The exemption stays
-# on-the-record and auditable, never a disguise: it must be its own line, in the command being
-# run, and it must carry a reason.
-ALLOW = re.compile(r"(?m)^\s*(?:#|//|--)?\s*keel-allow:\s*(\S.*)$")
-ALLOW_FIELDS = ("tool_input.command",)
+# It has been narrowed twice, both times because the wider form let the command supply its own
+# exemption. First it searched the entire serialized tool_input, so a Write whose CONTENT quoted
+# the documentation disabled every clause for that call. Then it searched anywhere in the command
+# string, which is the same hole with one more step: append a heredoc and the command carries its
+# own licence in its payload. That was not theoretical --
+#
+#     rm -rf build/                                    -> deny
+#     rm -rf build/ ; cat > note.md <<'EOF'
+#     keel-allow: whatever
+#     EOF                                              -> {}   (all 24 clauses skipped)
+#
+# -- and every command that can write a file could do it. So the marker is now read only from the
+# command's LEADING COMMENT BLOCK: the scan starts at the first line and stops dead at the first
+# line that is not blank and not a comment. A heredoc body, a quoted string, an appended segment
+# -- all of them live after command text has begun, which is after the scan has already stopped.
+# An exemption is something an author types at the top, above the command, on purpose.
+#
+# `#` only. The older pattern also accepted `//` and `--`, from when this was matched against
+# arbitrary tool_input; the field is a shell command and `#` is the only comment introducer a
+# shell has. `--` was worse than redundant, because `--force-with-lease` on its own line reads as
+# a comment to a pattern that accepts `--`.
+ALLOW = re.compile(r"^#\s*keel-allow:\s*(\S.*)$")
+
+# THE PRE-RENAME SPELLING, STILL HONOURED. The rename to `keel` changed the marker's name, so
+# every exemption already written in a user's scripts and notes stopped working -- and stopped
+# working SILENTLY, which is the part that matters: a marker that no longer parses is not a
+# marker, so the call was simply denied with no hint that a rename was the reason. Measured:
+# `ALLOW.search('# gyroscope-allow: approved')` returned False. Honouring the old spelling with a
+# message that names the rename is strictly better than either alternative -- refusing it strands
+# work for no gain, and honouring it quietly leaves the old name alive forever.
+ALLOW_LEGACY = re.compile(r"^#\s*gyroscope-allow:\s*(\S.*)$")
+
+
+def _allow_marker(command: str):
+    """`(spelling, reason)` from the command's leading comment header, or None.
+
+    The reason travels with it because it is the auditable half: an exemption without one is not
+    an exemption, and both patterns refuse a marker with nothing after it. The spelling travels
+    with it so the caller can say something about the old one.
+    """
+    for line in command.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("#"):
+            # Command text. Everything from here on is payload, not preamble.
+            return None
+        found = ALLOW.match(stripped)
+        if found:
+            return "keel", found.group(1)
+        found = ALLOW_LEGACY.match(stripped)
+        if found:
+            return "gyroscope", found.group(1)
+    return None
 
 
 def _get(event: dict, path: str):
@@ -137,19 +185,18 @@ def _keyed_reason(clause, subject: str) -> str:
 # is never needed again. A pointer, never an inlined command: the construction is authored prose
 # with its own caveats, and a one-line paraphrase here would be a second writer of that fact.
 # Composed at render time from the clause's own `construction` field, so the pointer cannot
-# drift from the table -- one writer, read twice. Every row carries an anchor and the loader
-# refuses one that does not, so there is no absent case for this to paper over.
+# drift from the table -- one writer, read twice.
+#
+# AN ABSENT OR MISSHAPEN ANCHOR COSTS THIS SENTENCE, AND NOTHING ELSE. The loader used to refuse
+# such a row, which meant a mistyped documentation pointer took the entire clause table down and
+# denied every tool call. The refusal now lives in the fence, where a bad anchor is a red build;
+# here, the worst a bad anchor can do is omit one sentence from one deny message. The deny itself
+# -- the load-bearing half -- is never withheld because its footnote is malformed.
 def _construction(clause) -> str:
-    return f" Construction: {clause.construction}."
-
-
-def _segments(command: str) -> list[str]:
-    """Split a shell string on `;` `&&` `||` `|`, respecting quotes.
-
-    `shlex` cannot do this -- it tokenizes words, not control operators -- and a naive `re.split`
-    would cut inside `grep 'a|b'`. Quote-aware scanning is the smallest thing that is correct.
-    """
-    return C.segments(command)
+    anchor = getattr(clause, "construction", "") or ""
+    if not C.CONSTRUCTION_ANCHOR.fullmatch(anchor):
+        return ""
+    return f" Construction: {anchor}."
 
 
 def _first_index(clause, event: dict, predicate, command: str) -> int:
@@ -160,7 +207,11 @@ def _first_index(clause, event: dict, predicate, command: str) -> int:
     string, so the push never reached the demand. Order is the entire question, so the answer has
     to be computed per segment.
     """
-    for index, segment in enumerate(_segments(command)):
+    # `C.segments` directly: the wrapper that used to stand here returned it unchanged and
+    # carried a second copy of the segmentation rules in its docstring -- a copy that had already
+    # gone stale, since it still listed `;` `&&` `||` `|` after a newline became a separator too.
+    # One implementation, one description of it.
+    for index, segment in enumerate(C.segments(command)):
         probe = dict(event)
         probe["tool_input"] = {**(event.get("tool_input") or {}), "command": segment}
         try:
@@ -210,10 +261,19 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     not a deny. But a clause that raises must never suppress the other twenty-five, so each is
     isolated -- that is a different axis from the row's fail direction."""
     session, agent = _ids(event)
-    for field in ALLOW_FIELDS:
-        value = _get(event, field)
-        if isinstance(value, str) and ALLOW.search(value):
-            return {}
+    bypass = _get(event, "tool_input.command")
+    # Read straight from the one field, rather than looping a one-element list of field paths:
+    # `_allow_marker` scans for SHELL comments, so the field it may be applied to is not a
+    # configuration choice -- it is the command, and a list implied there could be others.
+    marker = _allow_marker(bypass) if isinstance(bypass, str) else None
+    if marker is not None:
+        if marker[0] == "gyroscope":
+            # An allow that says so. `systemMessage` reaches the user, which is where a rename
+            # they have to act on belongs; the call itself is exempted exactly as before.
+            return {"systemMessage": "keel: `gyroscope-allow:` is the pre-rename spelling of this "
+                                     "marker. It still exempts the call; rename it to "
+                                     "`keel-allow:`."}
+        return {}
     _watch_standing(table, ledger, event, session, agent)
     command = _get(event, "tool_input.command")
     for cl in _applicable(table, event):
@@ -374,11 +434,25 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
 
 
 def session_start(table, ledger: Ledger, event: dict) -> dict:
-    """Fails OPEN: a hook that cannot read its own map must not stop the session."""
+    """Fails OPEN: a hook that cannot read its own map must not stop the session.
+
+    Also the one place a stranded pre-rename store can be reported. It is said BOTH ways on
+    purpose: in `additionalContext`, so the agent knows the ledger it is reading is not the one
+    that was there yesterday, and in `systemMessage`, so the person who has to move the directory
+    actually sees it. Neither costs a deny.
+    """
     try:
         rows = " | ".join(f"{c.id}: {c.guard}" for c in table)
         event_name = event.get("hook_event_name", "SessionStart")
-        return _context(f"keel active, {len(table)} clauses. {rows}", event_name)
+        stranded = legacy_state()
+        notice = "" if stranded is None else (
+            f"keel: the state directory was renamed. This session reads {state_dir()}; the "
+            f"pre-rename store at {stranded} is NOT being read, so obligations recorded there "
+            f"are not visible here. Move or merge it, or point KEEL_STATE_DIR at it. ")
+        out = _context(f"{notice}keel active, {len(table)} clauses. {rows}", event_name)
+        if notice:
+            out["systemMessage"] = notice.strip()
+        return out
     except Exception:
         return {}
 
@@ -476,7 +550,14 @@ def _stated_count(text: str):
     """
     head = text.split(" ", 2)
     for part in head:
-        digits = "".join(ch for ch in part if ch.isdigit())
+        # ASCII only, because `str.isdigit` and `int` DISAGREE and this loop had one of each.
+        # `'\u00b2'.isdigit()` is True and `int('\u00b2')` raises ValueError, so a superscript in
+        # the first three words selected a "digit" that could not be converted. The raise landed
+        # in `note_block`'s blanket except and the row was dropped -- silently, in the log whose
+        # stated purpose is telling "reconciled, nothing owed" apart from "never reached the
+        # terminal". One predicate for both steps is what makes that unreachable rather than
+        # merely unlikely.
+        digits = "".join(ch for ch in part if ch in "0123456789")
         if digits:
             return int(digits)
     return None
@@ -524,12 +605,12 @@ def main() -> int:
         # legitimately handed an empty table by callers isolating the ledger.
         if not table:
             print("keel: 0 clauses loaded from "
-                  f"{C.default_dir()} -- NOT-EVALUABLE, nothing was checked", file=sys.stderr)
+                  f"{C.default_bundle()} -- NOT-EVALUABLE, nothing was checked", file=sys.stderr)
             # The strongest "nothing was checked" signal there is, and previously it existed only
             # as a stderr line -- i.e. in the debug log, where a hook that exits 0 sends output
             # nobody reads. The session row already says `clauses: 0`; this says it happened on
             # this event too.
-            journal.note_fault(event, "zero_clauses", f"0 clauses from {C.default_dir()}",
+            journal.note_fault(event, "zero_clauses", f"0 clauses from {C.default_bundle()}",
                                failed_closed=event.get("hook_event_name") in ("Stop", "SubagentStop"))
             if event.get("hook_event_name") in ("Stop", "SubagentStop"):
                 print(json.dumps(_block(

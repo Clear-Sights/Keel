@@ -16,7 +16,10 @@ from typing import Any
 # A construction anchor names a section of the page shipped beside this table. Shape only: the
 # fence resolves it, so anything stricter here would be a second opinion about a fact the fence
 # already owns -- and a wrong one, since rows may legitimately share a section.
-_CONSTRUCTION_ANCHOR = re.compile(r"POINTS\.md#[a-z0-9][a-z0-9-]*")
+# Public, because it now has readers outside this module: `dispatch` renders the pointer only
+# when it matches, and `tests/test_fence.py` asserts the shape it names. One spelling of the
+# anchor shape, read by everything that needs it.
+CONSTRUCTION_ANCHOR = re.compile(r"POINTS\.md#[a-z0-9][a-z0-9-]*")
 
 _EVENTS = {
     "PreToolUse",
@@ -255,6 +258,15 @@ def segments(command: str) -> list[str]:
     An `&` after `<` or `>` is a REDIRECT, not a control operator. `make 2>&1 | tee log` split
     into `['make 2>', '1', 'tee log']` -- two segments that are not commands, and a real one
     whose text no longer resembles what ran.
+
+    A NEWLINE IS A SEPARATOR, and leaving it out was a hole straight through the fence. A shell
+    starts a new command at a newline exactly as it does at `;`, but this scanner did not, so
+    `# note\nrm -rf build/` was ONE segment whose text begins with `#`. Measured on the shipped
+    table: prefixing any command with a comment line allowed it -- `rm -rf build/`,
+    `git push --force origin main`, `kill -9 1234`, `curl -X POST ...` all went from deny to
+    allow behind two characters and a newline. A quoted newline still cannot separate, because
+    the quote branch above consumes it like any other character, which is the same rule the
+    other operators already follow.
     """
     out, buf, quote, i = [], [], "", 0
     while i < len(command):
@@ -269,12 +281,12 @@ def segments(command: str) -> list[str]:
         elif ch in "'\"":
             quote = ch
             buf.append(ch)
-        elif ch in ";|&":
+        elif ch in ";|&\n":
             if ch == "&" and buf and buf[-1] in "<>":
                 buf.append(ch)
                 i += 1
                 continue
-            if i + 1 < len(command) and command[i + 1] == ch:
+            if ch != "\n" and i + 1 < len(command) and command[i + 1] == ch:
                 i += 1
             out.append("".join(buf))
             buf = []
@@ -433,11 +445,21 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EVENT-UNKNOWN", f"{clause.id}: {clause.event}")
     if not clause.fixtures_pos or not clause.fixtures_neg:
         raise ClauseError("CLAUSE-NO-FIXTURES", clause.id)
-    # The pairing rule: every row names its positive half, with no null case. Shape only --
-    # whether the section EXISTS, and whether any section goes unclaimed, is the fence's half.
-    if not _CONSTRUCTION_ANCHOR.fullmatch(clause.construction or ""):
-        raise ClauseError("CLAUSE-CONSTRUCTION-MISSHAPEN",
-                          f"{clause.id}: {clause.construction!r}")
+    # THE PAIRING RULE IS NOT CHECKED HERE, and that placement is the fix. Every row names its
+    # positive half, and this function used to raise when one did not -- at DISPATCH time, inside
+    # the load that every hook invocation performs. `_admit` failing anywhere makes the whole
+    # table unloadable, and an unloadable table is NOT-EVALUABLE, which the dispatcher correctly
+    # reports as a deny. So a typo in ONE row's documentation pointer denied every tool call in
+    # the session: `ls -la` came back
+    # "keel could not evaluate this event: ClauseError -- NOT-EVALUABLE, not a pass".
+    #
+    # A documentation anchor is a BUILD fact. It cannot change between the build and the call, so
+    # runtime strictness buys nothing that the build has not already bought -- and it charges for
+    # it on every turn of every session. `tests/test_fence.py` owns the check instead, where it
+    # belongs: it resolves every anchor against a real POINTS.md heading AND refuses a heading no
+    # row claims, which is strictly more than the shape test that stood here, and a violation
+    # costs a red build rather than a dead agent. `CONSTRUCTION_ANCHOR` is the shape the fence
+    # asserts; it is defined here because this module owns the field.
     _compile(clause.fingerprint, clause.id)
     _compile(clause.activated_by, clause.id)
     _compile(clause.discharged_by, clause.id)
@@ -489,10 +511,6 @@ def _unique_sorted(clauses: list[Clause]) -> list[Clause]:
     return sorted(clauses, key=lambda clause: clause.id)
 
 
-def load_dir(path) -> list[Clause]:
-    return _unique_sorted([load_file(item) for item in Path(path).glob("*.json")])
-
-
 def load_bundle(path) -> list[Clause]:
     """Load one shipped table through the same parser and admission checks as loose files."""
     with Path(path).open(encoding="utf-8") as stream:
@@ -502,12 +520,25 @@ def load_bundle(path) -> list[Clause]:
     return _unique_sorted([_load_object(item) for item in data])
 
 
-def default_dir():
-    """The clause folder beside the package. One folder, one file per clause."""
-    return Path(__file__).resolve().parent.parent / "clauses"
+def default_bundle():
+    """The one clause table this package loads. One file, and there is no second place."""
+    return Path(__file__).resolve().with_name("clauses.json")
 
 
 def load_default() -> list[Clause]:
-    """Prefer the compact shipped table while retaining loose files for development."""
-    bundle = Path(__file__).resolve().with_name("clauses.json")
-    return load_bundle(bundle) if bundle.is_file() else load_dir(default_dir())
+    """Load the one shipped table.
+
+    THERE USED TO BE A SECOND PATH HERE, and cutting it is the fix. `load_default` fell back to
+    `load_dir(default_dir())` -- a folder of loose per-clause files -- whenever `clauses.json` was
+    absent. That folder does not exist in this repository and never has; the loose form lives only
+    in the frozen development archive, which is read-only and never executes this module. So the
+    branch was unreachable in every layout that runs, which is bad enough, and worse than
+    unreachable if it ever ran: not one of those archived files carries a `construction`, so the
+    admission checks would have rejected every row it loaded. A fallback that cannot be reached,
+    and would fail if it were, is not a safety net. It is a second answer to a question that has
+    one, kept alive by nothing but the sentence that described it.
+
+    A missing bundle now raises instead of silently returning some other table, and `main` already
+    treats a table it cannot fill as NOT-EVALUABLE rather than as a clean run.
+    """
+    return load_bundle(default_bundle())

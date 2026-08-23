@@ -1,9 +1,4 @@
 {
-  "_provenance": {
-    "as_of": "sha256:78e84e3333284c96",
-    "live_source_of_truth": "plugin/clauses/",
-    "recompute_with": "python3 -m gyroscope.generate"
-  },
   "hooks": {
     "PostToolUse": [
       {

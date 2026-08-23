@@ -47,6 +47,53 @@ def state_dir() -> pathlib.Path:
     return pathlib.Path.home() / ".claude" / "keel_state"
 
 
+# The names the store had before the rename to `keel`. Kept here, beside `state_dir`, because
+# "where the state is" and "where the state used to be" are one fact with two tenses, and a
+# rename that puts them in different files is how the second one goes stale.
+LEGACY_STATE_ENV = "GYROSCOPE_STATE_DIR"
+LEGACY_STATE_DIR = "gyroscope_state"
+
+# The ledger's file name, spelled once. `Ledger` opens it and `legacy_state` asks whether it is
+# there yet; two spellings of one file name is how the second reader starts asking about a file
+# nothing writes.
+LEDGER_FILE = "obligations.jsonl"
+
+
+def legacy_state() -> pathlib.Path | None:
+    """The pre-rename store this session is NOT reading, when there is one.
+
+    A HARD RENAME OWES THE OLD NAME A SENTENCE, and this one did not pay it. `state_dir` reads
+    `KEEL_STATE_DIR`; a session that had `GYROSCOPE_STATE_DIR` set kept setting it, had it
+    ignored without a word, and started from an empty ledger -- so every obligation the old store
+    held was gone and the run looked clean. Measured: `GYROSCOPE_STATE_DIR=/tmp/oldstate` and
+    `state_dir()` returns `~/.claude/keel_state`.
+
+    The previous rename in this project's history knew better and refused to start:
+    "STARTUP REFUSED: legacy state directory exists at ...; hard rename requires an explicit state
+    migration". That refusal ran in a SessionStart shell script that could exit nonzero. The same
+    duty lands here as a notice on the SessionStart context and a message to the user, which is
+    the loudest thing this arm can do without denying a session outright -- and denying is the
+    wrong price for state that may not matter to this run.
+
+    Two ways to be stranded, both reported. The variable being SET is enough on its own: it is
+    being ignored, and that is the fact worth saying, whether or not it points anywhere. A legacy
+    directory sitting beside the current one counts only until keel has a ledger of its own --
+    after that the old directory is history rather than a surprise.
+
+    "Has a ledger of its own" is the LEDGER FILE, not the directory, and the difference is the
+    whole test. `Ledger.__init__` creates the directory, and it is constructed before any handler
+    runs -- so a check for the directory's existence was always looking at something this same
+    process had just made, and reported nothing every time. The file is written when a row is
+    written, which is the event actually being asked about.
+    """
+    env = os.environ.get(LEGACY_STATE_ENV)
+    if env:
+        return pathlib.Path(env)
+    current = state_dir()
+    beside = current.parent / LEGACY_STATE_DIR
+    return beside if beside.is_dir() and not (current / LEDGER_FILE).exists() else None
+
+
 def _canon(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -96,7 +143,7 @@ class Ledger:
     def __init__(self, root: pathlib.Path | None = None):
         self.root = pathlib.Path(root) if root else state_dir()
         self.root.mkdir(parents=True, exist_ok=True)
-        self.path = self.root / "obligations.jsonl"
+        self.path = self.root / LEDGER_FILE
 
     def _append(self, row: dict) -> None:
         prev = self._tail_hash()
