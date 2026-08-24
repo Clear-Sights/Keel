@@ -46,7 +46,7 @@ every turn, not once at entry, so one instruction at the entrance is spent by tu
 holds a hull against standing pressure is a keel: built once, below the waterline, permanently
 there. It needs no spin, no attention and no trigger — being present is its whole job, which is
 why this is a hook registered on every event rather than something that runs at session start.
-And a keel does two things with the same wind. It keeps the hull from being capsized or shoved
+With the same wind, a keel keeps the hull from being capsized or shoved
 sideways — the deny half — and it is what makes sailing *toward* something possible at all: the
 same pressure that would only push the boat off course becomes headway — the construction half,
 where the default that used to cost you is turned into the thing that carries the work forward.
@@ -62,11 +62,15 @@ the opposition instead of re-earning it.
 </picture>
 
 A `PreToolUse` deny records a **demand**; a later call matching the clause's guard records a
-**discharge**; at `Stop` anything still open blocks. That is the whole model — the nine things
-that looked like separate Stop checks are one ledger read
+<!-- BEGIN GENERATED: stop-ledger-read | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
+
+**discharge**; at `Stop` anything still open blocks. That is the whole model — every
+one of the 24 clause demands is read at Stop by one mechanism
 ([`keel/ledger.py`](plugin/keel/ledger.py) states this where the mechanism is defined).
+
+<!-- END GENERATED: stop-ledger-read -->
 A licence is an **observed discharge**, never an absent demand — the absence of evidence is never
-treated as permission. Four properties of the ledger, each stated in the code it constrains:
+treated as permission. The ledger's properties, each stated in the code it constrains:
 
 - **Obligations are un-windowed within a session.** A promise does not expire because an hour
   passed; events may be windowed for cost, demands never are.
@@ -90,16 +94,20 @@ treated as permission. Four properties of the ledger, each stated in the code it
 
 `plugin/` is the whole package — exactly what the marketplace installs:
 
+<!-- BEGIN GENERATED: package-clause-count | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
+
 - **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,
   24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both
   supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity
   — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it
   stays silent rather than blocking the host.
+
+<!-- END GENERATED: package-clause-count -->
 - **one skill** ([`plugin/SKILL.md`](plugin/SKILL.md), with
   [`POINTS.md`](plugin/POINTS.md) and [`ACTS.md`](plugin/ACTS.md) beside it) — the positive
   half. For each denied moment it names the construction that makes the guard unnecessary from
   then on, and for the moments that leave no mark in a call sequence — budgets, plans, defaults,
-  reports — the seven acts carry the same reading. Each clause row's `construction` field
+  reports — the seven acts[^m-act-count] carry the same reading. Each clause row's `construction` field
   anchors into `POINTS.md`, so every negative is followed by its positive as a schema property
   the loader checks, not a cross-document convention.
 
@@ -169,14 +177,15 @@ failure this plugin refuses to accept from a session.
 
 `keel/journal.py` closes that. It appends to `decisions.jsonl` beside the ledger: one
 `session` row the first time a session is seen, carrying the loaded **clause count** — a row saying
-`clauses: 0` is a gate that checked nothing while everyone believes it is on — plus one row per
+`clauses: 0`[^m-zero-clauses] is a gate that checked nothing while everyone believes it is on — plus one row per
 `deny`, per terminal `block` (including clean reconciliations, which are a positive result a
 fires-only log would erase), per `fault`, and per repaired envelope. There is deliberately no row
 per allowed call.
 
 Every row names `plugin`, `session_id`, `agent_id` and `tool_name`, and every deny and block on the
-wire is now prefixed `keel:`. Three plugins register `PreToolUse` and the host shows the user
-a reason but never a source.
+wire is now prefixed `keel:`. Plugins on the
+[Courthouse bench](https://github.com/Clear-Sights/Courthouse#why-a-courthouse) register
+`PreToolUse`, and the host shows the user a reason but never a source.
 
 `fault` rows carry `failed_closed`, which makes Keel's split direction — carriage open,
 decision closed — checkable against the record rather than against its docstrings. See
@@ -184,11 +193,15 @@ decision closed — checkable against the record rather than against its docstri
 
 ## The shipped clause table
 
+<!-- BEGIN GENERATED: shipped-clause-count | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
+
 The dispatcher loads `plugin/keel/clauses.json` — 24 admitted clauses, every one carrying
 positive and negative fixtures checked at load. The table below is a generated view of that
 file, byte-compared against it by the test fence on every push, so it cannot quietly lag the
 artifact the dispatcher loads. Each row's construction column anchors the clause's positive
 half in [`plugin/POINTS.md`](plugin/POINTS.md).
+
+<!-- END GENERATED: shipped-clause-count -->
 
 <!-- BEGIN GENERATED: clause-routes | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
 
@@ -221,7 +234,7 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
 <!-- END GENERATED: clause-routes -->
 
-Three clauses (`U01`, `U02`, `U25`) name repository-local tooling in their guards or
+Three clauses[^m-local-tooling-clauses] (`U01`, `U02`, `U25`) name repository-local tooling in their guards or
 fingerprints. What happens when that tooling does not exist in the current repository — read from the
 dispatch code, not guessed:
 
@@ -238,10 +251,10 @@ dispatch code, not guessed:
 ## Evidence
 
 `python3 eval/replay.py` from the repository root replays recorded sessions through the real
-dispatcher: three derailments (a push with no status on record, a force-push with no fetch, a
+dispatcher: three derailments[^m-derailments] (a push with no status on record, a force-push with no fetch, a
 "done" claim over a dirty tree) each denied at or before the event where the session went wrong,
 a recovery session where the same denied call passes after its guard, and a benign control that
-stays silent — 5/5, standard library only, exit 0 iff every session meets its expectation.
+stays silent — 5/5,[^m-replay] standard library only, and succeeds iff every session meets its expectation.
 
 ## Why this is not a deny list
 
@@ -253,8 +266,8 @@ whether the *same* call executes now or waits until its licensing evidence exist
 
 ## Siblings
 
-Keel is one of three engines that split one taxonomy — act, sequence, statement — and share
-nothing else. All three install from the [Courthouse](https://github.com/Clear-Sights/Courthouse)
+Keel is the sequence engine in Courthouse's act/sequence/statement taxonomy; the engines share
+nothing else. They install from the [Courthouse](https://github.com/Clear-Sights/Courthouse)
 marketplace: `claude plugin marketplace add Clear-Sights/Courthouse`.
 
 | Engine | Judges | One line |
@@ -266,3 +279,9 @@ marketplace: `claude plugin marketplace add Clear-Sights/Courthouse`.
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+[^m-act-count]: The act headings in `plugin/ACTS.md`, counted by the `act-count` command in `MEASURED.tsv`.
+[^m-zero-clauses]: A session journal row produced with an empty admitted-clause set, read by the `zero-clauses` command in `MEASURED.tsv`.
+[^m-local-tooling-clauses]: Clause rows whose guard or fingerprint names Keel's repository-local tools, counted by the `local-tooling-clauses` command in `MEASURED.tsv`.
+[^m-derailments]: Corpus headers with the ordinary firing expectation, counted by the `derailments` command in `MEASURED.tsv`.
+[^m-replay]: Passing sessions over corpus sessions, measured by the `replay` command in `MEASURED.tsv`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One generator, every tabular view of the clause facts.
+"""One generator, every rendered view of the clause facts.
 
 `plugin/keel/clauses.json` is the single authoritative home of the clause facts -- it is
 the artifact the dispatcher loads. Every tabular appearance of those facts anywhere in this
@@ -22,13 +22,55 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CLAUSES = REPO / "plugin" / "keel" / "clauses.json"
-MARKER = "clause-routes"
+TABLE_MARKER = "clause-routes"
 
-# Every view: (file, link prefix that makes POINTS.md anchors resolve from that file's place).
-VIEWS = (
+# Every table view: (file, link prefix that makes POINTS.md anchors resolve from that file's place).
+TABLE_VIEWS = (
     (REPO / "plugin" / "SKILL.md", ""),
     (REPO / "README.md", "plugin/"),
 )
+
+README = REPO / "README.md"
+
+
+def render_clause_count(rows: list[dict], marker: str) -> list[str]:
+    """Render prose whose cardinal is owned by the loaded clause table."""
+    count = len(rows)
+    if marker == "stop-ledger-read":
+        missing = [row["id"] for row in rows if not row.get("discharged_by")]
+        if missing:
+            raise SystemExit(
+                "the Stop summary says every clause has a discharge demand, but these do not: "
+                + ", ".join(missing)
+            )
+        return [
+            "",
+            "**discharge**; at `Stop` anything still open blocks. That is the whole model — every",
+            f"one of the {count} clause demands is read at Stop by one mechanism",
+            "([`keel/ledger.py`](plugin/keel/ledger.py) states this where the mechanism is defined).",
+            "",
+        ]
+    if marker == "package-clause-count":
+        return [
+            "",
+            "- **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,",
+            f"  {count} admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both",
+            "  supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity",
+            "  — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it",
+            "  stays silent rather than blocking the host.",
+            "",
+        ]
+    if marker == "shipped-clause-count":
+        return [
+            "",
+            f"The dispatcher loads `plugin/keel/clauses.json` — {count} admitted clauses, every one carrying",
+            "positive and negative fixtures checked at load. The table below is a generated view of that",
+            "file, byte-compared against it by the test fence on every push, so it cannot quietly lag the",
+            "artifact the dispatcher loads. Each row's construction column anchors the clause's positive",
+            "half in [`plugin/POINTS.md`](plugin/POINTS.md).",
+            "",
+        ]
+    raise AssertionError(marker)
 
 
 def _cell(text: str) -> str:
@@ -54,7 +96,7 @@ def render_table(rows: list[dict], prefix: str) -> list[str]:
     return lines
 
 
-def _region(text: str, path: Path) -> tuple[int, int, list[str]]:
+def _region(text: str, path: Path, marker: str) -> tuple[int, int, list[str]]:
     """Line index just after BEGIN, line index of the matching END, and the file's lines.
 
     A MATCHED PAIR, not the last of each. The loop here used to rebind `begin` and `end` on every
@@ -72,16 +114,16 @@ def _region(text: str, path: Path) -> tuple[int, int, list[str]]:
     lines = text.split("\n")
     begin = end = None
     for index, line in enumerate(lines):
-        if line.startswith(f"<!-- BEGIN GENERATED: {MARKER}"):
+        if line.startswith(f"<!-- BEGIN GENERATED: {marker}"):
             if begin is not None:
                 raise SystemExit(
-                    f"{path}: a second {MARKER} BEGIN marker at line {index + 1} -- one view, "
+                    f"{path}: a second {marker} BEGIN marker at line {index + 1} -- one view, "
                     f"one region, and which of the two this one closes is not a guess to make")
             begin = index
-        elif line.startswith(f"<!-- END GENERATED: {MARKER}") and end is None:
+        elif line.startswith(f"<!-- END GENERATED: {marker}") and end is None:
             end = index
     if begin is None or end is None or end <= begin:
-        raise SystemExit(f"{path}: no {MARKER} marker region -- the view has lost its home")
+        raise SystemExit(f"{path}: no {marker} marker region -- the view has lost its home")
     return begin + 1, end, lines
 
 
@@ -95,9 +137,16 @@ def main(argv: list[str]) -> int:
     if not isinstance(rows, list) or not rows:
         raise SystemExit(f"{CLAUSES}: not a non-empty list -- nothing to render is a failure")
     drifted = []
-    for path, prefix in VIEWS:
-        fresh = ["", *render_table(rows, prefix), ""]
-        start, stop, lines = _region(path.read_text(encoding="utf-8"), path)
+    renderings = [
+        (path, TABLE_MARKER, ["", *render_table(rows, prefix), ""])
+        for path, prefix in TABLE_VIEWS
+    ]
+    renderings.extend(
+        (README, marker, render_clause_count(rows, marker))
+        for marker in ("stop-ledger-read", "package-clause-count", "shipped-clause-count")
+    )
+    for path, marker, fresh in renderings:
+        start, stop, lines = _region(path.read_text(encoding="utf-8"), path, marker)
         if lines[start:stop] == fresh:
             continue
         if write:

@@ -273,7 +273,7 @@ class TheSevenActs(unittest.TestCase):
 
 
 class GeneratedViewsMatch(unittest.TestCase):
-    """Every tabular appearance of the clause facts is a rendering of clauses.json.
+    """Every generated appearance of the clause facts is a rendering of clauses.json.
 
     One writer, byte-compared: the incident this exists for is a shipped generated page listing
     seven clauses that no longer existed and missing eight that did, silently, for weeks.
