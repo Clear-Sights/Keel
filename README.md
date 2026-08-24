@@ -7,6 +7,8 @@
 
 **One purpose: do not let the session capsize irreversibly.**
 
+Shipped plugin — installable and versioned. The dispatcher is replay-tested against authored sessions; its effect on a live session's outcome is unmeasured.
+
 *Formerly Gyroscope; renamed at v2.0.0, when the positive half merged in. The mechanism is
 unchanged — GitHub redirects the old repository name.*
 
