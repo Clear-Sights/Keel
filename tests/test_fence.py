@@ -31,7 +31,7 @@ import unittest
 # exists to have deleted: it names a DIFFERENT directory in each of the two layouts these bytes
 # run from, so the copy that was supposed to be portable was the one file pinning itself to one
 # layout. One derivation, one home, and its docstring is where the reasoning lives.
-from tests.plant_support import PLUGIN, REPO
+from tests.plant_support import PLUGIN, REPO, smoke_replace
 from keel import clauses as C_MOD
 
 SKILL = PLUGIN / "SKILL.md"
@@ -466,6 +466,53 @@ class SkillIsLoadable(unittest.TestCase):
         )
         # The host rejects a description longer than 1024 characters; 1024 itself loads.
         self.assertLessEqual(len(folded), 1024, "description exceeds the 1024-char limit")
+        self._assert_both_occasions(folded)
+
+    # The two occasions this package fires on, each pinned by a literal. This plugin carries two
+    # halves of one sentence -- "asymmetry is where the DEFAULT is the unhealing issue" read for
+    # harm, and read for benefit -- and the description is the applicability predicate for both:
+    # it is what a model reads to decide whether this page is relevant at all.
+    #
+    # THE MERGE DROPPED ONE OF THEM, AND NOTHING NOTICED. Swale's description led with the
+    # repetition occasion -- "Use when a guard has just been run by hand and will be needed
+    # again" -- and the merged description opened with the costly-act list instead. Measured: that
+    # phrase occurred zero times in this file. Every construction survived the merge (all 24
+    # clauses carry an anchor) and the OCCASION did not, so the positive half could only be
+    # reached through a denial: a session repeating a guard by hand while tripping no clause --
+    # exactly what the positive half is for -- got nothing.
+    #
+    # Length checks could not see it. A description can be 158 words, well-formed, under budget,
+    # and silently half a trigger.
+    OCCASIONS = (
+        ("the repetition occasion", ("run by hand", "needed again")),
+        ("the costly-act occasion", ("decides what the rest of the run inherits",)),
+    )
+
+    def _assert_both_occasions(self, folded: str) -> None:
+        for label, phrases in self.OCCASIONS:
+            missing = [p for p in phrases if p not in folded]
+            self.assertEqual(
+                [], missing,
+                f"the description no longer names {label} (missing {missing}). This page serves "
+                f"both halves of one sentence; a description that names only one of them makes "
+                f"the other reachable only by accident.")
+
+    def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Drop the repetition occasion the way the merge did, and the fence must name it.
+
+        The planted edit is deliberately the merge's own edit: the leading clause removed, the
+        rest of the description left well-formed, still long, still under budget. That is what
+        the regression actually looked like, and it is what every check on this description
+        except this one still passes.
+        """
+        smoke_replace(
+            self, PLUGIN / "SKILL.md",
+            b'  Use when a guard has just been run by hand and will be needed again '
+            b'\xe2\x80\x94 the same check, the same\n  "remember to" \xe2\x80\x94 and before a '
+            b'call that decides what the rest of the run inherits: pushing,\n',
+            b'  Use before a call that decides what the rest of the run inherits: pushing,\n',
+            "tests.test_fence.SkillIsLoadable.test_frontmatter_declares_a_name_and_a_trigger",
+            "the repetition occasion")
 
     def test_the_body_stays_inside_the_progressive_disclosure_budget(self) -> None:
         """Past ~500 lines the body stops being an index and starts being the thing it points
