@@ -1,17 +1,16 @@
 ---
 name: keel
 description: >-
-  Use before a call that decides what the rest of the run inherits — pushing, force-pushing,
-  deleting files or rules, checking out a ref, applying a patch, rewriting text in place, signing
-  a commit, releasing an artifact, traversing JSON, signalling a PID, mutating an external
-  service, launching a nested worker, dispatching work to a subagent, presenting a plan, reading
-  what a subagent returned, trusting a process listing, trusting a scanner, trusting a checker
-  never seen failing, or declaring a run finished — and when a default, budget, plan, or bare
-  result is being set or adopted. The hooks deny each costly act until its cheap guard is on
+  Use when a guard has just been run by hand and will be needed again — the same check, the same
+  "remember to" — and before a call that decides what the rest of the run inherits: pushing,
+  force-pushing, deleting files or rules, checking out a ref, applying a patch, rewriting text in
+  place, signing a commit, releasing an artifact, traversing JSON, signalling a PID, mutating an
+  external service, launching a nested worker, dispatching work to a subagent, presenting a plan,
+  reading what a subagent returned, trusting a process listing, trusting a scanner, trusting a
+  checker never seen failing, or declaring a run finished — and when a default, budget, plan, or
+  bare result is being set or adopted. The hooks deny each costly act until its cheap guard is on
   record this session; this page names the construction, where one exists, that makes the guard
-  unnecessary from then on — a data dependency, a single door, a resident failing case, a setting
-  every later call inherits, or a declared count — so the safe outcome arrives when nobody does
-  anything.
+  unnecessary from then on, so the safe outcome arrives when nobody does anything.
 ---
 
 # Keel

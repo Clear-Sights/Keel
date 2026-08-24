@@ -22,6 +22,14 @@ from __future__ import annotations
 import re
 import unittest
 
+# `keel` lives in `plugin/`, and what puts it on `sys.path` is importing `tests.plant_support`
+# -- its module-level insert, whose comment states the intent: "So `import keel` does not depend
+# on which directory the runner was started from." Eight sibling modules import it first and
+# resolve; this one imported `keel` directly and did not, because it is alphabetically first so
+# nothing had run the insert yet. It failed only OUTSIDE CI, which sets `PYTHONPATH: plugin` --
+# two spellings of one requirement, neither checked against the other. See
+# `tests/test_suite_imports_standalone.py`, which now makes that unreachable rather than unlikely.
+from tests.plant_support import PLUGIN  # noqa: F401  -- imported for its sys.path effect
 from keel import clauses as C
 
 # the pre-fix spelling, kept ONLY so the teeth test below can show this file is not vacuous

@@ -11,6 +11,8 @@ copies stay byte-identical across the move, and is the reason that line is now w
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -32,6 +34,80 @@ REPO = PLUGIN.parent
 if str(PLUGIN) not in sys.path:
     # So `import keel` does not depend on which directory the runner was started from.
     sys.path.insert(0, str(PLUGIN))
+
+
+def _sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+# Where a plant records that a source file is CURRENTLY mutated. Outside the repository, because
+# it must not be committed or shipped; outside this process, because the thing it guards against
+# is this process dying; keyed on the checkout path, so two checkouts on one machine cannot adopt
+# each other's wreckage.
+PLANT_STATE = Path(tempfile.gettempdir()) / f"keel-plants-{_sha(str(REPO).encode())[:12]}"
+
+# Set by `smoke_replace` in the child it runs, and inherited by anything the child spawns. A
+# process running INSIDE a plant must never recover it: the mutation is the point, and undoing it
+# mid-flight would make every plant report green for the wrong reason.
+PLANT_ACTIVE_ENV = "KEEL_PLANT_ACTIVE"
+
+
+def recover_stale_plants(state: Path | None = None) -> list[str]:
+    """Undo any mutation a killed plant left behind, and say where. Returns what it recovered.
+
+    A plant mutates a source file, runs a child against it, and restores. Restore is registered
+    with `addCleanup` and called again inline -- and a SIGKILL skips both, so an interrupt or a
+    timeout while the child runs leaves the working tree carrying the planted fault.
+
+    MEASURED, and it cost a false diagnosis: a run killed at a ten-minute timeout left
+    `plugin/keel/ledger.py` missing the two lines one plant removes. The next suite reported a
+    missing dedup guard in a file nobody had edited, and the comment describing that guard was
+    still sitting above the hole -- which reads exactly like a real defect. `git diff` is what
+    told the two apart, and nothing in the suite pointed at it.
+
+    So the reversal is made to outlive the process that made it: the marker is written before the
+    mutation and deleted after the restore, and whatever finds a marker later does the restore
+    the dead process could not. This is the resting-state repair rather than a warning, because a
+    warning still leaves the next run measuring a tree that is not the tree under test.
+
+    RECOVERY IS REFUSED, NEVER GUESSED, when the file no longer holds what the plant wrote:
+    someone has edited it since, and silently overwriting their work with a backup would be a
+    worse failure than the one being repaired.
+    """
+    state = PLANT_STATE if state is None else Path(state)
+    if os.environ.get(PLANT_ACTIVE_ENV) or not state.is_dir():
+        return []
+    recovered = []
+    for marker in sorted(state.glob("*.json")):
+        record = json.loads(marker.read_text(encoding="utf-8"))
+        target, backup = Path(record["path"]), Path(record["backup"])
+        current = target.read_bytes() if target.exists() else b""
+        if _sha(current) == record["original"]:
+            marker.unlink()  # the restore ran and only the marker leaked; nothing to undo
+            continue
+        if _sha(current) != record["mutated"]:
+            raise RuntimeError(
+                f"a plant died leaving {target} mutated (pid {record.get('pid')}), and the file "
+                f"has been edited since -- this cannot be undone without discarding that edit. "
+                f"The bytes from before the plant are at {backup}; compare, then delete "
+                f"{marker} to clear this.")
+        if not backup.exists():
+            raise RuntimeError(
+                f"a plant died leaving {target} mutated (pid {record.get('pid')}) and its backup "
+                f"{backup} is gone. Restore that file from git, then delete {marker}.")
+        target.write_bytes(backup.read_bytes())
+        backup.unlink()
+        marker.unlink()
+        recovered.append(str(target))
+    if recovered:
+        # stderr, and unconditional: a repair nobody is told about is how the same kill becomes a
+        # mystery twice. The suite's own output is the seat that reads this.
+        print(f"plant_support: restored {len(recovered)} file(s) left mutated by a killed plant: "
+              + ", ".join(recovered), file=sys.stderr)
+    return recovered
+
+
+recover_stale_plants()
 
 
 def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
@@ -61,25 +137,37 @@ def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
     """
     original = path.read_bytes()
     case.assertIn(old, original, f"plant seam changed in {path}")
+    mutated = original.replace(old, new, 1)
     backup = tempfile.NamedTemporaryFile(prefix=path.name + ".", delete=False)
     backup_path = Path(backup.name)
     backup.write(original)
     backup.close()
+    # The marker `recover_stale_plants` reads if this process is killed while the file is
+    # mutated. Named after the backup, so one plant's wreckage is one marker naming one backup.
+    marker = PLANT_STATE / (backup_path.name + ".json")
     def restore() -> None:
         if backup_path.exists():
             path.write_bytes(backup_path.read_bytes())
             backup_path.unlink()
+        # After the file, never before: a kill in between leaves a marker whose target already
+        # matches `original`, which recovery reads as "the restore ran" and simply clears.
+        marker.unlink(missing_ok=True)
     case.addCleanup(restore)
     def run() -> subprocess.CompletedProcess:
         return subprocess.run(["python3", "-m", "unittest", target], cwd=TESTS_CWD,
                               text=True, capture_output=True, check=False,
-                              env={**os.environ, "PYTHONPATH": str(PLUGIN)})
+                              env={**os.environ, "PYTHONPATH": str(PLUGIN),
+                                   PLANT_ACTIVE_ENV: marker.name})
 
     before = run()
     case.assertEqual(0, before.returncode,
                      f"{target} is not green BEFORE the seam is mutated, so the red run below "
                      f"would prove nothing:\n{before.stdout}{before.stderr}")
-    path.write_bytes(original.replace(old, new, 1))
+    PLANT_STATE.mkdir(parents=True, exist_ok=True)
+    marker.write_text(json.dumps({"path": str(path), "backup": str(backup_path), "pid": os.getpid(),
+                                  "original": _sha(original), "mutated": _sha(mutated)}),
+                      encoding="utf-8")
+    path.write_bytes(mutated)
     done = run()
     output = done.stdout + done.stderr
     case.assertNotEqual(0, done.returncode, output)
