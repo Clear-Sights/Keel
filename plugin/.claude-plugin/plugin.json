@@ -1,7 +1,7 @@
 {
   "name": "keel",
   "description": "Denies a costly call until the cheap call that licenses it is on record, and names the construction that retires the guard for good. One obligation ledger reconciled at Stop; exact predicates over event plus ledger, never over prose.",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "author": {"name": "Clear-Sights"},
   "license": "Apache-2.0",
   "keywords": ["claude-code", "codex", "hooks", "guardrails", "keel"]
