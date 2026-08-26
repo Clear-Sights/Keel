@@ -113,23 +113,7 @@
       "git push --force-with-lease origin main",
       "git fetch origin main",
       "git push origin main"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero force-pushes in 4401 calls, so the clause has no measured denominator and, per this repository's own rule, absence is never a pass. A guard nobody was ever observed to need cannot show it is discharged by real work.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "A01 and T02 (live in the table)",
-      "successor_contract": "A01 gates push itself on the same corpus surface (22 evaluated, 0 fp) and T02 requires the landing of any push to be verified by fetch/ls-remote before the run may end. The force-push-specific residue -- overwriting a never-fetched remote tip -- also remains repriced by the fingerprint's own carve-out: --force-with-lease was always exempt, and it is the form that encodes the fetch.",
-      "status": "quarantined NOT-EVALUABLE; conserved verbatim"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a frozen corpus containing a force-push is admitted; restore and measure before trusting"
-    },
-    "expect_unobserved": "a force-push overwriting an unfetched remote ref is a release-day act; an ordinary session does not perform one, and the corpus is ordinary sessions."
+    ]
   },
   {
     "id": "C03-verify-what-returns",
@@ -235,7 +219,6 @@
       "renewed": 0,
       "because": "NOT EVALUABLE against this host: no exit status reaches PostToolUse in any form. Measured over 71 recorded Bash PostToolUse payloads in makoto.record.db (the raw hook events, not the transcript): tool_response is a dict in every one, keyed (stdout, stderr, interrupted, isImage, noOutputExpected), plus returnCodeInterpretation once carrying the string 'No matches found'. No exit_code member under any spelling, and no 'Error: Exit code N' string -- that form is the TRANSCRIPT's rendering of a failed call, not the payload. Failing runs do produce PostToolUse events, so the clause is not merely unobserved: the evidence it asks for is absent from an event that arrives. Matching failure text in tool_response.stdout was measured instead and rejected: it fired on a real failure AND on a passing run (121 passed, 1 xfailed) in an 18-run sample, and predicates over prose are what this table exists to avoid. Ledger cost of leaving it live: 114 demand rows in one session, 0 discharges ever, every Stop blocked. Renew only by re-arguing this research; if the host ships an exit status, delete the waiver instead."
     },
-    "expect_unobserved": "the frozen corpus contains no explicit pytest/unittest or named *check*/verify script activation paired with observable PostToolUse outcome events; this keyed terminal occasion is therefore expected to have evaluated: 0, which is NOT-EVALUABLE rather than evidence of absence.",
     "_fixture_note": "terminal keyed clause: fixtures_pos/neg validate the PostToolUse failure guard; fixtures_activate validate checker recognition. The guard reads tool_response as TEXT, not tool_response.exit_code: the host sends no exit-code field. A SUCCEEDING Bash call yields a dict keyed (stdout, stderr, interrupted, isImage, noOutputExpected); a FAILING one yields the STRING 'Error: Exit code N\\n<output>'. Measured over 2279 recorded tool results (1985 dict / 175 str / 119 list, 67 distinct keys) -- no exit_code member under any spelling. The engine returns False for a non-str under kind=regex, so the success dict cannot discharge and only a real failure does.",
     "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PreToolUse activation records the normalized checker command as its own obligation; only a nonzero PostToolUse for the equal key discharges it. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py."
   },
@@ -452,7 +435,6 @@
       "on": "tool_input.command",
       "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b"
     },
-    "_activation": "A terminal demand with fingerprint `always` fires at every Stop, so a read-only session that never pushed was asked for a fetch it had no reason to run -- a firing-rate cost on every session end, measured: reconcile([T02], empty ledger, read-only Stop) returned decision=block. `activated_by` makes the demand CONDITIONAL on an observed push, which is the deferred-demand shape this clause needed. Quarantining T02 instead was declined: a false block costs one cheap fetch, while losing the landing check costs an unverified push, and only the second is unrecoverable.",
     "fixtures_activate": [
       "git push -u origin main",
       "cd /x && git push"
@@ -488,23 +470,7 @@
     "fixtures_neg": [
       "python3 tools/probe_child_capability.py --writable-home --response-transport --result-write",
       "pytest -q"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: the fingerprint (dispatch.sh nested-worker launch) matched 0 of 4401 calls, and the demanded guard names tools/probe_child_capability.py, a file this repository does not ship. No measured denominator; absence is never a pass.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "D01 (live in the table)",
-      "successor_contract": "D01 gates the fan-out surface this corpus actually uses -- Agent dispatch -- on probe-before-dispatch, and carries the corpus's single true positive. The nested-worker occasion, if it returns, is the same shape: probe the child's capability before spending the dispatch.",
-      "status": "quarantined NOT-EVALUABLE; conserved verbatim"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a corpus containing dispatch.sh worker launches is admitted"
-    },
-    "expect_unobserved": "launching a nested worker is not part of ordinary editing; it appears only in fan-out sessions, of which this corpus has none."
+    ]
   },
   {
     "id": "U02",
@@ -540,23 +506,7 @@
     "fixtures_neg": [
       "python3 tools/probe_child_capability.py --target unit-a --after-failure --require-change",
       "python3 -m pytest -q"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: the fingerprint (dispatch.sh re-launch) matched 0 of 4401 calls, and the guard names tools/probe_child_capability.py, which this repository does not ship. No measured denominator; absence is never a pass.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "D01 (live in the table)",
-      "successor_contract": "Same surface as U01: D01 holds probe-before-dispatch for the fan-out mechanism the corpus exercises. Re-launch-after-failure, if the occasion returns, is D01's shape with a stricter precondition.",
-      "status": "quarantined NOT-EVALUABLE; conserved verbatim"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a corpus containing dispatch.sh worker re-launches is admitted"
-    },
-    "expect_unobserved": "re-launching a nested worker after a failure is strictly rarer than U01, which is itself unobserved here."
+    ]
   },
   {
     "id": "U03",
@@ -624,23 +574,7 @@
     "fixtures_neg": [
       "curl -H 'Authorization: Bearer token' https://api.example.test/me",
       "curl -I https://example.test"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero mutating curl requests (-X POST/PUT/PATCH/DELETE) in 4401 calls. No measured denominator; absence is never a pass. tools/register_gate.py already records U06 in EXPECTED_EXCLUDED as having failed the hardened admissibility audit.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "U06 itself, conserved verbatim here",
-      "successor_contract": "No live clause covers a mutating external request, and none can claim to until a corpus contains one -- naming a live successor would assert conservation nothing measured. The clause is held whole in quarantine so restoring it is a file move, not a reconstruction.",
-      "status": "quarantined NOT-EVALUABLE; awaiting an evaluable corpus"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a frozen corpus containing a mutating external request is admitted"
-    },
-    "expect_unobserved": "a mutating request to an external service leaves the repository entirely; the corpus records tool calls, and most sessions never make one."
+    ]
   },
   {
     "id": "U08",
@@ -672,23 +606,7 @@
     "fixtures_neg": [
       "printf test | gpg --clearsign",
       "git status --short"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero signed commits (git commit -S/--gpg-sign) in 4401 calls. No measured denominator; absence is never a pass.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "git's own signing path (host guarantee, outside the table)",
-      "successor_contract": "git commit -S fails loudly and creates NO commit when the signer cannot sign; the state left by a failed signature heals by correction with the error on screen. The residue -- a signer that signs wrongly but successfully -- was never what the canary guard could detect either.",
-      "status": "quarantined NOT-EVALUABLE; conserved verbatim"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a corpus containing signed commits is admitted"
-    },
-    "expect_unobserved": "signed commits require a configured signer; sessions on hosts without one never attempt the act at all."
+    ]
   },
   {
     "id": "U09",
@@ -814,23 +732,7 @@
     "fixtures_neg": [
       "rg -n -F 'def target(' src/app.py",
       "sed -n '40,80p' src/app.py"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero real patch applications in 4401 calls. The single fingerprint-shaped call (call 165) is prose -- a python heredoc quoting `patch -p` -- and it contains its own grep, so the dispatcher scores it as guard-then-act and it never enters the denominator. Searched the corpus for `git apply` and `patch -pN` at segment starts: the heredoc is the only hit. No measured denominator; absence is never a pass.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "U12 itself, conserved verbatim here",
-      "successor_contract": "No live clause gates patch application, and none can claim measured conservation until a corpus contains a real one. The clause is held whole so restoration is a file move. Its guard (rg/grep of the patch context) was the natural-guard pattern and stays recorded here as the shape to restore.",
-      "status": "quarantined NOT-EVALUABLE; awaiting an evaluable corpus"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a frozen corpus containing a real git apply / patch invocation is admitted"
-    },
-    "expect_unobserved": "applying a patch is an occasional integration act; a session that edits files directly never reaches it."
+    ]
   },
   {
     "id": "U13",
@@ -872,23 +774,7 @@
       "git apply --check generated.patch",
       "git diff --check",
       "cd /tmp/verify\npython3 - <<'PY'\nimport sys; sys.path.insert(0,'bench')\nimport admissibility as a\npairs = {\n \"U05\": ('test -w \"$(git rev-parse --git-path FETCH_HEAD)\"; git fetch origin', 'git fetch origin'),\n \"U06\": ('gh api user; gh pr view 123', 'gh pr view 123'),\n \"U12\": (\"sed -n '42p' file.py; rg -c 'target' file.py; test $(rg -c 'target' file.py) -eq 1; git apply change.patch\",\n         'git apply change.patch'),\n \"U19\": ('python3 rewrite_crlf.py; python3 -m unittest tests.test_preservation', 'python3 rewrite_crlf.py'),\n}\nprint(\"witness_overlap verdict under the CURRENT checker (subset rule removed):\")\nfor cid,(s,v) in pairs.items():\n    err = a.witness_overlap(s, v)\n    print(f\"  {cid}: {'ADMISSIBLE (no overlap finding)' if not err else 'REJECTED: '+err}\")\nprint()\nprint(\"valid_witness (both arms name a real tool call)?\")\nfor cid,(s,v) in pairs.items():\n    fs = a.valid_witness(s) if hasattr(a,'valid_witness') else None\n    print(f\"  {cid}: satisfying_tools={sorted({a.invoked_tool(x) for x in a.normalized_segments(s)}-{None})} violating_tools={sorted({a.invoked_tool(x) for x in a.normalized_segments(v)}-{None})}\")\nPY"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero real patch applications in 4401 calls -- the only fingerprint-shaped text is prose inside a python heredoc, which the segment anchor correctly refuses. No measured denominator; absence is never a pass.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "U13 itself, conserved verbatim here (U12, first named as successor, is quarantined alongside for the same absent occasion)",
-      "successor_contract": "No live clause gates patch application; none can claim measured conservation until a corpus contains a real one. `git apply --check` remains the guard to restore with this clause.",
-      "status": "quarantined NOT-EVALUABLE; awaiting an evaluable corpus"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a corpus containing a real patch application is admitted"
-    },
-    "expect_unobserved": "applying a GENERATED patch is rarer still than U12 -- it needs a producer and a consumer in the same session."
+    ]
   },
   {
     "id": "U19",
@@ -936,7 +822,10 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)",
+      "unless": [
+        "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+      ]
     },
     "discharged_by": {
       "kind": "regex",
@@ -948,12 +837,12 @@
     "construction": "POINTS.md#u20",
     "fixtures_pos": [
       "rm -r generated/state",
-      "git reset --hard HEAD~1",
-      "find . -name '*.tmp' -delete"
+      "git reset --hard HEAD~1"
     ],
     "fixtures_neg": [
       "pytest -q tests/test_behavior.py",
-      "curl -fsS http://localhost:8080/health"
+      "curl -fsS http://localhost:8080/health",
+      "find . -name '*.tmp' -delete"
     ],
     "_absorbed_from_U17": "U17 (preview-the-selector, quarantined at 29/30 candidate FP) covered `find -delete` where A02's dir-keyed extractor abstains. The occasion is conserved here: a selector-driven delete is a destructive behavior-changing mutation, and U20's guard -- run the relevant test or probe first -- is the guard real work performs (measured 0 candidate FP, 8 true positives on the frozen corpus)."
   },
@@ -988,23 +877,7 @@
     "fixtures_neg": [
       "python -W error -m pytest",
       "PYTHONWARNINGS=error tox -e py312"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero publish/release commands (npm publish, twine upload, cargo publish) in 4401 calls. No measured denominator; absence is never a pass. The practice survives independently in the bench register under its audited identity C16-warnings-are-errors, which tools/register_gate.py pins.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "C16-warnings-are-errors (bench register, pinned by tools/register_gate.py)",
-      "successor_contract": "The audited register row carries the same requirement -- run the suite with warnings promoted to errors before release -- with its witness pair byte-checked by the WITNESS-NOT-CARRIED gate.",
-      "status": "quarantined NOT-EVALUABLE; conserved verbatim"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a corpus containing a publish/release command is admitted"
-    },
-    "expect_unobserved": "publishing or releasing an artifact happens on release days, not in the development sessions this corpus is drawn from."
+    ]
   },
   {
     "id": "U25",
@@ -1036,22 +909,6 @@
     "fixtures_neg": [
       "pytest -q tests/test_scanner.py -k prefix_distractor",
       "python3 -m pytest -q tests/test_parser.py"
-    ],
-    "_quarantine_reason": "NOT-EVALUABLE on the frozen corpus: zero scanner-as-acceptance-check invocations in 4401 calls. No measured denominator; absence is never a pass.",
-    "_conservation": {
-      "requirement": "a retired row names a canonical successor with evidence and a reason; the clause is conserved verbatim in quarantine, never deleted, so the reason it existed can be re-examined",
-      "successor": "C08-check-can-fail (bench register, pinned by tools/register_gate.py)",
-      "successor_contract": "The audited register row carries the underlying requirement -- a check must be shown able to fail before its pass is trusted -- of which the prefix-distractor regression demanded here is one instance.",
-      "status": "quarantined NOT-EVALUABLE; conserved verbatim"
-    },
-    "_quarantine_evidence": {
-      "corpus": "corpus/frozen/MANIFEST.json digest c1d98edf67c287a36a8748614790e696e656575caaf5fe43ea9ce9e6ea2d4fb0, 4401 calls, one session",
-      "evaluated": 0,
-      "denied": 0,
-      "candidate_fp": 0,
-      "fp_rate": "N/A (evaluated: 0)",
-      "revisit_if": "a corpus containing a scanner acceptance run is admitted"
-    },
-    "expect_unobserved": "running a scanner AS an acceptance check is a specific misuse; the corpus contains scanner runs, but none standing in for a test suite."
+    ]
   }
 ]

@@ -167,4 +167,9 @@ was moved, not removed.
   without going red.
 - Nothing here establishes outcome efficacy. The dispatcher's denial is replay-verified; what a
   live agent does after a denial, and whether these constructions help, is unmeasured.
+- Not every clause ships with a measured false-positive rate. Some name an occasion the frozen
+  corpus never contained, so there was no denominator to measure against and absence was not
+  counted as a pass. Those clauses still fire; what is missing is the evidence about how often
+  they fire wrongly, and the per-clause record of it lives in the development repository. The
+  count is deliberately not restated here, because nothing in this repository can recompute it.
 - The shapes are one list against a large body of prior art, and incomplete.
