@@ -6,7 +6,7 @@ between them and `keel/clauses.json`:
 
   (a) whether every clause's `construction` anchor resolves to a real heading in POINTS.md, and
       every POINTS.md entry belongs to a real clause -- no point silently dropped, none invented;
-  (b) whether the seven acts in ACTS.md are still exactly the seven, and every point ACTS.md
+  (b) whether the ten acts in ACTS.md are still exactly the ten, and every point ACTS.md
       cites is a clause that exists;
   (c) whether every generated tabular view still matches the table it renders;
   (d) whether the vendored vocabulary still matches its pinned provenance, and the pages still
@@ -50,7 +50,7 @@ def _headings(text: str) -> list[str]:
     matched word-shaped headings only, so a heading with a space in it was INVISIBLE to them: it
     could be duplicated, it could sit over an empty section, a contents row could link to it, and
     every one of those checks passed by never seeing it. A heading the pattern cannot see is a
-    heading the assertion never judges. `TheSevenActs` already knew this and wrote it down -- it
+    heading the assertion never judges. `TheActList` already knew this and wrote it down -- it
     was the one of the four copies that got it right, which is what four copies of one job
     produce. There is one copy now, and it is the right one.
     """
@@ -58,18 +58,27 @@ def _headings(text: str) -> list[str]:
 
 SKILL_NAME = "keel"
 
-# The seven acts. This literal is the fence's half of the single-home rule: ACTS.md's headings
+# The ten acts. This literal is the fence's half of the single-home rule: ACTS.md's headings
 # are the one place the list lives as content, and this pin is what makes losing or inventing
-# one a red run instead of a quiet fork. The names originate in the development repository's
-# register (Gyroscope-Dev, frozen); moving this set is a deliberate re-vendoring, so the pin
-# moves by hand, like a sha.
-SEVEN_ACTS = (
+# one a red run instead of a quiet fork. Seven of the names originate in the development
+# repository's register (Gyroscope-Dev, frozen); moving this set is a deliberate re-vendoring, so
+# the pin moves by hand, like a sha.
+#
+# `compact`, `probe` and `research` were added by hand and do NOT come from that register. They
+# come from the directive set it feeds, where each cleared the recurrence cut over independent
+# sources and no act here carried them. The register was deliberately left alone: its act list is
+# a MEASURED structure -- every act in it resolves to clauses that route to it -- and adding three
+# names with no clauses would have made it assert a routing nobody measured.
+TEN_ACTS = (
     "accept_report",
     "choose_spend",
+    "compact",
     "delete",
     "dispatch_work",
     "finalize_plan",
+    "probe",
     "push",
+    "research",
     "write_default_rule",
 )
 
@@ -123,11 +132,16 @@ class TheConstructionJoin(unittest.TestCase):
         self.ids = [row["id"] for row in self.rows]
         self.points_md = _load(POINTS_MD)
 
-    def test_the_table_still_holds_twenty_four_clauses(self) -> None:
-        """Pinned literally: the prose says twenty-four across every page, so a coherently
-        reduced or grown table must land here first and force the prose sweep, not pass
-        quietly."""
-        self.assertEqual(len(self.ids), 24, "the table moved; every spelled-out count moves with it")
+    def test_no_clause_id_is_duplicated(self) -> None:
+        """Two rows under one id is one row the other checks never judge.
+
+        This method used to open by pinning the table to a literal 24, and said why in its own
+        words: the prose spells twenty-four, so a changed table "must land here first and force
+        the prose sweep". The sweep was a person. `SpelledCountsMatchWhatTheyCount` now joins
+        every spelled total to its source, so the pages themselves are the acknowledgement and a
+        third copy of the number here would be one more writer to keep in step. What is left is
+        the part no join can see: the table disagreeing with itself.
+        """
         self.assertEqual(len(set(self.ids)), len(self.ids), "duplicate id in clauses.json")
 
     def test_no_entry_is_duplicated_or_empty(self) -> None:
@@ -230,13 +244,13 @@ class TheConstructionJoin(unittest.TestCase):
                           f"contents row {label} links to #{target}, which is no heading")
 
 
-class TheSevenActs(unittest.TestCase):
-    """ACTS.md's headings are the single home of the act list, held to the pinned seven."""
+class TheActList(unittest.TestCase):
+    """ACTS.md's headings are the single home of the act list, held to the pinned ten."""
 
     def setUp(self) -> None:
         self.acts = _load(ACTS_MD)
 
-    def test_the_act_headings_are_exactly_the_seven(self) -> None:
+    def test_the_act_headings_are_exactly_the_ten(self) -> None:
         """Set equality both directions, so neither an invented act nor a dropped one passes.
 
         Every heading, not a word-shaped subset: a heading the pattern cannot see is a heading
@@ -246,10 +260,10 @@ class TheSevenActs(unittest.TestCase):
         indexed = _headings(self.acts)
         self.assertEqual(len(indexed), len(set(indexed)), f"duplicate act heading: {indexed}")
         self.assertEqual(
-            set(indexed), set(SEVEN_ACTS),
+            set(indexed), set(TEN_ACTS),
             f"ACTS.md and the pinned act list disagree: "
-            f"only in ACTS.md {sorted(set(indexed) - set(SEVEN_ACTS))}, "
-            f"only in the pin {sorted(set(SEVEN_ACTS) - set(indexed))}",
+            f"only in ACTS.md {sorted(set(indexed) - set(TEN_ACTS))}, "
+            f"only in the pin {sorted(set(TEN_ACTS) - set(indexed))}",
         )
 
     def test_every_point_cited_anywhere_is_a_clause(self) -> None:
@@ -632,3 +646,139 @@ class TheShippedFilesNameOnlyThingsThatExist(unittest.TestCase):
                             (PLUGIN / relative).is_file(),
                             f"{name} {event}: command {command!r} names no file in the plugin")
         self.assertGreater(seen, 5, f"only {seen} hook commands reached the assertion")
+
+
+# The English number words these pages actually use to state a total, and their values. Derived
+# from the spelling, not from a table of allowed totals: `twenty-four` is `20 + four`, so the map
+# cannot go stale when a count moves. Nothing above twenty-nine has ever appeared here; a larger
+# total would simply not be seen, which is why the check reports its omissions below.
+_ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+         "fifteen sixteen seventeen eighteen nineteen twenty").split()
+NUMBER_WORDS = {word: value for value, word in enumerate(_ONES)}
+NUMBER_WORDS.update({f"twenty-{w}": 20 + v for v, w in enumerate(_ONES[1:10], 1)})
+
+# A TOTAL claim in these pages is written with a determiner: "the ten acts", "these ten acts".
+# Without one the same words are ordinary prose that counts nothing -- "overruling a stated one
+# are different acts", "They are not two points" -- and both are in the shipped text today. The
+# determiner is what separates them, so it is required rather than a list of phrases to skip.
+# Up to two words may sit between the number and its noun ("the seven coarser acts"), which is
+# the form the defect this class exists for was written in.
+# Digits as well as words. No page writes a total in digits today, so this alternative matches
+# nothing at the moment -- which is the reason to add it now rather than after "the 24 points"
+# has been written and quietly missed. A check whose coverage depends on a house style nothing
+# enforces is a check with a hole in the shape of that style.
+SPELLED_TOTAL_RX = re.compile(
+    r"\b(?:the|these|those|all)\s+(\d{1,3}|%s)\s+((?:[\w-]+\s+){0,2}?)([a-z]+s)\b"
+    % "|".join(sorted(NUMBER_WORDS, key=len, reverse=True)),
+    re.IGNORECASE,
+)
+
+
+class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
+    """Every spelled-out total on a shipped page, joined to the thing it counts.
+
+    WHY THIS EXISTS. The pages state counts in words -- "the ten acts", "the twenty-four points"
+    -- and nothing held those words to the tables they describe. The relation was true when
+    written and drifted in silence, because the only thing carrying it was a person remembering
+    to sweep. `test_the_table_still_holds_twenty_four_clauses` said so in its own docstring: it
+    pinned the number on one side and asked the prose sweep to happen on the other.
+
+    It drifted. Raising ACTS.md from seven acts to ten updated the headings and the pinned list
+    and left SKILL.md's index entry reading "the seven coarser acts", and the whole fence stayed
+    green. Planting the reverse -- retitling ACTS.md "The nine acts" with ten headings present --
+    was also green. Both are joined here now.
+
+    WHAT IT DOES NOT SEE, and says so rather than passing over it. The scope is swept from the
+    pages, but only nouns whose count can be COMPUTED from a single source can be judged; the
+    rest are reported by `test_the_check_reports_what_it_cannot_join` instead of being silently
+    dropped. A total written without a determiner is not seen at all -- that is the price of not
+    firing on ordinary prose, and it is paid knowingly.
+    """
+
+    def counted(self) -> dict[str, int]:
+        """noun -> the count computed from the ONE place that fact lives.
+
+        Never from another page's prose: a count read out of the text would make the check agree
+        with whatever was written, which is the failure it exists to end.
+        """
+        skill = _load(SKILL)
+        constructions = re.findall(r"^\*\*(\d+)\.\s", skill, re.MULTILINE)
+        shapes = json.loads(_load(VOCABULARY))["shapes"]
+        clauses = _clause_rows()
+        return {
+            "acts": len(_headings(_load(ACTS_MD))),
+            "points": len(clauses),
+            "moments": len(clauses),
+            "constructions": len(constructions),
+            "shapes": len(shapes),
+            "tiers": len(re.findall(r"^### Tier ", skill, re.MULTILINE)),
+        }
+
+    def occurrences(self):
+        """(page, line number, value, noun, phrase) for every spelled total on every page."""
+        for page in PAGES:
+            for number, line in enumerate(_load(page).splitlines(), 1):
+                for found in SPELLED_TOTAL_RX.finditer(line):
+                    token = found.group(1).lower()
+                    value = int(token) if token.isdigit() else NUMBER_WORDS[token]
+                    yield page, number, value, found.group(3).lower(), found.group(0)
+
+    def test_every_spelled_total_equals_what_it_counts(self) -> None:
+        counted = self.counted()
+        self.assertTrue(all(counted.values()), f"a computed count came out empty: {counted}")
+        wrong = [
+            f"{page.name}:{line} says {phrase!r} but there are {counted[noun]} {noun}"
+            for page, line, value, noun, phrase in self.occurrences()
+            if noun in counted and value != counted[noun]
+        ]
+        self.assertEqual([], wrong, "a page states a count that its own source contradicts")
+
+    def test_the_check_has_a_subject(self) -> None:
+        """An empty subject is reported, not passed over.
+
+        A sweep that matches nothing returns no mismatches and looks identical to a clean one.
+        Every count in this suite that can be green over nothing is required to say so instead.
+        """
+        counted = self.counted()
+        joined = [o for o in self.occurrences() if o[3] in counted]
+        self.assertGreater(
+            len(joined), len(counted),
+            f"only {len(joined)} spelled totals resolve to a computed count; the sweep has "
+            "stopped seeing the pages it is supposed to be reading")
+
+    def test_the_check_reports_what_it_cannot_join(self) -> None:
+        """Name the totals no source can settle, so the residue is visible rather than assumed."""
+        counted = self.counted()
+        unjoined = sorted({
+            f"{page.name}:{line} {phrase!r}"
+            for page, line, _, noun, phrase in self.occurrences() if noun not in counted
+        })
+        self.assertIsInstance(unjoined, list)
+        print(f"\nDENOMINATOR subject=spelled-totals joined={len(counted)} "
+              f"unjoined={len(unjoined)}")
+
+    def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Retitle ACTS.md against its own headings, and this must go red.
+
+        This exact edit -- a spelled total moved while the headings stayed -- was made by hand
+        against the fence before this class existed and the whole suite returned OK.
+        """
+        smoke_replace(
+            self, ACTS_MD, b"# The ten acts", b"# The nine acts",
+            "tests.test_fence.SpelledCountsMatchWhatTheyCount."
+            "test_every_spelled_total_equals_what_it_counts",
+            "says 'The nine acts' but there are 10 acts",
+        )
+
+    def test_the_subject_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Blind the sweep, and the empty subject must be reported rather than pass.
+
+        Planted in the pattern rather than in a page, because that is where the failure would
+        really come from: a regex that stops matching turns every mismatch test in this class
+        green at once, and only this method can tell that from a clean tree.
+        """
+        smoke_replace(
+            self, Path(__file__), b'r"\\b(?:the|these|those|all)\\s+', b'r"\\bNOTHINGMATCHESTHIS\\s+',
+            "tests.test_fence.SpelledCountsMatchWhatTheyCount.test_the_check_has_a_subject",
+            "stopped seeing the pages",
+        )

@@ -95,6 +95,14 @@ def _marker_name(session: str) -> str:
     return f"{safe}-{hashlib.sha256(session.encode('utf-8')).hexdigest()[:16]}"
 
 
+# How long an unfinished claim marker may sit before another process may take it over. The bound
+# is the longest a claim can still be LIVE: the process holding it runs inside a hook, and
+# `hooks/hooks.json` bounds every handler, so a marker younger than that bound may belong to a
+# writer still working. Taking that one over loses the liveness row this journal exists to
+# guarantee -- the exact failure `_committed` was written against, arriving from the other side.
+# This sits ABOVE the hook bound rather than at it, and `tests/test_bounds.py` requires that
+# relation, so raising a hook timeout past it goes red instead of silently stealing live claims.
+# On exhaustion the marker is taken over and the claim is re-run.
 _STALE_CLAIM_SECONDS = 60
 
 

@@ -466,7 +466,7 @@
     ],
     "occasion": "the trace is about to launch a nested worker",
     "costly": "launch a nested worker",
-    "guard": "run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write`",
+    "guard": "run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --writable-home --response-transport --result-write`",
     "subject": "session_id",
     "fingerprint": {
       "kind": "regex",
@@ -479,7 +479,7 @@
       "pattern": "\\bpython3?\\b[^\\n]*(?:probe_child_capability\\.py)[^\\n]*--writable-home[^\\n]*--response-transport[^\\n]*--result-write\\b"
     },
     "window": "session",
-    "deny_reason": "launch a nested worker without its guard; run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write`",
+    "deny_reason": "launch a nested worker without its guard; run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --writable-home --response-transport --result-write`",
     "construction": "POINTS.md#u01",
     "fixtures_pos": [
       "/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt",
@@ -514,7 +514,7 @@
     ],
     "occasion": "the trace is about to re-launch a nested-worker target",
     "costly": "re-launch a nested-worker target",
-    "guard": "run `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change`",
+    "guard": "run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --target TARGET --after-failure --require-change`",
     "subject": {
       "on": "tool_input.command",
       "pattern": "(?:dispatch\\.sh|--target)\\s+([A-Za-z0-9][\\w.-]*)\\b",
@@ -531,7 +531,7 @@
       "pattern": "\\bpython3?\\b[^\\n]*probe_child_capability\\.py[^\\n]*--target\\s+\\S+[^\\n]*--after-failure[^\\n]*--require-change\\b"
     },
     "window": "session",
-    "deny_reason": "re-launch a nested-worker target without its guard; run `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change`",
+    "deny_reason": "re-launch a nested-worker target without its guard; run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --target TARGET --after-failure --require-change`",
     "construction": "POINTS.md#u02",
     "fixtures_pos": [
       "/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt",
