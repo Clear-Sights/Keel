@@ -105,5 +105,30 @@ class NoTestAssertsFromWhatTheProductIgnores(unittest.TestCase):
         )
 
 
+class OneClauseDecliningAnotherStaysInStep(unittest.TestCase):
+    """U20 declines exactly what A02 claims, and the two spellings must not drift apart.
+
+    `rm -rf ./build` used to raise A02 and then, once its remedy was obeyed, U20 -- one act, two
+    unrelated remedies (list what you are deleting; run the test suite). U20 now carries an
+    `unless` holding A02's fingerprint, so the bulk deletes A02 owns are no longer U20's occasion,
+    while a plain `rm file`, `rm -r dir` and `git reset --hard` still are: the overlap goes, no
+    coverage does.
+
+    `clauses.json` is data and cannot reference another row, so that pattern is a COPY -- the
+    two-writer shape this repository keeps finding. The copy is legal only because this holds it
+    in step: change A02's fingerprint without mirroring it and the overlap silently re-opens,
+    which is the failure that got the pair recorded in the first place.
+    """
+
+    def test_u20_declines_exactly_what_a02_claims(self) -> None:
+        rows = {r["id"]: r for r in json.loads(CLAUSES.read_text(encoding="utf-8"))}
+        a02 = rows["A02"]["fingerprint"]["pattern"]
+        declined = rows["U20"]["fingerprint"].get("unless") or []
+        self.assertIn(
+            a02, declined,
+            "U20 no longer declines A02's occasion verbatim, so a bulk delete raises both again: "
+            "one command, two remedies with nothing in common")
+
+
 if __name__ == "__main__":
     unittest.main()

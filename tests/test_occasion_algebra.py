@@ -39,6 +39,7 @@ import unittest
 from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
+from keel.clauses import _regex_predicate
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 # Beside MEASURED.tsv at the repository root, NOT inside `plugin/`: `plugin/` is what the
@@ -64,13 +65,26 @@ def corpus(records):
 
 
 def extensions(records, commands):
-    """{clause id: frozenset of corpus indices its fingerprint matches}."""
+    """{clause id: frozenset of corpus indices its fingerprint matches}.
+
+    THE DISPATCHER'S OWN MATCHER, imported rather than rebuilt. This function used to compile
+    `fp["pattern"]` and search with it, which is most of what a fingerprint means and not all of
+    it: `unless` entries subtract from the match, and a second copy of the rule here answered a
+    question the plugin does not ask. It went wrong the first time it mattered -- U20 was narrowed
+    with an `unless` so it would stop claiming the deletes A02 owns, the dispatcher stopped
+    raising both, and this module still reported the overlap because it could not see the field.
+
+    A private name is imported deliberately. The alternative is a second writer for "what a
+    fingerprint matches", which is the defect `C14-one-path-one-writer` is about, and this module
+    exists to compare clauses against each other -- it can afford no disagreement with the thing
+    that actually matches them.
+    """
     out = {}
     for c in records:
         fp = c.get("fingerprint")
         if isinstance(fp, dict) and fp.get("kind") == "regex" and fp.get("on") == COMMAND:
-            pattern = re.compile(fp["pattern"])
-            out[c["id"]] = frozenset(n for n, s in enumerate(commands) if pattern.search(s))
+            out[c["id"]] = frozenset(n for n, s in enumerate(commands)
+                                     if _regex_predicate(fp, s))
     return out
 
 
@@ -207,9 +221,12 @@ class OccasionAlgebra(unittest.TestCase):
             candidate commands. Also wrong, and not repairable by adding candidates: the absence
             of a shared discharge cannot be proved from a sample.
 
-        U12/U13 is single for a reason neither reading could see: U13's discharge is
-        `git apply ... --check`, which the witness command already IS, so its occasion arrives
-        pre-discharged on the safe form of the act.
+        A third reading, held here briefly and also wrong, said U12/U13 was not a double denial at
+        all. It is. That reading came from the ledger's own witness, `git apply --check
+        generated.patch`, which U13 has never matched: U13's fingerprint carries an `unless`
+        excluding the --check form, and nothing could see it while this module compiled
+        `pattern` by hand. Correct the witness to a command U13 actually matches and the pair
+        denies twice like the others. A wrong witness is a wrong measurement, not a safe one.
         """
         results = {}
         for a, _rel, b, witness, _why in ledger_rows():
@@ -237,7 +254,7 @@ class OccasionAlgebra(unittest.TestCase):
         self.assertTrue(sequences, "no declared pairs were driven; nothing was measured")
         double = sorted(pair for pair, (kind, _) in sequences.items() if kind == "double")
         self.assertEqual(
-            [("A01", "A03"), ("U01", "U02")], double,
+            [("A01", "A03"), ("U01", "U02"), ("U12", "U13")], double,
             "the set of declared overlaps answering one command with two unrelated remedies has "
             f"changed: {rendered(sequences)}")
 
@@ -251,7 +268,7 @@ class OccasionAlgebra(unittest.TestCase):
                               for (a, b), (kind, who) in self._sequences().items()
                               if kind == "no-quoted-remedy")
         self.assertEqual(
-            ["A02/U20 (denied by U20, which quotes no command)"], unmeasurable,
+            [], unmeasurable,
             "the set of declared pairs whose denial names no runnable remedy has changed; each "
             "is a pair this module cannot measure and a user cannot mechanically obey")
 

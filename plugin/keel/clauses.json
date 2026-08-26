@@ -822,7 +822,10 @@
     "fingerprint": {
       "kind": "regex",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)"
+      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)",
+      "unless": [
+        "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+      ]
     },
     "discharged_by": {
       "kind": "regex",
@@ -834,12 +837,12 @@
     "construction": "POINTS.md#u20",
     "fixtures_pos": [
       "rm -r generated/state",
-      "git reset --hard HEAD~1",
-      "find . -name '*.tmp' -delete"
+      "git reset --hard HEAD~1"
     ],
     "fixtures_neg": [
       "pytest -q tests/test_behavior.py",
-      "curl -fsS http://localhost:8080/health"
+      "curl -fsS http://localhost:8080/health",
+      "find . -name '*.tmp' -delete"
     ],
     "_absorbed_from_U17": "U17 (preview-the-selector, quarantined at 29/30 candidate FP) covered `find -delete` where A02's dir-keyed extractor abstains. The occasion is conserved here: a selector-driven delete is a destructive behavior-changing mutation, and U20's guard -- run the relevant test or probe first -- is the guard real work performs (measured 0 candidate FP, 8 true positives on the frozen corpus)."
   },
