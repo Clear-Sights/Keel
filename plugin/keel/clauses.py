@@ -364,6 +364,19 @@ def _fixture_event(predicate: dict[str, Any], fixture: Any) -> dict[str, Any]:
     return event
 
 
+# The ceiling on a clause's `probe.timeout_ms`. Not a preference, and not a number picked for
+# feeling right: a probe runs INSIDE the hook, and a hook that reaches its own timeout is canceled
+# with its output discarded -- it renders no decision at all, so a deny row becomes an allow. A
+# probe allowed to outlive the hook hosting it is therefore a guaranteed fail-open. The bound that
+# matters is the hook timeout declared in `hooks/hooks.json`, and `tests/test_bounds.py` holds this
+# constant at or under it, so lowering that timeout goes red here instead of quietly permitting the
+# hang. Sitting below rather than at it is a choice with a reason: the rest of the hook's work --
+# scanning the segments, appending the journal row, rendering the decision -- has to fit the same
+# budget. On exhaustion the child is killed and the predicate is treated as unsatisfied, never as
+# assumed true.
+PROBE_TIMEOUT_CEILING_MS = 5000
+
+
 def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
     if predicate is None:
         return
@@ -401,7 +414,8 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
         isinstance(expect, dict) and set(expect) == {"regex"} and isinstance(expect["regex"], str)
     )
     if not (isinstance(cmd, list) and cmd and all(isinstance(x, str) and x for x in cmd)
-            and isinstance(timeout, int) and not isinstance(timeout, bool) and 0 < timeout <= 5000
+            and isinstance(timeout, int) and not isinstance(timeout, bool)
+            and 0 < timeout <= PROBE_TIMEOUT_CEILING_MS
             and valid_expect):
         raise ClauseError("CLAUSE-PROBE-INVALID", clause_id)
     # Compare the WHOLE argv, and refuse any path separator. Normalising to the basename
