@@ -149,9 +149,9 @@ was moved, not removed.
 
 - **[POINTS.md](POINTS.md)** — the twenty-four moments the clauses name, one authored entry
   each: what is denied, what the discharge buys, and what to build so the discharge is never
-  needed again — or, for the two unsolved points, what is known and what is still missing. Open
+  needed again — or, for the points still unsolved, what is known and what is still missing. Open
   this when a deny names it.
-- **[ACTS.md](ACTS.md)** — the seven coarser acts: the decisions that set what the rest of the
+- **[ACTS.md](ACTS.md)** — the ten coarser acts: the decisions that set what the rest of the
   run inherits, whether or not a clause fires.
 - **[vocabulary.json](vocabulary.json)** — the definition sentence and the four shapes, vendored
   from the development repository's register with the commit and blob shas they were taken from.
