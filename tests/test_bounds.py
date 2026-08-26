@@ -37,6 +37,25 @@ from keel.journal import _STALE_CLAIM_SECONDS
 HOOK_FILES = ("hooks/hooks.json", "hooks/hooks.codex.json")
 
 
+def declared_timeout_count(body) -> int:
+    """How many `timeout` keys the file holds, found by walking the JSON blind to its shape.
+
+    A SECOND OPINION, deliberately sharing no assumption with `hook_timeouts` below. That one
+    walks the nesting the host defines -- event, matcher rows, handler list -- which is the right
+    way to read the values, and is also exactly what goes quiet if the shape ever changes: it
+    would return the timeouts it still recognises and report nothing about the ones it no longer
+    reaches. The subject check cannot see that either, because a partial miss still leaves plenty
+    of values behind. This walk knows nothing about the shape, so the two disagree the moment the
+    structured one starts missing something.
+    """
+    if isinstance(body, dict):
+        return sum(1 for key in body if key == "timeout") + sum(
+            declared_timeout_count(value) for key, value in body.items() if key != "timeout")
+    if isinstance(body, list):
+        return sum(declared_timeout_count(item) for item in body)
+    return 0
+
+
 def hook_timeouts() -> list[int]:
     """Every handler timeout declared by every shipped hook file, in seconds.
 
@@ -70,6 +89,13 @@ class TimingBoundsAreJoinedToTheHookTimeout(unittest.TestCase):
             len(self.seconds), len(HOOK_FILES),
             f"only {len(self.seconds)} hook timeouts found across {HOOK_FILES}; the sweep has "
             "stopped seeing the declarations it is supposed to be joining against")
+        blind = sum(declared_timeout_count(json.loads((PLUGIN / name).read_text(encoding="utf-8")))
+                    for name in HOOK_FILES)
+        self.assertEqual(
+            blind, len(self.seconds),
+            f"a shape-blind walk finds {blind} timeout keys and the structured sweep reads "
+            f"{len(self.seconds)}; the sweep is joining against fewer bounds than are declared, "
+            "and every one it misses is a bound nothing checks")
 
     def test_a_probe_cannot_be_allowed_to_outlive_its_hook(self) -> None:
         shortest = min(self.seconds)
@@ -209,6 +235,20 @@ class TheseBoundsCanFail(unittest.TestCase):
             "tests.test_bounds.EveryPickedBoundDeclaresItself."
             "test_no_bound_is_buried_in_a_comparison",
             "give it a named constant",
+        )
+
+    def test_the_shape_blind_cross_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Declare a timeout somewhere the structured walk does not reach.
+
+        A `timeout` on the matcher row rather than inside its handler list is valid JSON that the
+        host ignores and the structured sweep never sees. Only the blind walk finds it, which is
+        the whole reason the second opinion exists.
+        """
+        smoke_replace(
+            self, PLUGIN / "hooks" / "hooks.json",
+            b'"matcher"', b'"timeout": 9,\n      "matcher"',
+            "tests.test_bounds.TimingBoundsAreJoinedToTheHookTimeout.test_the_check_has_a_subject",
+            "a shape-blind walk finds",
         )
 
     def test_the_subject_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
