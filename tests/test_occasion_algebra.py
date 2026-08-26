@@ -30,7 +30,11 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -83,6 +87,13 @@ def relation(a, b):
     return "OVERLAP"
 
 
+
+def rendered(sequences):
+    """The measured sequences, in the shortest form that still identifies each pair."""
+    return ", ".join(f"{a}/{b}={kind}" + (f"->{who}" if who else "")
+                     for (a, b), (kind, who) in sorted(sequences.items()))
+
+
 def ledger_rows():
     rows = []
     lines = [l for l in LEDGER.read_text(encoding="utf-8").splitlines()
@@ -110,9 +121,6 @@ class OccasionAlgebra(unittest.TestCase):
         self.assertTrue(self.commands, "no fixture commands; nothing was compared")
         self.assertTrue(self.ext, "no command fingerprints; nothing was compared")
 
-    def _live(self, clause_id):
-        return not self.byid[clause_id].get("_quarantine_reason")
-
     def _found(self):
         """{(A, B): RELATION} for every pair sharing at least one command, A before B in id order."""
         out = {}
@@ -125,13 +133,13 @@ class OccasionAlgebra(unittest.TestCase):
     def test_every_live_clause_has_an_occasion(self):
         """A fingerprint matching nothing is a clause that can never fire -- the stone case."""
         for clause_id, matched in sorted(self.ext.items()):
-            if matched or not self._live(clause_id):
+            if matched:
                 continue
             self.fail(
                 f"{clause_id} is live and its fingerprint matches none of the "
                 f"{len(self.commands)} fixture commands: it can never fire. Either give it a "
-                f"fixture that exercises its occasion, or quarantine it with the denominator that "
-                f"measured the absence -- absence is never a pass.")
+                f"fixture that exercises its occasion, or withdraw it. It cannot be parked: this "
+                f"table has no field that stops a clause firing.")
 
     def test_every_clause_matches_its_own_positive_fixtures(self):
         """A positive fixture its own fingerprint misses means the two disagree about the occasion."""
@@ -172,19 +180,80 @@ class OccasionAlgebra(unittest.TestCase):
                     f"OVERLAPS.tsv witness for {a}/{b} is no longer matched by {clause_id}: "
                     f"{witness!r}")
 
-    def test_only_one_declared_pair_has_both_clauses_live(self):
-        """Two live clauses on one command means two denials with two remedies.
+    def _drive(self, command, session, state):
+        """One PreToolUse event through the real dispatcher; return (denying id, quoted remedy)."""
+        event = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                            "session_id": session, "cwd": "/tmp",
+                            "tool_input": {"command": command}})
+        done = subprocess.run(
+            [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
+            env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
+                 "PYTHONPATH": str(PLUGIN)})
+        body = json.loads(done.stdout or "{}")
+        reason = (body.get("hookSpecificOutput") or {}).get("permissionDecisionReason") or ""
+        denied = re.search(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason)
+        remedy = re.search(r"`([^`]+)`", reason)
+        return (denied.group(1) if denied else None), (remedy.group(1) if remedy else None)
 
-        Recurring double-denial is Asymmetric by GROUND's own test, so the count is pinned rather
-        than left to drift: a new live pair must be argued for, not merely declared.
+    def _sequences(self):
+        """Per declared pair: obey the deny, retry the same command, and record what happens.
+
+        THE DISPATCHER, NOT A READING OF THE TABLE. Two plausible readings both got this wrong:
+
+          * "both clauses are un-quarantined, so both fire" -- said all four pairs double-deny.
+            `_quarantine_reason` was never read by the dispatcher, so it never suppressed
+            anything; but U12/U13 still does not double-deny.
+          * "no single command satisfies both discharges" -- said all four again, over 120
+            candidate commands. Also wrong, and not repairable by adding candidates: the absence
+            of a shared discharge cannot be proved from a sample.
+
+        U12/U13 is single for a reason neither reading could see: U13's discharge is
+        `git apply ... --check`, which the witness command already IS, so its occasion arrives
+        pre-discharged on the safe form of the act.
         """
-        both_live = sorted((a, b) for a, _, b, _, _ in ledger_rows()
-                           if self._live(a) and self._live(b))
+        results = {}
+        for a, _rel, b, witness, _why in ledger_rows():
+            with tempfile.TemporaryDirectory() as state:
+                session = f"algebra-{a}-{b}"
+                first, remedy = self._drive(witness, session, state)
+                if first is None:
+                    results[(a, b)] = ("no-denial", None)
+                elif not remedy:
+                    results[(a, b)] = ("no-quoted-remedy", first)
+                else:
+                    self._drive(remedy, session, state)
+                    second, _ = self._drive(witness, session, state)
+                    results[(a, b)] = (("double" if second else "single"), second)
+        return results
+
+    def test_the_declared_pairs_that_double_deny(self):
+        """Pinned to what the dispatcher does, so a fix shrinks this and a regression grows it.
+
+        A double denial is one command answered twice with unrelated remedies. That is Asymmetric
+        by GROUND's own test: the noise does not heal, the gate gets switched off, and the real
+        catches leave with it.
+        """
+        sequences = self._sequences()
+        self.assertTrue(sequences, "no declared pairs were driven; nothing was measured")
+        double = sorted(pair for pair, (kind, _) in sequences.items() if kind == "double")
         self.assertEqual(
-            [("A02", "U20")], both_live,
-            "the set of declared overlaps where BOTH clauses are live has changed. Each one makes "
-            "a single command raise two denials with unrelated remedies; that is the noise that "
-            "gets a gate disabled.")
+            [("A01", "A03"), ("U01", "U02")], double,
+            "the set of declared overlaps answering one command with two unrelated remedies has "
+            f"changed: {rendered(sequences)}")
+
+    def test_every_pair_is_measurable_by_following_the_instruction(self):
+        """A deny whose remedy is not a command cannot be obeyed mechanically, or measured here.
+
+        Reported rather than skipped: a pair that drops out of the measurement above looks
+        identical to one that passed it, and that is the shape this module refuses.
+        """
+        unmeasurable = sorted(f"{a}/{b} (denied by {who}, which quotes no command)"
+                              for (a, b), (kind, who) in self._sequences().items()
+                              if kind == "no-quoted-remedy")
+        self.assertEqual(
+            ["A02/U20 (denied by U20, which quotes no command)"], unmeasurable,
+            "the set of declared pairs whose denial names no runnable remedy has changed; each "
+            "is a pair this module cannot measure and a user cannot mechanically obey")
 
     def test_the_check_can_fail(self):
         """Widen one fingerprint so it swallows another, and this module must go red naming both.

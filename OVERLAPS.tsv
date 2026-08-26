@@ -3,17 +3,24 @@
 # relation that is NOT declared here, on a declared relation that no longer holds, and on a live
 # clause whose fingerprint matches nothing.
 #
-# Overlap is DECLARED, never condemned. Three of the four rows below are a general clause layered
+# Overlap is DECLARED, never condemned. Two of the four rows below are a general clause layered
 # with a specific one -- A01 guards a push nobody checked, A03 a force-push nobody fetched -- and a
-# check that condemned subsumption outright would fire on all three. A gate firing on lookalikes is
-# itself Asymmetric: the noise does not heal, the gate gets disabled, and its real catches go with it.
+# check that condemned subsumption outright would fire on those for no defect. A gate firing on
+# lookalikes is itself Asymmetric: the noise does not heal, the gate gets disabled, and its real
+# catches go with it.
+#
+# WHICH PAIRS ACTUALLY DOUBLE-DENY IS MEASURED, NOT READ OFF THIS TABLE. Every row here once
+# reasoned from `_quarantine_reason`, a field the dispatcher never read, so "quarantined, so no
+# live double-denial" was false wherever it appeared. The field is gone; the pairs are now driven
+# through keel.dispatch by tests/test_occasion_algebra.py, which pins which of them answer one
+# command with two unrelated remedies.
 #
 # RELATION is read left-to-right: A SUPERSET B means every command matching B also matches A.
 # WITNESS is a command in the shared extension and must still be matched by BOTH, so a fingerprint
 # edit breaks the row rather than silently re-pointing it.
 #
 # A	RELATION	B	WITNESS	WHY
-A01	SUPERSET	A03	git push --force origin main	layering, not duplication: A01 denies a push whose landing nobody checked (discharge: git status), A03 a force-push whose remote tip was never fetched (discharge: git fetch). Different obligations on one command; A03 is quarantined, so no live double-denial.
-U12	SUPERSET	U13	git apply --check generated.patch	the general/specific pair: U12 takes session_id as subject, U13 extracts the patch file as its own. Both quarantined.
-U01	IDENTICAL	U02	/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt	identical extension on this corpus only: U02's pattern is strictly narrower (it requires arguments), and no fixture exercises the difference. Both quarantined; if either is ever unquarantined, this row needs a fixture that separates them.
-A02	OVERLAP	U20	find . -name '*.tmp' -delete	THE ONE LIVE PAIR, and a real defect rather than layering. A02 denies a bulk delete over a set nobody enumerated (subject: the path; discharge: ls|find|git status|du); U20 denies a destructive mutation nobody tested (subject: session_id; discharge: pytest|curl). One command raises two denials with unrelated remedies. Independently measured at 32 of 64 calls over 2266 real Bash calls, where the relation is strict subsumption rather than partial overlap.
+A01	SUPERSET	A03	git push --force origin main	layering in intent, DOUBLE DENIAL in fact. A01 denies a push whose landing nobody checked (discharge: git status), A03 a force-push whose remote tip was never fetched (discharge: git fetch). This row used to end "A03 is quarantined, so no live double-denial" -- untrue: the dispatcher never read that field. Driven through keel.dispatch, the witness denies A01, and obeying the quoted remedy then denies A03.
+U12	SUPERSET	U13	git apply --check generated.patch	the general/specific pair: U12 takes session_id as subject, U13 extracts the patch file as its own. Not a double denial, and not because either is parked -- U13's discharge IS git apply --check, which the witness already is, so U13's occasion arrives pre-discharged on the safe form of the act. Driven: witness denies U12, obeying its remedy leaves the command allowed.
+U01	IDENTICAL	U02	/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt	identical extension on this corpus only: U02's pattern is strictly narrower (it requires arguments) and no fixture exercises the difference. This row used to say both were quarantined; the dispatcher never read that field. Driven: the witness denies U01, and obeying the quoted remedy then denies U02 -- one act, two remedies. Either they need a fixture that separates them or they are one clause written twice.
+A02	OVERLAP	U20	find . -name '*.tmp' -delete	A REAL DEFECT rather than layering, and one of three, not the only one -- see A01/A03 and U01/U02. A02 denies a bulk delete over a set nobody enumerated (subject: the path; discharge: ls|find|git status|du); U20 denies a destructive mutation nobody tested (subject: session_id; discharge: pytest|curl). One command, two unrelated remedies, independently measured at 32 of 64 calls over 2266 real Bash calls. On this witness U20 denies first and quotes no runnable command, so the sequence cannot even be measured by following the instruction.
