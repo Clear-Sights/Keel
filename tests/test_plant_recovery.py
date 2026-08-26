@@ -144,7 +144,19 @@ class AnEqualLengthPlantIsNotSwallowedByBytecode(unittest.TestCase):
             module.write_text("VALUE = 60\n", encoding="utf-8")
             read_it = ["python3", "-c", "import planted_module; print(planted_module.VALUE)"]
 
-            first = subprocess.run(read_it, cwd=directory, capture_output=True, text=True)
+            # The subject is bytecode CACHING, so this test makes its own conditions rather than
+            # inheriting them. CI runs the suite under `PYTHONDONTWRITEBYTECODE=1`, where no cache
+            # is written and there is no collision to observe -- the first version of this test
+            # asserted the cache existed and went red there, on the ambient setting rather than on
+            # anything about the plant harness. A test that only holds when the environment
+            # happens to agree is not checking the property it names.
+            caching = {k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"}
+
+            def read() -> subprocess.CompletedProcess:
+                return subprocess.run(read_it, cwd=directory, capture_output=True, text=True,
+                                      env=caching)
+
+            first = read()
             self.assertEqual("60", first.stdout.strip(), first.stderr)
             self.assertTrue((Path(directory) / "__pycache__").is_dir(),
                             "no bytecode was cached, so this test cannot observe the collision")
@@ -152,7 +164,7 @@ class AnEqualLengthPlantIsNotSwallowedByBytecode(unittest.TestCase):
             # Same length, and within the same second as the compile above -- the collision.
             module.write_text("VALUE = 10\n", encoding="utf-8")
             _drop_bytecode(module)
-            after = subprocess.run(read_it, cwd=directory, capture_output=True, text=True)
+            after = read()
             self.assertEqual(
                 "10", after.stdout.strip(),
                 "an equal-length plant did not reach a fresh interpreter, so every plant in this "
