@@ -25,6 +25,7 @@ Standard library only, `unittest` discovery, like the rest of the suite.
 """
 from __future__ import annotations
 
+import ast
 import json
 import unittest
 from pathlib import Path
@@ -87,6 +88,75 @@ class TimingBoundsAreJoinedToTheHookTimeout(unittest.TestCase):
             "over and the liveness row this journal guarantees is lost")
 
 
+class EveryPickedBoundDeclaresItself(unittest.TestCase):
+    """Generalised from the three fixes above, so the next picked bound fails here.
+
+    The rule this estate keeps returning to: a limiter increases exactness when its bound is a
+    function of the input, and destroys it when the bound is a constant the author picked. A
+    picked bound is not forbidden -- some bounds genuinely have no input to compute them from --
+    but it has to say what it holds under and what happens when it runs out, or a later reader
+    has no way to tell a measured limit from a guess, and no way to know whether moving it is
+    safe.
+
+    Three instances were found by reading: the probe ceiling, the stale-claim window, and the
+    hook-timeout ceiling. Reading is not repeatable. Two mechanical properties cover the family:
+
+      (a) a module-level numeric constant carries a comment saying why it is that number;
+      (b) shipped code does not compare against a multi-digit literal inline, where no name can
+          carry the reason -- which is exactly how the probe ceiling was written before this.
+
+    Single digits are left alone deliberately. `> 0`, `!= 1`, `[:2]` are arity and emptiness, not
+    limiters, and demanding a paragraph over each would train the habit of writing a comment to
+    silence a check.
+    """
+
+    @staticmethod
+    def _shipped():
+        return sorted(path for path in PLUGIN.rglob("*.py") if "__pycache__" not in path.parts)
+
+    def test_the_check_has_a_subject(self) -> None:
+        """No shipped modules means both properties below hold over nothing."""
+        self.assertTrue(self._shipped(), f"no python found under {PLUGIN}; nothing was checked")
+
+    def test_every_numeric_constant_says_why_it_is_that_number(self) -> None:
+        bare = []
+        for path in self._shipped():
+            source = path.read_text(encoding="utf-8")
+            lines = source.splitlines()
+            for node in ast.parse(source).body:
+                if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+                    continue
+                value = node.value.value
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                above = lines[node.lineno - 2].strip() if node.lineno >= 2 else ""
+                if not above.startswith("#"):
+                    name = getattr(node.targets[0], "id", "?")
+                    bare.append(f"{path.name}:{node.lineno} {name} = {value}")
+        self.assertEqual([], sorted(bare),
+                         "a numeric constant is shipped with nothing saying what it holds under "
+                         "or what happens when it is exhausted, so a later reader cannot tell a "
+                         "measured limit from a guess")
+
+    def test_no_bound_is_buried_in_a_comparison(self) -> None:
+        """A literal inside an expression has nowhere to carry its reason."""
+        buried = []
+        for path in self._shipped():
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Compare):
+                    continue
+                for operator, operand in zip(node.ops, node.comparators):
+                    if not isinstance(operator, (ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+                        continue
+                    if isinstance(operand, ast.Constant) and isinstance(operand.value, int) \
+                            and not isinstance(operand.value, bool) and abs(operand.value) > 9:
+                        buried.append(f"{path.name}:{node.lineno} compares against "
+                                      f"{operand.value}")
+        self.assertEqual([], sorted(buried),
+                         "a bound is written as a literal inside a comparison, where no name "
+                         "carries the condition it holds under; give it a named constant")
+
+
 class TheseBoundsCanFail(unittest.TestCase):
     """Each join seen red on a planted fault, because a bound that has only ever held is a claim."""
 
@@ -107,6 +177,29 @@ class TheseBoundsCanFail(unittest.TestCase):
             "tests.test_bounds.TimingBoundsAreJoinedToTheHookTimeout."
             "test_a_claim_younger_than_a_live_hook_is_never_stolen",
             "the liveness row this journal guarantees is lost",
+        )
+
+    def test_the_declaration_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Strip the reason off a constant, and it must stop being an acceptable constant."""
+        smoke_replace(
+            self, PLUGIN / "keel" / "clauses.py",
+            b"# assumed true.\nPROBE_TIMEOUT_CEILING_MS", b"\nPROBE_TIMEOUT_CEILING_MS",
+            "tests.test_bounds.EveryPickedBoundDeclaresItself."
+            "test_every_numeric_constant_says_why_it_is_that_number",
+            "cannot tell a measured limit from a guess",
+        )
+
+    def test_the_buried_bound_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Put the ceiling back the way it was written, and that must be red.
+
+        This is not a synthetic fault: it restores the exact line this change replaced.
+        """
+        smoke_replace(
+            self, PLUGIN / "keel" / "clauses.py",
+            b"and 0 < timeout <= PROBE_TIMEOUT_CEILING_MS", b"and 0 < timeout <= 5000",
+            "tests.test_bounds.EveryPickedBoundDeclaresItself."
+            "test_no_bound_is_buried_in_a_comparison",
+            "give it a named constant",
         )
 
     def test_the_subject_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red

@@ -110,6 +110,33 @@ def recover_stale_plants(state: Path | None = None) -> list[str]:
 recover_stale_plants()
 
 
+def _drop_bytecode(path: Path) -> None:
+    """Delete any cached bytecode for `path`, so the next import reads the bytes on disk.
+
+    WHY, and it is not hygiene. CPython treats a `.pyc` as current when the source's mtime AND
+    size match what the cache recorded, and mtime is stored to the second. A plant that swaps one
+    equal-length run of bytes -- `60` for `10`, `+ 1` for `+ 0`, both live in this suite -- changes
+    neither, so a mutation landing in the same second as the last compile is INVISIBLE to the next
+    interpreter: it loads the stale bytecode and runs the unmutated code.
+
+    That breaks a plant in both directions, and the quiet direction is the dangerous one. The
+    child can miss the fault and report the target green, which `smoke_replace` correctly calls an
+    inert plant -- a false alarm costing an investigation. Or the restore can be the write that
+    collides, leaving a LATER process reading the mutant long after the file on disk is correct;
+    that one was observed twice as a suite failure naming a value no file contained.
+
+    Both writes below are followed by this call, so the window never opens.
+    """
+    cache = path.parent / "__pycache__"
+    if not cache.is_dir():
+        return
+    for stale in cache.glob(path.stem + ".*.pyc"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+
+
 def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
                   target: str, expected: str) -> str:
     """Mutate one seam, prove the NAMED test goes red because of it, restore, return the output.
@@ -148,6 +175,7 @@ def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
     def restore() -> None:
         if backup_path.exists():
             path.write_bytes(backup_path.read_bytes())
+            _drop_bytecode(path)
             backup_path.unlink()
         # After the file, never before: a kill in between leaves a marker whose target already
         # matches `original`, which recovery reads as "the restore ran" and simply clears.
@@ -168,6 +196,7 @@ def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
                                   "original": _sha(original), "mutated": _sha(mutated)}),
                       encoding="utf-8")
     path.write_bytes(mutated)
+    _drop_bytecode(path)
     done = run()
     output = done.stdout + done.stderr
     case.assertNotEqual(0, done.returncode, output)

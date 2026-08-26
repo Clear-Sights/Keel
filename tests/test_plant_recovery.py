@@ -27,12 +27,14 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.plant_support import (PLANT_ACTIVE_ENV, _sha, recover_stale_plants, smoke_replace,
+from tests.plant_support import (PLANT_ACTIVE_ENV, _drop_bytecode, _sha,
+                                 recover_stale_plants, smoke_replace,
                                 REPO)
 
 ORIGINAL = b"the bytes that were there before the plant\n"
@@ -115,3 +117,43 @@ class AKilledPlantIsUndone(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnEqualLengthPlantIsNotSwallowedByBytecode(unittest.TestCase):
+    """A plant that swaps equal-length bytes must reach the interpreter that runs it.
+
+    MEASURED, and it cost two misdiagnosed suite failures before it was understood. CPython treats
+    a `.pyc` as current when the source's mtime and size both match what the cache recorded, and
+    mtime is stored to the SECOND. Swapping `60` for `10` changes neither, so a plant landing in
+    the same second as the last compile is invisible: the next interpreter loads stale bytecode
+    and runs the unmutated code.
+
+    Both directions are wrong and the quiet one is worse. Forward, the child misses the fault and
+    the target stays green, which `smoke_replace` reports as an inert plant -- a real defect it
+    would be pointing at the wrong place. Backward, the RESTORE is the colliding write, and a
+    later process reads the mutant long after the file on disk is correct; that is how this was
+    found, as a failure naming a value no file contained.
+
+    This is the resident case for `_drop_bytecode`. Without it the symptom is intermittent and
+    lands on whichever test imported the module, never on the plant that caused it.
+    """
+
+    def test_a_same_length_mutation_is_seen_by_a_fresh_interpreter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            module = Path(directory) / "planted_module.py"
+            module.write_text("VALUE = 60\n", encoding="utf-8")
+            read_it = ["python3", "-c", "import planted_module; print(planted_module.VALUE)"]
+
+            first = subprocess.run(read_it, cwd=directory, capture_output=True, text=True)
+            self.assertEqual("60", first.stdout.strip(), first.stderr)
+            self.assertTrue((Path(directory) / "__pycache__").is_dir(),
+                            "no bytecode was cached, so this test cannot observe the collision")
+
+            # Same length, and within the same second as the compile above -- the collision.
+            module.write_text("VALUE = 10\n", encoding="utf-8")
+            _drop_bytecode(module)
+            after = subprocess.run(read_it, cwd=directory, capture_output=True, text=True)
+            self.assertEqual(
+                "10", after.stdout.strip(),
+                "an equal-length plant did not reach a fresh interpreter, so every plant in this "
+                "suite that swaps a digit can report a green target while the fault is present")
