@@ -663,8 +663,12 @@ NUMBER_WORDS.update({f"twenty-{w}": 20 + v for v, w in enumerate(_ONES[1:10], 1)
 # determiner is what separates them, so it is required rather than a list of phrases to skip.
 # Up to two words may sit between the number and its noun ("the seven coarser acts"), which is
 # the form the defect this class exists for was written in.
+# Digits as well as words. No page writes a total in digits today, so this alternative matches
+# nothing at the moment -- which is the reason to add it now rather than after "the 24 points"
+# has been written and quietly missed. A check whose coverage depends on a house style nothing
+# enforces is a check with a hole in the shape of that style.
 SPELLED_TOTAL_RX = re.compile(
-    r"\b(?:the|these|those|all)\s+(%s)\s+((?:[\w-]+\s+){0,2}?)([a-z]+s)\b"
+    r"\b(?:the|these|those|all)\s+(\d{1,3}|%s)\s+((?:[\w-]+\s+){0,2}?)([a-z]+s)\b"
     % "|".join(sorted(NUMBER_WORDS, key=len, reverse=True)),
     re.IGNORECASE,
 )
@@ -715,7 +719,8 @@ class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
         for page in PAGES:
             for number, line in enumerate(_load(page).splitlines(), 1):
                 for found in SPELLED_TOTAL_RX.finditer(line):
-                    value = NUMBER_WORDS[found.group(1).lower()]
+                    token = found.group(1).lower()
+                    value = int(token) if token.isdigit() else NUMBER_WORDS[token]
                     yield page, number, value, found.group(3).lower(), found.group(0)
 
     def test_every_spelled_total_equals_what_it_counts(self) -> None:
