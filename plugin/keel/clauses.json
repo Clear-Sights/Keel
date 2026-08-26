@@ -465,7 +465,8 @@
     "construction": "POINTS.md#u01",
     "fixtures_pos": [
       "/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt",
-      "dispatch.sh unit-b luna brief-b.txt"
+      "dispatch.sh unit-b luna brief-b.txt",
+      "dispatch.sh"
     ],
     "fixtures_neg": [
       "python3 tools/probe_child_capability.py --writable-home --response-transport --result-write",
@@ -505,7 +506,8 @@
     ],
     "fixtures_neg": [
       "python3 tools/probe_child_capability.py --target unit-a --after-failure --require-change",
-      "python3 -m pytest -q"
+      "python3 -m pytest -q",
+      "dispatch.sh"
     ]
   },
   {
