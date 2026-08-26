@@ -130,5 +130,52 @@ class OneClauseDecliningAnotherStaysInStep(unittest.TestCase):
             "one command, two remedies with nothing in common")
 
 
+class ActivationIsOnlyDeclaredWhereItIsHonoured(unittest.TestCase):
+    """`activated_by` on a clause the dispatcher will never activate does nothing, silently.
+
+    The activation loop in `keel/dispatch.py` opens by skipping every clause whose event is not
+    `Stop` or `SubagentStop`. So the field arms a terminal clause -- "the run is ending AFTER a
+    push" -- and on any other event it is inert: the loader admits it, no runtime reads it, and
+    the clause behaves exactly as if it were absent.
+
+    This was nearly written into U02. Its occasion says the trace is about to RE-LAUNCH a target,
+    it has no way to tell a re-launch from a first launch, and `activated_by` says precisely that
+    -- arm only once the occasion has already been seen. Declaring it on a `PreToolUse` clause
+    would have read like a fix, changed nothing, and left a field that lies, which is the defect
+    this file exists for. The check is the difference between finding that out here and finding
+    it out from a user.
+    """
+
+    ACTIVATABLE = ("Stop", "SubagentStop")
+
+    def test_activation_is_declared_only_on_clauses_that_can_be_activated(self) -> None:
+        rows = json.loads(CLAUSES.read_text(encoding="utf-8"))
+        inert = sorted(f"{r['id']} (event {r['event']})" for r in rows
+                       if r.get("activated_by") and r.get("event") not in self.ACTIVATABLE)
+        self.assertEqual(
+            [], inert,
+            "a clause declares `activated_by` on an event the dispatcher never activates on, so "
+            f"the field does nothing; only {list(self.ACTIVATABLE)} are honoured")
+
+    def test_the_check_has_a_subject(self) -> None:
+        """Nothing declaring activation makes the rule above vacuous."""
+        rows = json.loads(CLAUSES.read_text(encoding="utf-8"))
+        declared = [r["id"] for r in rows if r.get("activated_by")]
+        self.assertTrue(declared, "no clause declares `activated_by`; nothing was checked")
+
+    def test_the_events_match_the_dispatcher(self) -> None:
+        """Read the guard out of the dispatcher rather than trusting this copy of it.
+
+        The tuple above is a second writer for a condition `dispatch.py` already states. It is
+        held to the source so that widening activation there without updating here is red, not a
+        check quietly enforcing last year's rule.
+        """
+        source = (PLUGIN / "keel" / "dispatch.py").read_text(encoding="utf-8")
+        self.assertIn(
+            'if cl.event not in ("Stop", "SubagentStop"):', source,
+            "the dispatcher no longer skips non-terminal clauses in its activation loop the way "
+            "this module assumes; the set of activatable events has moved")
+
+
 if __name__ == "__main__":
     unittest.main()

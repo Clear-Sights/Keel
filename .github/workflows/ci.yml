@@ -29,6 +29,14 @@ name: CI
 on:
   push:
   pull_request:
+  # A run that dies before any job starts -- runner loss, a queue fault, `startup_failure` --
+  # cannot be retried through the API: GitHub refuses `rerun` with "this workflow run cannot be
+  # retried", because there is nothing to re-run. With only push and pull_request triggers the
+  # only remaining ways to get a verdict are an empty commit or closing and reopening the PR,
+  # which are both ways of lying about what changed. This gives the run a door that does not
+  # require inventing history. Measured: it happened on 08518b8, whose workflow file is
+  # byte-identical to the green one on main.
+  workflow_dispatch:
 
 permissions:
   contents: read
