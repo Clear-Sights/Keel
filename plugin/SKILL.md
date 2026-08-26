@@ -101,8 +101,8 @@ this page cannot quietly lag the table it describes.
 | `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | [POINTS.md#p01](POINTS.md#p01) |
 | `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](POINTS.md#t01) |
 | `T02` | end the run treating a push report as a landing | fetch or `git ls-remote` the ref after pushing | [POINTS.md#t02](POINTS.md#t02) |
-| `U01` | launch a nested worker | run `python3 tools/probe_child_capability.py --writable-home --response-transport --result-write` | [POINTS.md#u01](POINTS.md#u01) |
-| `U02` | re-launch a nested-worker target | run `python3 tools/probe_child_capability.py --target TARGET --after-failure --require-change` | [POINTS.md#u02](POINTS.md#u02) |
+| `U01` | launch a nested worker | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --writable-home --response-transport --result-write` | [POINTS.md#u01](POINTS.md#u01) |
+| `U02` | re-launch a nested-worker target | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --target TARGET --after-failure --require-change` | [POINTS.md#u02](POINTS.md#u02) |
 | `U03` | use a PID in a signal operation | run `ps`, `pgrep`, or an equivalent observer-namespace process listing | [POINTS.md#u03](POINTS.md#u03) |
 | `U06` | send a mutating request to an external service | run an authenticated read canary such as `curl ... -H 'Authorization: ...'` | [POINTS.md#u06](POINTS.md#u06) |
 | `U08` | create a signed git commit | run a signer canary such as `printf test \| gpg --clearsign` | [POINTS.md#u08](POINTS.md#u08) |

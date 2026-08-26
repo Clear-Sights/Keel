@@ -1,14 +1,16 @@
-# The seven acts
+# The ten acts
 
 The twenty-four points in [POINTS.md](POINTS.md) are exact moments named by the plugin's
-admitted clauses. They do not reach everywhere. These seven acts are the coarser index — the moments where a
+admitted clauses. They do not reach everywhere. These ten acts are the coarser index — the moments where a
 decision sets what the rest of the run inherits, whether or not a point fires.
 
-The seven act names originate in the development repository's register; these headings are their
-single home in the shipped product — the fence checks them against the pinned seven, and nothing
-else spells the list. Construction numbers refer to [SKILL.md](SKILL.md).
+Seven of the act names originate in the development repository's register. The other three —
+`compact`, `probe` and `research` — come from the directive set that register feeds, where
+recurrence across independent sources put them above the cut and no act here carried them.
+These headings are their single home in the shipped product — the fence checks them against the
+pinned ten, and nothing else spells the list. Construction numbers refer to [SKILL.md](SKILL.md).
 
-The question is the same at all seven: **if nobody does anything next time, does the good outcome
+The question is the same at all ten: **if nobody does anything next time, does the good outcome
 still arrive?**
 
 ---
@@ -70,6 +72,25 @@ exists to prevent, because a partial result that looks complete is what ends a r
 
 **Frugality is the point, not asceticism.** The smallest sufficient amount, then stop — not the
 smallest amount.
+
+## compact
+
+**The moment.** The context is about to be cut — at a threshold nobody chose to cross, or because
+someone typed `/compact`. What survives the cut is what every later turn inherits; what does not
+survive is not recoverable from inside the session that lost it.
+
+No point covers it, and the reason is a host constraint rather than an oversight. `PreCompact` fires
+closer to the cut and is explicitly non-affecting: its stdout reaches the debug log, never the
+summarizer. `UserPromptSubmit` is the earlier event and the only one with reach.
+
+**Construction (4).** Supply the preserve list from the tool rather than from whoever is present to
+remember one. A bare `/compact` is answered with the list already attached; an operator who wrote
+their own instruction keeps it untouched. Every later compaction inherits the same list without
+anyone typing it.
+
+**Carry what regenerates the work, not what narrates it.** The commands that ran and what they
+returned, each decision with its reason, each failure with its cause, and which claims an executed
+trace verified as against merely believed. Drop the account of how the work went.
 
 ## delete
 
@@ -138,6 +159,26 @@ The second: it gets refined without ever landing, because refinement always look
 and the appearance of progress consumes the occasion to notice there is none. The reversal is a push. Steer for complete and sufficient, but
 done — not for never finishing, and not for endless churn.
 
+## probe
+
+**The moment.** Recording a limit — writing "cannot", "unsupported", "not possible", or any cap —
+and every later decision inheriting it as fact. A limit nobody attempted is an assumption with a
+measurement's authority, and nothing downstream re-tests it.
+
+Points `U01` and `U02` cover the nested-worker case: launching a child whose home, response
+transport or result write was never probed, and re-launching a target that failed without observing
+a change. Both denied against a probe that did not exist for the whole life of this plugin, so the
+remedy could not be run; `plugin/tools/probe_child_capability.py` is that probe, written rather than
+the clauses withdrawn, because the occasion was always real.
+
+**Construction (2).** One launcher, with the probe inside it. It attempts on first use, caches the
+verdict for the session, and refuses when a capability is absent — so capability becomes a property
+of the door rather than of whoever remembered to check.
+
+**Attempt it, and read what came back.** A probe that concludes from a config value, a version
+string or a permission bit has measured nothing: the question is whether the operation succeeds
+here, now, and only running it answers that.
+
 ## push
 
 **The moment.** Publishing: a push, a tag, a release, a merge.
@@ -149,6 +190,25 @@ whether what you published was **derived** or **typed**.
 workflow input. Once the tag is computed from the tree it is cut from, that path cannot emit a
 version the tree does not declare — the guarantee is the door's, so release only through the door.
 A hand-typed version is correct exactly as often as somebody checks.
+
+## research
+
+**The moment.** Work fans out to read rather than to write — subagents dispatched to search, a
+sweep across files, any pass that returns findings and changes nothing. Nothing is written, so
+nothing shows up in a diff, and whatever the pass concluded is inherited whole by everything built
+on it afterwards.
+
+Point `D01` covers the dispatch half: fanning out with nothing read, globbed or grepped on record,
+where the brief describes a remembered repository instead of this one. What no point covers is the
+weaker and more common case — the search that ran, returned little, and was treated as having
+settled the question.
+
+**Construction (1).** Make the search's output a field of the brief and let the render step run the
+search and inject what it returned, so the dependency holds only while the tool supplies it. A field
+a hand can fill is a field a hand will fill.
+
+**Search before inventing, and read what the search returns.** Prior art that exists and was not
+found costs the same as prior art that does not exist, and the second is much rarer than it looks.
 
 ## write_default_rule
 

@@ -6,7 +6,7 @@ between them and `keel/clauses.json`:
 
   (a) whether every clause's `construction` anchor resolves to a real heading in POINTS.md, and
       every POINTS.md entry belongs to a real clause -- no point silently dropped, none invented;
-  (b) whether the seven acts in ACTS.md are still exactly the seven, and every point ACTS.md
+  (b) whether the ten acts in ACTS.md are still exactly the ten, and every point ACTS.md
       cites is a clause that exists;
   (c) whether every generated tabular view still matches the table it renders;
   (d) whether the vendored vocabulary still matches its pinned provenance, and the pages still
@@ -50,7 +50,7 @@ def _headings(text: str) -> list[str]:
     matched word-shaped headings only, so a heading with a space in it was INVISIBLE to them: it
     could be duplicated, it could sit over an empty section, a contents row could link to it, and
     every one of those checks passed by never seeing it. A heading the pattern cannot see is a
-    heading the assertion never judges. `TheSevenActs` already knew this and wrote it down -- it
+    heading the assertion never judges. `TheActList` already knew this and wrote it down -- it
     was the one of the four copies that got it right, which is what four copies of one job
     produce. There is one copy now, and it is the right one.
     """
@@ -58,18 +58,27 @@ def _headings(text: str) -> list[str]:
 
 SKILL_NAME = "keel"
 
-# The seven acts. This literal is the fence's half of the single-home rule: ACTS.md's headings
+# The ten acts. This literal is the fence's half of the single-home rule: ACTS.md's headings
 # are the one place the list lives as content, and this pin is what makes losing or inventing
-# one a red run instead of a quiet fork. The names originate in the development repository's
-# register (Gyroscope-Dev, frozen); moving this set is a deliberate re-vendoring, so the pin
-# moves by hand, like a sha.
-SEVEN_ACTS = (
+# one a red run instead of a quiet fork. Seven of the names originate in the development
+# repository's register (Gyroscope-Dev, frozen); moving this set is a deliberate re-vendoring, so
+# the pin moves by hand, like a sha.
+#
+# `compact`, `probe` and `research` were added by hand and do NOT come from that register. They
+# come from the directive set it feeds, where each cleared the recurrence cut over independent
+# sources and no act here carried them. The register was deliberately left alone: its act list is
+# a MEASURED structure -- every act in it resolves to clauses that route to it -- and adding three
+# names with no clauses would have made it assert a routing nobody measured.
+TEN_ACTS = (
     "accept_report",
     "choose_spend",
+    "compact",
     "delete",
     "dispatch_work",
     "finalize_plan",
+    "probe",
     "push",
+    "research",
     "write_default_rule",
 )
 
@@ -230,13 +239,13 @@ class TheConstructionJoin(unittest.TestCase):
                           f"contents row {label} links to #{target}, which is no heading")
 
 
-class TheSevenActs(unittest.TestCase):
-    """ACTS.md's headings are the single home of the act list, held to the pinned seven."""
+class TheActList(unittest.TestCase):
+    """ACTS.md's headings are the single home of the act list, held to the pinned ten."""
 
     def setUp(self) -> None:
         self.acts = _load(ACTS_MD)
 
-    def test_the_act_headings_are_exactly_the_seven(self) -> None:
+    def test_the_act_headings_are_exactly_the_ten(self) -> None:
         """Set equality both directions, so neither an invented act nor a dropped one passes.
 
         Every heading, not a word-shaped subset: a heading the pattern cannot see is a heading
@@ -246,10 +255,10 @@ class TheSevenActs(unittest.TestCase):
         indexed = _headings(self.acts)
         self.assertEqual(len(indexed), len(set(indexed)), f"duplicate act heading: {indexed}")
         self.assertEqual(
-            set(indexed), set(SEVEN_ACTS),
+            set(indexed), set(TEN_ACTS),
             f"ACTS.md and the pinned act list disagree: "
-            f"only in ACTS.md {sorted(set(indexed) - set(SEVEN_ACTS))}, "
-            f"only in the pin {sorted(set(SEVEN_ACTS) - set(indexed))}",
+            f"only in ACTS.md {sorted(set(indexed) - set(TEN_ACTS))}, "
+            f"only in the pin {sorted(set(TEN_ACTS) - set(indexed))}",
         )
 
     def test_every_point_cited_anywhere_is_a_clause(self) -> None:
