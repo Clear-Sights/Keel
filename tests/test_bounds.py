@@ -124,14 +124,23 @@ class EveryPickedBoundDeclaresItself(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             lines = source.splitlines()
             for node in ast.parse(source).body:
-                if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+                # AnnAssign as well as Assign: `TIMEOUT: int = 5000` is the same declaration
+                # wearing a type, and a check that saw only one form would pass the moment
+                # somebody annotated the constant it was written to catch.
+                if isinstance(node, ast.Assign):
+                    targets, value_node = node.targets, node.value
+                elif isinstance(node, ast.AnnAssign):
+                    targets, value_node = [node.target], node.value
+                else:
                     continue
-                value = node.value.value
+                if not isinstance(value_node, ast.Constant):
+                    continue
+                value = value_node.value
                 if isinstance(value, bool) or not isinstance(value, (int, float)):
                     continue
                 above = lines[node.lineno - 2].strip() if node.lineno >= 2 else ""
                 if not above.startswith("#"):
-                    name = getattr(node.targets[0], "id", "?")
+                    name = getattr(targets[0], "id", "?")
                     bare.append(f"{path.name}:{node.lineno} {name} = {value}")
         self.assertEqual([], sorted(bare),
                          "a numeric constant is shipped with nothing saying what it holds under "
