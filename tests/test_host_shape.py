@@ -66,6 +66,10 @@ def host_shape_findings(body: dict) -> list[str]:
     return found
 
 
+# See `timeout_findings` for the condition this holds under and what happens when a handler
+# exceeds it. Named rather than inlined so the number has one home and the reason sits beside it.
+HOOK_TIMEOUT_CEILING_SECONDS = 60
+
 def timeout_findings(body: dict) -> list[str]:
     """Every registered handler must bound its own hang.
 
@@ -73,6 +77,17 @@ def timeout_findings(body: dict) -> list[str]:
     is canceled with its output discarded -- it renders NO decision. On a deny row that is an
     allow, reached after stalling the user for ten minutes: the fail direction inverted by a hang,
     which no per-row `open` flag can express because the row never got to speak.
+
+    THE CEILING IS A POLICY, and it is written down here rather than left as a number in the
+    comparison. A hook stalls the user for as long as it runs, so the bound is the longest an
+    advisory gate may hold up a turn before the gate costs more than the deny is worth. Sixty
+    seconds is a judgement, not a derivation -- there is no input that computes it -- and it is
+    declared as one. What a hook may NOT do is exceed it silently: on a timeout above the ceiling
+    this reports the handler by name and the tree is red until someone argues the new number.
+
+    The lower bound is not a policy. A timeout of zero or less bounds nothing, and the handler it
+    describes reaches its limit before it can render a decision, which is the fail-open above
+    arriving instantly instead of after ten minutes.
     """
     found: list[str] = []
     hooks = body.get("hooks")
@@ -89,8 +104,10 @@ def timeout_findings(body: dict) -> list[str]:
                 seconds = handler.get("timeout")
                 if not isinstance(seconds, int) or isinstance(seconds, bool):
                     found.append(f"{name}: no timeout -- defaults to 600s, a hang is an allow")
-                elif not 0 < seconds <= 60:
-                    found.append(f"{name}: timeout {seconds}s outside the bound")
+                elif not 0 < seconds <= HOOK_TIMEOUT_CEILING_SECONDS:
+                    found.append(
+                        f"{name}: timeout {seconds}s is outside 1..{HOOK_TIMEOUT_CEILING_SECONDS}, "
+                        "the longest an advisory gate may stall a turn")
     return found
 
 
@@ -122,6 +139,17 @@ class CommittedHooksLoadOnTheHost(unittest.TestCase):
         absurd = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": f"x/{SHIM}",
                                                  "timeout": 600}]}]}}
         self.assertTrue(timeout_findings(absurd), "missed an unbounded timeout")
+        # 600 is also the value a handler with NO timeout defaults to, so on its own it cannot
+        # tell "the ceiling is enforced" from "that number is rejected for some other reason".
+        # One second over the ceiling makes the ceiling itself the subject.
+        over = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": f"x/{SHIM}",
+                                               "timeout": HOOK_TIMEOUT_CEILING_SECONDS + 1}]}]}}
+        self.assertTrue(timeout_findings(over),
+                        f"a timeout one second over {HOOK_TIMEOUT_CEILING_SECONDS} was accepted")
+        at = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": f"x/{SHIM}",
+                                             "timeout": HOOK_TIMEOUT_CEILING_SECONDS}]}]}}
+        self.assertEqual([], timeout_findings(at),
+                         "a timeout AT the ceiling was refused, so the bound is off by one")
         self.assertTrue(timeout_findings({}), "missed the absence of a hooks record")
         self.assertTrue(timeout_findings({"hooks": "nope"}),
                         "malformed hooks must be a finding, not a detector crash")
