@@ -30,10 +30,26 @@ host, the runtime. A naked number then has nowhere to enter from, because the sh
 has fields it cannot fill. One assertion of origin converts every future green in the repository from
 ambiguous to attributable.
 
+**Attributable is not yet reproducible.** Provenance names the runtime a green came from; it does
+not say whether the project declares what that runtime supplied. A suite importing a package
+nobody put in the dependency list passes on the machine that happens to carry it and fails
+everywhere else — attributably, with host and runtime recorded, and still wrong. What closes it is
+a declaration rather than an observation: every import backed by something the project states,
+checked where the report is produced, so a green earned from an environment nobody declared is
+refused at the point it would otherwise be adopted.
+
 **A record that gets cut is a report too.** A summary, a handoff, a compaction — the next reader
 inherits it whole, so the cut decides what survives. Give the cut a preserve list stated in
 advance — what has to survive verbatim, failures with their root causes, the done-bar as a check
 that can fail — and the provenance fields above complete that list as a report format.
+
+**And a list stated in advance is still a stated list.** Nothing reads it after the cut, so the
+cut renders whether or not it was honoured — the added ritual exactly, on the one artifact whose
+omissions are invisible to its own reader. What makes it construction 1 is a comparison carrying a
+denominator: take the named units of the record before the cut, require each one either present in
+the text after it or named in a losses list with its reason, and divide by the count of the
+before. An unnamed drop is then a finding with a name instead of an absence nobody can see, and
+the preserve list stops being a promise and becomes the cut's argument.
 
 **Construction (2).** This one the hooks now build for you, and where they cannot they say so. A
 bare `/compact` is a cut asked for with no preserve list, so `UserPromptSubmit` supplies the
