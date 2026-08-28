@@ -75,6 +75,12 @@ again.
 divergence. A rewrite that matched nothing, or forty places instead of one, stops being
 survivable.
 
+A bound is not a declared count, and it is the near-miss worth naming. `measured <= limit` passes
+at every value beneath the limit, so a limit left sitting above what the tree measures is licence
+nobody asked for and it never goes red — the slack accrues quietly and the commit that finally
+trips the gate is charged for drift that arrived over months. A declared count is an equality: it
+fails in both directions, so slack gets spent deliberately or not at all.
+
 Each point's entry in [POINTS.md](POINTS.md) names which construction it takes. Every clause row
 carries one; there is no null case. Rows may share an entry when they are one point enforced
 twice — `P01` and `P02` are the same failure (a plan step adopted on ground never established)

@@ -45,6 +45,18 @@ Construction numbers refer to [SKILL.md](SKILL.md): **1** data dependency, **2**
 - **Caveat, and it is the third counterfeit:** a `pre-push` hook is the obvious answer and it is not
   cloned. `core.hooksPath .githooks` moves the hooks into the tree but the setting itself is still
   per-clone. Anything needing one setup act per clone has moved its maintenance cost, not removed it.
+- **What answers the caveat:** stop treating the install as an act somebody performs and make it a
+  statement the door executes. Where landing already goes through one script, an idempotent
+  installer invoked from its first lines sets `core.hooksPath` on every landing, whether or not
+  this clone has ever seen it. Idempotence is what makes calling it every time free: the installer
+  verifies-or-refreshes and exits, so a second run fires nothing and costs a stat. That is
+  construction 2 wrapping construction 4 — the per-clone act still exists, and nobody performs it
+  as an act.
+- **Its residue, stated because it is not zero:** the obligation becomes *reach the door* rather
+  than *remember the install*, which is smaller and not empty. A push typed around the door
+  installs nothing, and the first landing in a fresh clone is still the landing that pays. A
+  per-clone act ridden by a door beats one carried by memory; it is not the same as a setting that
+  was never per-clone.
 
 ## A02
 **Bulk delete over a set nobody enumerated.**
