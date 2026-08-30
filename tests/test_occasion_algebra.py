@@ -39,7 +39,8 @@ import unittest
 from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
-from keel.clauses import _regex_predicate
+from keel import clauses as C
+from keel.clauses import _regex_predicate, load_default, waiver_status
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 # Beside MEASURED.tsv at the repository root, NOT inside `plugin/`: `plugin/` is what the
@@ -155,16 +156,226 @@ class OccasionAlgebra(unittest.TestCase):
                 f"fixture that exercises its occasion, or withdraw it. It cannot be parked: this "
                 f"table has no field that stops a clause firing.")
 
-    def test_every_clause_matches_its_own_positive_fixtures(self):
-        """A positive fixture its own fingerprint misses means the two disagree about the occasion."""
-        for clause_id in sorted(self.ext):
-            fp = self.byid[clause_id]["fingerprint"]
-            pattern = re.compile(fp["pattern"])
-            missed = [f for f in (self.byid[clause_id].get("fixtures_pos") or [])
-                      if isinstance(f, str) and not pattern.search(f)]
-            self.assertFalse(
-                missed,
-                f"{clause_id}: fingerprint does not match its own fixtures_pos {missed}")
+    def test_no_clause_escapes_both_the_algebra_and_the_corpus(self):
+        """Every clause is graded by SOMETHING. A clause in neither place is graded by nothing.
+
+        `extensions()` admits a clause only when its fingerprint is `kind: regex` AND keyed
+        `on: tool_input.command`. That is correct for what this module computes -- an algebra over
+        command strings -- but it is a silent filter, and the two laws above range over its output.
+        A clause it drops is not held to them and nothing said so: no warning, no count, no `else`.
+
+        Seven of the twenty-four are dropped today. Four are `kind: always` (C03, C08, T01, T02)
+        and three are keyed `on: tool_name` (D01, P01, P02). Before this law, five of those seven
+        had no evidence of any kind that they can deny, and the table-wide guarantee read as
+        though it covered them.
+
+        This is the totality: a clause is either extended here, or it is named by a replay session
+        in `eval/corpus`, which drives it through the real dispatcher and requires the denial to
+        name it. Neither is a subset of the other and a clause may have both. What no clause may
+        have is neither.
+        """
+        corpus = REPO / "eval" / "corpus"
+        declared = set()
+        for session in sorted(corpus.glob("*.jsonl")):
+            header = json.loads(session.read_text().splitlines()[0])
+            if header.get("clause"):
+                declared.add(header["clause"])
+
+        # A clause parked by a LIVE waiver is the third disposition, and it is a real one: it
+        # cannot be driven, because `_applicable` skips it. It is not silence -- the waiver
+        # carries its research and an expiry. The expiry is why this stays honest: on the day it
+        # lapses the clause enforces again with no edit, and this law goes red until a session
+        # for it exists. Inaction restores the demand rather than retiring it.
+        parked = {clause.id for clause in load_default()
+                  if waiver_status(clause) == "live"}
+
+        ungraded = sorted(c["id"] for c in self.records
+                          if c["id"] not in self.ext and c["id"] not in declared
+                          and c["id"] not in parked)
+        self.assertFalse(
+            ungraded,
+            f"these clauses are held by nothing: {ungraded}. `extensions()` drops them (their "
+            f"fingerprint is not a regex on {COMMAND!r}), no session in eval/corpus declares "
+            f"them, and no live waiver parks them -- so nothing in this repository has observed "
+            f"them deny. Either give one a corpus session naming it, or withdraw it. If one was "
+            f"parked, its waiver has lapsed and the clause is enforcing again.")
+
+    def test_every_clause_is_driven_through_the_real_dispatcher(self):
+        """Every clause not parked by a live waiver has a session that drives it.
+
+        The totality law above accepts three dispositions, and one of them -- extension by the
+        occasion algebra -- is a property of a clause's FINGERPRINT, not evidence that the
+        clause denies. Under that law alone a corpus session could be deleted and nothing
+        would go red, because the algebra still holds the clause. Measured: removing U24's
+        session left the whole suite green.
+
+        That is a weaker standard than the sibling repositories meet. Ward requires a session
+        in eval/corpus for all twelve of its rows and for its fail-closed preflight; Makoto
+        fires every live gate through its real .run(ctx). This law brings Keel to the same
+        bar: the algebra says a clause COULD match something, a session says it DID deny, and
+        replay requires the first fire to name the clause the session declares, so a session
+        is evidence about its own row rather than about the table.
+
+        A live waiver is still the third disposition and still a real one -- it cannot be
+        driven because `_applicable` skips it -- and it carries research and an expiry, so on
+        the day it lapses the clause enforces again and this law goes red with no edit.
+        """
+        corpus = REPO / "eval" / "corpus"
+        declared = set()
+        for session in sorted(corpus.glob("*.jsonl")):
+            header = json.loads(session.read_text().splitlines()[0])
+            if header.get("clause"):
+                declared.add(header["clause"])
+        parked = {clause.id for clause in load_default()
+                  if waiver_status(clause) == "live"}
+        undriven = sorted(c["id"] for c in self.records
+                          if c["id"] not in declared and c["id"] not in parked)
+        self.assertFalse(
+            undriven,
+            f"these clauses have never been observed denying through the real dispatcher: "
+            f"{undriven}. Being extended by the occasion algebra is not that -- it says the "
+            f"fingerprint could match something, not that the clause denied. Add a session to "
+            f"eval/corpus declaring the clause, or park it with a waiver carrying research and "
+            f"an expiry.")
+
+    def test_every_corpus_session_declares_a_clause_that_exists(self):
+        """A session naming a clause the table does not carry grades a rule nobody ships."""
+        corpus = REPO / "eval" / "corpus"
+        known = {c["id"] for c in self.records}
+        for session in sorted(corpus.glob("*.jsonl")):
+            header = json.loads(session.read_text().splitlines()[0])
+            declared = header.get("clause")
+            if declared is None:
+                self.assertEqual(
+                    header.get("expect"), "none",
+                    f"{session.name} declares no clause and is not a control session; a session "
+                    f"that names no clause is evidence about nothing")
+                continue
+            self.assertIn(declared, known,
+                          f"{session.name} declares {declared}, which is not a clause in "
+                          f"clauses.json")
+
+    def test_the_fixture_law_refuses_a_table_whose_fixtures_disagree(self):
+        """The fixture law lives in `clauses._admit`, and nothing witnessed it.
+
+        What stood here instead was a test that could not fail. It re-derived the positive-fixture
+        law itself -- `re.compile(fingerprint["pattern"]).search(fixture)` -- over the clauses in
+        `self.ext`, i.e. exactly the regex-kind fingerprints. But `_admit` already applies
+        `_base_predicate` to every clause's discriminator at LOAD time, and for a regex-kind
+        fingerprint `_base_predicate` requires that same `re.search` to hit before it looks at
+        anything else. So any clause the old test could have caught raised CLAUSE-FIXTURE-POS-MISS
+        inside `load_default()` in this class's own setUp, before its body ever ran: the assertion
+        was implied by its own precondition. It was also strictly weaker than the thing it
+        shadowed -- it never applied `unless`, never used `_discriminator` (so terminal clauses,
+        whose fixtures test the GUARD, were outside it entirely), and never checked the negative
+        half at all.
+
+        This tests the enforcement that actually exists, by planting a fault in the table and
+        requiring the load to refuse it -- both halves, over the real predicate."""
+        bundle = json.loads((PLUGIN / "keel" / "clauses.json").read_text())
+        self.assertTrue(bundle, "no clauses, so nothing below is being tested")
+
+        def load_planted(records):
+            with tempfile.TemporaryDirectory(prefix="keel-fixture-plant-") as name:
+                path = Path(name) / "clauses.json"
+                path.write_text(json.dumps(records), encoding="utf-8")
+                return C.load_bundle(path)
+
+        # The unplanted table must load, or a refusal below proves nothing about the plant.
+        self.assertEqual(len(bundle), len(load_planted(bundle)),
+                         "the shipped table does not load unplanted; the plants below are void")
+
+        planted_pos = planted_neg = 0
+        for index, record in enumerate(bundle):
+            for slot, sentinel, kind in (("fixtures_pos", "keel-fixture-plant-no-clause-matches-this",
+                                          "CLAUSE-FIXTURE-POS-MISS"),
+                                         ("fixtures_neg", None, "CLAUSE-FIXTURE-NEG-HIT")):
+                if slot == "fixtures_neg":
+                    # PLANT the other direction with a string the clause's OWN positive fixture
+                    # uses, so the negative half is required to be excluded by the real predicate.
+                    positives = [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]
+                    if not positives:
+                        continue
+                    sentinel = positives[0]
+                elif not [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]:
+                    continue
+                copy = [dict(r) for r in bundle]
+                copy[index] = dict(record)
+                copy[index][slot] = [sentinel]
+                with self.assertRaises(C.ClauseError) as caught:
+                    load_planted(copy)
+                self.assertEqual(kind, caught.exception.code,
+                                 f"{record['id']}: planting {slot} raised "
+                                 f"{caught.exception.code}, not {kind}")
+                self.assertIn(record["id"], caught.exception.detail,
+                              f"{record['id']}: the refusal does not name the clause it refused")
+                if slot == "fixtures_pos":
+                    planted_pos += 1
+                else:
+                    planted_neg += 1
+
+        self.assertGreater(planted_pos, 0, "no positive fixture was planted, so nothing was shown")
+        self.assertGreater(planted_neg, 0, "no negative fixture was planted, so nothing was shown")
+        print(f"DENOMINATOR subject=fixture-law clauses={len(bundle)} "
+              f"pos-plants={planted_pos} neg-plants={planted_neg}")
+
+    def test_no_positive_fixture_is_one_the_clause_cannot_key(self):
+        """A fixture the clause cannot key is not evidence that the clause covers it.
+
+        `_admit` checked positive fixtures against the FINGERPRINT only. A clause whose `subject`
+        is an extractor needs one thing more: when the extractor finds no operand, the dispatcher
+        treats the event as NOT-EVALUABLE and passes it -- correctly, since an empty key would
+        merge every demand for the clause into one bucket. So a fixture could match the
+        fingerprint, be admitted as evidence that the occasion is covered, and be silently
+        unenforceable.
+
+        Measured when this law was added: A02 declared three positive fixtures and could deny
+        exactly one. `git clean -fd` and `find . -name '*.tmp' -delete` name no trailing-slash
+        path, its extractor returned "", and the shipped dispatcher ALLOWED both -- a bulk delete
+        walking past the clause written to stop it.
+        """
+        bundle = json.loads((PLUGIN / "keel" / "clauses.json").read_text())
+        with_extractor = [r for r in bundle if isinstance(r.get("subject"), dict)]
+        self.assertTrue(with_extractor, "no clause keys on an extractor; this law is vacuous")
+
+        planted = 0
+        for record in with_extractor:
+            positives = [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]
+            if not positives:
+                continue
+            copy = [dict(r) for r in bundle]
+            index = bundle.index(record)
+            copy[index] = dict(record)
+            copy[index]["subject"] = dict(record["subject"])
+            # An extractor that cannot match anything: the exact shape A02 shipped with.
+            copy[index]["subject"]["pattern"] = "(keel-no-operand-can-match-this)"
+            with tempfile.TemporaryDirectory(prefix="keel-unkeyable-") as name:
+                path = Path(name) / "clauses.json"
+                path.write_text(json.dumps(copy), encoding="utf-8")
+                with self.assertRaises(C.ClauseError) as caught:
+                    C.load_bundle(path)
+            self.assertEqual("CLAUSE-FIXTURE-POS-UNKEYABLE", caught.exception.code,
+                             f"{record['id']}: {caught.exception.code}")
+            planted += 1
+        self.assertGreater(planted, 0, "nothing was planted, so nothing was shown")
+        print(f"DENOMINATOR subject=unkeyable-fixture extractors={len(with_extractor)} "
+              f"plants={planted}")
+
+    def test_A02_denies_every_occasion_it_declares(self):
+        """The behaviour behind the law above, driven through the real dispatcher.
+
+        Two of A02's three declared occasions were allowed by the shipped plugin. This drives all
+        of them and requires A02 to answer each, so the fix is pinned by observation and not only
+        by the load-time refusal."""
+        rows = {r["id"]: r for r in json.loads((PLUGIN / "keel" / "clauses.json").read_text())}
+        fixtures = [f for f in rows["A02"]["fixtures_pos"] if isinstance(f, str)]
+        self.assertGreaterEqual(len(fixtures), 3, "A02's fixture list shrank; subject changed")
+        with tempfile.TemporaryDirectory(prefix="keel-a02-") as state:
+            for command in fixtures:
+                denied, _ = self._drive(command, f"a02-{abs(hash(command))}", state)
+                self.assertEqual("A02", denied,
+                                 f"{command!r} is A02's own declared occasion and the dispatcher "
+                                 f"answered {denied!r}")
 
     def test_every_relation_is_declared(self):
         declared = {(a, b) for a, _, b, _, _ in ledger_rows()}

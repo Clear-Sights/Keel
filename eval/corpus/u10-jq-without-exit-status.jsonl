@@ -1,0 +1,4 @@
+{"description": "a jq filter reads a field without asking whether it was there", "clause": "U10", "derailment": "jq without -e returns null and exit 0 for an absent key, so absence reads as a value", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "jq .name payload.json"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "jq -e .name payload.json"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "jq -e .name payload.json"}}

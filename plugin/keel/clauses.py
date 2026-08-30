@@ -21,12 +21,37 @@ from typing import Any
 # anchor shape, read by everything that needs it.
 CONSTRUCTION_ANCHOR = re.compile(r"POINTS\.md#[a-z0-9][a-z0-9-]*")
 
+# The events a clause may target. A clause naming anything else is refused
+# CLAUSE-EVENT-UNKNOWN by `_admit`, and because a single `_admit` failure makes the whole
+# table unloadable -- which the dispatcher reports as a deny -- such a clause would deny
+# every tool call, not merely fail to fire.
+#
+# This is a STRICT SUBSET of what the dispatcher routes, and that gap was undeclared: the
+# plugin registers eight events in hooks.json and HANDLERS routes all eight, but only these
+# five can carry enforcement. The other three are named below rather than left as an
+# absence, so that adding a handler without deciding whether clauses may target it is a
+# decision someone has to make out loud. `tests/test_event_surface.py` holds the two sets to
+# exactly the dispatcher's own, so neither can drift alone.
 _EVENTS = {
     "PreToolUse",
     "PostToolUse",
     "Stop",
     "SubagentStop",
     "SessionStart",
+}
+
+# Routed by the dispatcher and registered with the host, but deliberately NOT targetable by a
+# clause. Each entry says why it is bookkeeping rather than an enforcement point. An event in
+# neither this set nor `_EVENTS` is undecided, and the law in tests/test_event_surface.py
+# goes red rather than letting it default to unenforceable in silence.
+_NON_ENFORCING = {
+    "SubagentStart": "seeds a subagent's session state; the obligations it seeds are enforced "
+                     "at SubagentStop, which is where a subagent can still be denied",
+    "UserPromptSubmit": "records the turn boundary. Denying here would refuse a prompt before "
+                        "any tool is proposed, which is not what any clause in this table is "
+                        "about",
+    "PreCompact": "records that context was compacted. There is no act to permit or refuse, "
+                  "and a deny would block compaction rather than any behaviour",
 }
 
 
@@ -481,16 +506,35 @@ def _admit(clause: Clause) -> Clause:
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-POS-MISS", f"{clause.id}: {fixture!r}")
+        # A FIXTURE THE CLAUSE CANNOT KEY IS NOT EVIDENCE THAT THE CLAUSE COVERS IT.
+        #
+        # Matching the fingerprint was the whole admission test, and the dispatcher needs one
+        # thing more: a dict `subject` is an EXTRACTOR, and when it finds no operand the clause
+        # abstains -- `dispatch.pre_tool_use` treats an empty key as NOT-EVALUABLE and passes the
+        # event, because denying under the empty key would merge every demand for the clause into
+        # one bucket. That abstention is right. What was wrong is that a positive fixture could
+        # match the fingerprint, be admitted as evidence that the clause covers that occasion,
+        # and then be silently unenforceable.
+        #
+        # Measured when this was added: A02 declared three positive fixtures and could deny only
+        # one. `git clean -fd` and `find . -name '*.tmp' -delete` name no trailing-slash path, so
+        # its extractor returned "" and the dispatcher allowed both -- a bulk delete passing the
+        # clause written to stop it, with the fixture list asserting the opposite.
+        if isinstance(clause.subject, dict):
+            keyed = _fixture_event(clause.subject, fixture)
+            value = _resolve(keyed, clause.subject.get("on", ""))
+            found = (re.search(clause.subject["pattern"], value)
+                     if isinstance(value, str) and clause.subject.get("pattern") else None)
+            if not (found and found.group(clause.subject.get("group", 0))):
+                raise ClauseError(
+                    "CLAUSE-FIXTURE-POS-UNKEYABLE",
+                    f"{clause.id}: {fixture!r} matches the fingerprint but the subject extractor "
+                    f"finds no operand in it, so the clause abstains and this occasion is never "
+                    f"denied")
     for fixture in clause.fixtures_neg:
         if _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-NEG-HIT", f"{clause.id}: {fixture!r}")
     return clause
-
-
-def load_file(path) -> Clause:
-    with Path(path).open(encoding="utf-8") as stream:
-        data = json.load(stream)
-    return _load_object(data)
 
 
 def _load_object(data: dict[str, Any]) -> Clause:

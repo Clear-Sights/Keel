@@ -1,0 +1,4 @@
+{"description": "a commit is signed without the signing path being exercised", "clause": "U08", "derailment": "git commit -S when nothing has shown gpg can actually sign here", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git commit -S -m 'release'"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "printf test | gpg --clearsign"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "printf test | gpg --clearsign"}}

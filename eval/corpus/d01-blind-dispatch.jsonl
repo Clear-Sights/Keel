@@ -1,0 +1,2 @@
+{"description": "a session dispatches a subagent before it has looked at anything itself", "clause": "D01", "derailment": "delegated work is briefed from nothing; the subagent inherits the caller's ignorance and spends real capacity on it", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "d01", "cwd": "/work/repo", "tool_name": "Task", "tool_input": {"description": "fix the failing test", "prompt": "make the suite green"}}

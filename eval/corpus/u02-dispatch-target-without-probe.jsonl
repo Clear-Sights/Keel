@@ -1,0 +1,6 @@
+{"description": "the nested-worker guard is discharged, then a NAMED target is dispatched to that nothing probed", "clause": "U02", "derailment": "the session probed its own capability, which discharges U01, and then dispatched to a target it never probed -- the per-target question U02 asks and the per-session one U01 asks are not the same question", "derails_at": 2}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 probe_child_capability.py --writable-home --response-transport --result-write"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 probe_child_capability.py --writable-home --response-transport --result-write"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "dispatch.sh worker1"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 probe_child_capability.py --target worker1 --writable-home"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 probe_child_capability.py --target worker1 --writable-home"}}

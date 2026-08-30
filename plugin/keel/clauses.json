@@ -44,7 +44,7 @@
     "guard": "list the set first (`ls`, `find` without -delete, or `git status`)",
     "subject": {
       "on": "tool_input.command",
-      "pattern": "([\\w./-]+/)",
+      "pattern": "([\\w./-]+/|git\\s+clean\\b|find\\b[^|;]*-delete\\b)",
       "group": 1
     },
     "fingerprint": {
@@ -73,7 +73,8 @@
       "find . -name '*.tmp'",
       "rm single-file.txt",
       "git status --short"
-    ]
+    ],
+    "_note": "Subject: the operand keyed per demand. A trailing-slash path when there is one; otherwise the destructive form itself, because `git clean -fd` and `find ... -delete` name no path and an unkeyable occasion makes this clause abstain rather than deny."
   },
   {
     "id": "A03",

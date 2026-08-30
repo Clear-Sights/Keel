@@ -1,4 +1,4 @@
-{"description": "the same unverified push, but the session runs the cheap guard after the denial and retries", "derailment": "git push without a git status on record", "derails_at": 0, "expect": "recovery"}
+{"description": "the same unverified push, but the session runs the cheap guard after the denial and retries", "clause": "A01", "derailment": "git push without a git status on record", "derails_at": 0, "expect": "recovery"}
 {"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git push origin main"}}
 {"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git status"}}
 {"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git status"}}

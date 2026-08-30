@@ -1,0 +1,4 @@
+{"description": "a scanner is run without its own tests having run", "clause": "U25", "derailment": "scanner.py grades a tree while nothing has graded the scanner", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 scanner.py"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "pytest -q"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "pytest -q"}}
