@@ -39,6 +39,7 @@ import unittest
 from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
+from keel import clauses as C
 from keel.clauses import _regex_predicate, load_default, waiver_status
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
@@ -254,16 +255,69 @@ class OccasionAlgebra(unittest.TestCase):
                           f"{session.name} declares {declared}, which is not a clause in "
                           f"clauses.json")
 
-    def test_every_clause_matches_its_own_positive_fixtures(self):
-        """A positive fixture its own fingerprint misses means the two disagree about the occasion."""
-        for clause_id in sorted(self.ext):
-            fp = self.byid[clause_id]["fingerprint"]
-            pattern = re.compile(fp["pattern"])
-            missed = [f for f in (self.byid[clause_id].get("fixtures_pos") or [])
-                      if isinstance(f, str) and not pattern.search(f)]
-            self.assertFalse(
-                missed,
-                f"{clause_id}: fingerprint does not match its own fixtures_pos {missed}")
+    def test_the_fixture_law_refuses_a_table_whose_fixtures_disagree(self):
+        """The fixture law lives in `clauses._admit`, and nothing witnessed it.
+
+        What stood here instead was a test that could not fail. It re-derived the positive-fixture
+        law itself -- `re.compile(fingerprint["pattern"]).search(fixture)` -- over the clauses in
+        `self.ext`, i.e. exactly the regex-kind fingerprints. But `_admit` already applies
+        `_base_predicate` to every clause's discriminator at LOAD time, and for a regex-kind
+        fingerprint `_base_predicate` requires that same `re.search` to hit before it looks at
+        anything else. So any clause the old test could have caught raised CLAUSE-FIXTURE-POS-MISS
+        inside `load_default()` in this class's own setUp, before its body ever ran: the assertion
+        was implied by its own precondition. It was also strictly weaker than the thing it
+        shadowed -- it never applied `unless`, never used `_discriminator` (so terminal clauses,
+        whose fixtures test the GUARD, were outside it entirely), and never checked the negative
+        half at all.
+
+        This tests the enforcement that actually exists, by planting a fault in the table and
+        requiring the load to refuse it -- both halves, over the real predicate."""
+        bundle = json.loads((PLUGIN / "keel" / "clauses.json").read_text())
+        self.assertTrue(bundle, "no clauses, so nothing below is being tested")
+
+        def load_planted(records):
+            with tempfile.TemporaryDirectory(prefix="keel-fixture-plant-") as name:
+                path = Path(name) / "clauses.json"
+                path.write_text(json.dumps(records), encoding="utf-8")
+                return C.load_bundle(path)
+
+        # The unplanted table must load, or a refusal below proves nothing about the plant.
+        self.assertEqual(len(bundle), len(load_planted(bundle)),
+                         "the shipped table does not load unplanted; the plants below are void")
+
+        planted_pos = planted_neg = 0
+        for index, record in enumerate(bundle):
+            for slot, sentinel, kind in (("fixtures_pos", "keel-fixture-plant-no-clause-matches-this",
+                                          "CLAUSE-FIXTURE-POS-MISS"),
+                                         ("fixtures_neg", None, "CLAUSE-FIXTURE-NEG-HIT")):
+                if slot == "fixtures_neg":
+                    # PLANT the other direction with a string the clause's OWN positive fixture
+                    # uses, so the negative half is required to be excluded by the real predicate.
+                    positives = [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]
+                    if not positives:
+                        continue
+                    sentinel = positives[0]
+                elif not [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]:
+                    continue
+                copy = [dict(r) for r in bundle]
+                copy[index] = dict(record)
+                copy[index][slot] = [sentinel]
+                with self.assertRaises(C.ClauseError) as caught:
+                    load_planted(copy)
+                self.assertEqual(kind, caught.exception.code,
+                                 f"{record['id']}: planting {slot} raised "
+                                 f"{caught.exception.code}, not {kind}")
+                self.assertIn(record["id"], caught.exception.detail,
+                              f"{record['id']}: the refusal does not name the clause it refused")
+                if slot == "fixtures_pos":
+                    planted_pos += 1
+                else:
+                    planted_neg += 1
+
+        self.assertGreater(planted_pos, 0, "no positive fixture was planted, so nothing was shown")
+        self.assertGreater(planted_neg, 0, "no negative fixture was planted, so nothing was shown")
+        print(f"DENOMINATOR subject=fixture-law clauses={len(bundle)} "
+              f"pos-plants={planted_pos} neg-plants={planted_neg}")
 
     def test_every_relation_is_declared(self):
         declared = {(a, b) for a, _, b, _, _ in ledger_rows()}
