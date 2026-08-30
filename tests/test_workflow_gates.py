@@ -115,15 +115,29 @@ def _steps_writing(path: Path, step_id: str):
         return None
     written = set()
     for raw in owned:
-        for line in _without_shell_comments(raw).splitlines():
+        script = _without_shell_comments(raw)
+        for line in script.splitlines():
             if "GITHUB_OUTPUT" not in line:
                 continue
             for name, value in re.findall(r'echo\s+"?([\w-]+)=([^">]*)', line):
-                # A LITERAL IS NOT A MEASUREMENT. `echo "sessions=25" >> $GITHUB_OUTPUT` moves a
-                # hard-coded number into a step output and out through the published string,
-                # which is the same defect one indirection further along. The value written has
-                # to come from a shell variable.
-                if "$" in value:
+                # A LITERAL IS NOT A MEASUREMENT, AND NEITHER IS A VARIABLE HOLDING ONE.
+                # `echo "sessions=25" >> $GITHUB_OUTPUT` moves a hard-coded number into a step
+                # output and out through the published string -- the original defect one
+                # indirection along. Requiring a `$` closed only half of that: `ran=82; echo
+                # "ran=$ran"` satisfies it while nothing was measured. So each referenced
+                # variable is traced back to its assignment inside this step.
+                referenced = re.findall(r"\$\{?(\w+)", value)
+                if not referenced:
+                    continue
+                def measured(var):
+                    if var.isdigit():
+                        # `summary=$(...)` then `set -- $summary` then `echo "sessions=$1"`:
+                        # the positional came from splitting a captured value, so it is a
+                        # command substitution one indirection back.
+                        return bool(re.search(r"(?m)^\s*set\s+--\s+\$", script))
+                    return bool(re.search(r"(?m)^\s*" + re.escape(var) + r"=\$\(", script)
+                                or re.search(r"(?m)^\s*" + re.escape(var) + r"=`", script))
+                if any(measured(var) for var in referenced):
                     written.add(name)
     return written
 
