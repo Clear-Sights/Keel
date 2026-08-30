@@ -319,6 +319,64 @@ class OccasionAlgebra(unittest.TestCase):
         print(f"DENOMINATOR subject=fixture-law clauses={len(bundle)} "
               f"pos-plants={planted_pos} neg-plants={planted_neg}")
 
+    def test_no_positive_fixture_is_one_the_clause_cannot_key(self):
+        """A fixture the clause cannot key is not evidence that the clause covers it.
+
+        `_admit` checked positive fixtures against the FINGERPRINT only. A clause whose `subject`
+        is an extractor needs one thing more: when the extractor finds no operand, the dispatcher
+        treats the event as NOT-EVALUABLE and passes it -- correctly, since an empty key would
+        merge every demand for the clause into one bucket. So a fixture could match the
+        fingerprint, be admitted as evidence that the occasion is covered, and be silently
+        unenforceable.
+
+        Measured when this law was added: A02 declared three positive fixtures and could deny
+        exactly one. `git clean -fd` and `find . -name '*.tmp' -delete` name no trailing-slash
+        path, its extractor returned "", and the shipped dispatcher ALLOWED both -- a bulk delete
+        walking past the clause written to stop it.
+        """
+        bundle = json.loads((PLUGIN / "keel" / "clauses.json").read_text())
+        with_extractor = [r for r in bundle if isinstance(r.get("subject"), dict)]
+        self.assertTrue(with_extractor, "no clause keys on an extractor; this law is vacuous")
+
+        planted = 0
+        for record in with_extractor:
+            positives = [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]
+            if not positives:
+                continue
+            copy = [dict(r) for r in bundle]
+            index = bundle.index(record)
+            copy[index] = dict(record)
+            copy[index]["subject"] = dict(record["subject"])
+            # An extractor that cannot match anything: the exact shape A02 shipped with.
+            copy[index]["subject"]["pattern"] = "(keel-no-operand-can-match-this)"
+            with tempfile.TemporaryDirectory(prefix="keel-unkeyable-") as name:
+                path = Path(name) / "clauses.json"
+                path.write_text(json.dumps(copy), encoding="utf-8")
+                with self.assertRaises(C.ClauseError) as caught:
+                    C.load_bundle(path)
+            self.assertEqual("CLAUSE-FIXTURE-POS-UNKEYABLE", caught.exception.code,
+                             f"{record['id']}: {caught.exception.code}")
+            planted += 1
+        self.assertGreater(planted, 0, "nothing was planted, so nothing was shown")
+        print(f"DENOMINATOR subject=unkeyable-fixture extractors={len(with_extractor)} "
+              f"plants={planted}")
+
+    def test_A02_denies_every_occasion_it_declares(self):
+        """The behaviour behind the law above, driven through the real dispatcher.
+
+        Two of A02's three declared occasions were allowed by the shipped plugin. This drives all
+        of them and requires A02 to answer each, so the fix is pinned by observation and not only
+        by the load-time refusal."""
+        rows = {r["id"]: r for r in json.loads((PLUGIN / "keel" / "clauses.json").read_text())}
+        fixtures = [f for f in rows["A02"]["fixtures_pos"] if isinstance(f, str)]
+        self.assertGreaterEqual(len(fixtures), 3, "A02's fixture list shrank; subject changed")
+        with tempfile.TemporaryDirectory(prefix="keel-a02-") as state:
+            for command in fixtures:
+                denied, _ = self._drive(command, f"a02-{abs(hash(command))}", state)
+                self.assertEqual("A02", denied,
+                                 f"{command!r} is A02's own declared occasion and the dispatcher "
+                                 f"answered {denied!r}")
+
     def test_every_relation_is_declared(self):
         declared = {(a, b) for a, _, b, _, _ in ledger_rows()}
         undeclared = sorted(f"{a} {rel} {b}" for (a, b), rel in self._found().items()

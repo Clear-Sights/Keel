@@ -22,7 +22,11 @@ at runtime -- is invisible here, so this measures the ordinary spelling and says
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -36,6 +40,25 @@ def _sources(root: Path) -> str:
                      if "__pycache__" not in p.parts)
 
 
+ANNOTATION_ONLY_RECORD = Path(__file__).resolve().parent / "annotation-only-fields.tsv"
+
+
+def annotation_only_fields() -> list[str]:
+    """The clause fields no code reads, declared with a reason each.
+
+    DELIBERATELY NOT A PYTHON LITERAL. `_sources` reads every `*.py` under tests/, and
+    `_mentions` looks for the field as a quoted literal -- so writing this list in a test module
+    would make every name on it "mentioned by the suite" and empty the very set it declares. The
+    record is a TSV for that reason, and the reason is here so nobody helpfully inlines it.
+    """
+    rows = [line.split("\t") for line in
+            ANNOTATION_ONLY_RECORD.read_text(encoding="utf-8").strip().splitlines()]
+    assert rows and rows[0][0] == "FIELD", f"header changed: {rows[:1]}"
+    assert all(len(r) == 2 and r[1].strip() for r in rows[1:]), (
+        "every annotation-only field carries the reason it is prose")
+    return sorted(row[0] for row in rows[1:])
+
+
 def _mentions(body: str, field: str) -> bool:
     """The field as a QUOTED literal, never a bare substring.
 
@@ -44,6 +67,22 @@ def _mentions(body: str, field: str) -> bool:
     below, which is the one thing this must not do.
     """
     return re.search(r"""["']%s["']""" % re.escape(field), body) is not None
+
+
+
+def _denying_clause(command: str, session: str, state: str) -> str | None:
+    """The clause id that denied this command through the REAL dispatcher, or None."""
+    event = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                        "session_id": session, "cwd": "/tmp",
+                        "tool_input": {"command": command}})
+    done = subprocess.run(
+        [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
+        env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
+             "PYTHONPATH": str(PLUGIN)})
+    body = json.loads(done.stdout or "{}")
+    reason = (body.get("hookSpecificOutput") or {}).get("permissionDecisionReason") or ""
+    found = re.search(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason)
+    return found.group(1) if found else None
 
 
 def _fields() -> list[str]:
@@ -77,13 +116,31 @@ class NoTestAssertsFromWhatTheProductIgnores(unittest.TestCase):
             "is asserting a property of the table instead of a property of the plugin; this is "
             "how `_quarantine_reason` kept a live double-denial green")
 
+    # The clause fields no code reads. Authored prose beside a row is legitimate -- this is the
+    # list of what is allowed to be prose, and adding to it is a decision someone states here.
+    ANNOTATION_ONLY = annotation_only_fields()
+
     def test_the_fields_nothing_reads_are_named(self) -> None:
-        """Authored prose beside a row is legitimate. Being unable to list it is not."""
+        """Authored prose beside a row is legitimate. Being unable to list it is not.
+
+        This asserted `assertIsInstance(prose, list)` over a value built by `sorted(...)`, which
+        returns a list always: it could not fail, and the naming it is named for happened only in
+        a print nobody reads. So a new field that no code touches -- the exact shape that let
+        `_quarantine_reason` keep a live double-denial green -- was admitted silently.
+
+        The list is now DECLARED, and both directions fail: a new unread field is not on it, and
+        a field that gains a reader must come off it. Neither is a defect; both are decisions
+        that have to be stated rather than absorbed.
+        """
         prose = sorted(f for f in self.fields
                        if not _mentions(self.runtime, f) and not _mentions(self.suite, f))
-        self.assertIsInstance(prose, list)
         print(f"\nDENOMINATOR subject=clause-fields total={len(self.fields)} "
               f"annotation-only={len(prose)} {prose}")
+        self.assertEqual(
+            sorted(self.ANNOTATION_ONLY), prose,
+            "the set of clause fields no code reads has changed. A field that appeared here is "
+            "read by nothing -- name it in tests/annotation-only-fields.tsv with its reason, or "
+            "give it a reader. A field that disappeared now has one, so take it off the list.")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Make the suite reason from an annotation, and this must go red naming the rule.
@@ -128,6 +185,43 @@ class OneClauseDecliningAnotherStaysInStep(unittest.TestCase):
             a02, declined,
             "U20 no longer declines A02's occasion verbatim, so a bulk delete raises both again: "
             "one command, two remedies with nothing in common")
+
+    def test_the_decline_is_observed_and_not_merely_declared(self) -> None:
+        """Drive A02's own occasion through the real dispatcher and watch U20 stay silent.
+
+        The assertion above compares two DECLARED strings: A02's pattern against the entries of
+        U20's `unless`. That is the right thing to pin -- the copy has to be held in step -- but
+        it is agreement between two fields, and it stays green even if the runtime stopped
+        honouring `unless` entirely. The name of this class is a claim about what U20 DOES.
+
+        So: take A02's own positive fixtures, send each through `keel.dispatch`, and require the
+        denial to name A02 and not U20. The control is the second half -- a command U20 matches
+        and A02 does not must still be denied BY U20 -- so a dispatcher that has stopped denying
+        anything, or one where `unless` swallows the whole clause, fails here too.
+        """
+        rows = {r["id"]: r for r in json.loads(CLAUSES.read_text(encoding="utf-8"))}
+        overlapping = [f for f in rows["A02"]["fixtures_pos"] if isinstance(f, str)]
+        self.assertTrue(overlapping, "A02 ships no string fixture; nothing is driven below")
+
+        with tempfile.TemporaryDirectory(prefix="keel-decline-") as state:
+            for command in overlapping:
+                denied = _denying_clause(command, f"decline-{abs(hash(command))}", state)
+                self.assertEqual(
+                    "A02", denied,
+                    f"{command!r} is A02's own occasion; the dispatcher answered {denied!r}. "
+                    f"U20 declines this occasion in the table -- if U20 answered, the runtime is "
+                    f"not honouring `unless`; if nothing answered, A02 stopped firing.")
+
+            # CONTROL, in the same test: U20 must still be reachable on its own occasion, or
+            # "U20 did not fire" above would be satisfied by a U20 that never fires at all.
+            u20_only = [f for f in rows["U20"]["fixtures_pos"]
+                        if isinstance(f, str) and not re.search(rows["A02"]["fingerprint"]["pattern"], f)]
+            self.assertTrue(u20_only, "no U20 fixture falls outside A02; the control is vacuous")
+            denied = _denying_clause(u20_only[0], "decline-control", state)
+            self.assertEqual(
+                "U20", denied,
+                f"control: {u20_only[0]!r} is U20's occasion alone and the dispatcher answered "
+                f"{denied!r}; U20 is unreachable, so its silence above proves nothing")
 
 
 class ActivationIsOnlyDeclaredWhereItIsHonoured(unittest.TestCase):

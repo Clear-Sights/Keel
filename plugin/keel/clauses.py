@@ -506,6 +506,31 @@ def _admit(clause: Clause) -> Clause:
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-POS-MISS", f"{clause.id}: {fixture!r}")
+        # A FIXTURE THE CLAUSE CANNOT KEY IS NOT EVIDENCE THAT THE CLAUSE COVERS IT.
+        #
+        # Matching the fingerprint was the whole admission test, and the dispatcher needs one
+        # thing more: a dict `subject` is an EXTRACTOR, and when it finds no operand the clause
+        # abstains -- `dispatch.pre_tool_use` treats an empty key as NOT-EVALUABLE and passes the
+        # event, because denying under the empty key would merge every demand for the clause into
+        # one bucket. That abstention is right. What was wrong is that a positive fixture could
+        # match the fingerprint, be admitted as evidence that the clause covers that occasion,
+        # and then be silently unenforceable.
+        #
+        # Measured when this was added: A02 declared three positive fixtures and could deny only
+        # one. `git clean -fd` and `find . -name '*.tmp' -delete` name no trailing-slash path, so
+        # its extractor returned "" and the dispatcher allowed both -- a bulk delete passing the
+        # clause written to stop it, with the fixture list asserting the opposite.
+        if isinstance(clause.subject, dict):
+            keyed = _fixture_event(clause.subject, fixture)
+            value = _resolve(keyed, clause.subject.get("on", ""))
+            found = (re.search(clause.subject["pattern"], value)
+                     if isinstance(value, str) and clause.subject.get("pattern") else None)
+            if not (found and found.group(clause.subject.get("group", 0))):
+                raise ClauseError(
+                    "CLAUSE-FIXTURE-POS-UNKEYABLE",
+                    f"{clause.id}: {fixture!r} matches the fingerprint but the subject extractor "
+                    f"finds no operand in it, so the clause abstains and this occasion is never "
+                    f"denied")
     for fixture in clause.fixtures_neg:
         if _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-NEG-HIT", f"{clause.id}: {fixture!r}")
