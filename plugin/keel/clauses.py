@@ -512,12 +512,6 @@ def _admit(clause: Clause) -> Clause:
     return clause
 
 
-def load_file(path) -> Clause:
-    with Path(path).open(encoding="utf-8") as stream:
-        data = json.load(stream)
-    return _load_object(data)
-
-
 def _load_object(data: dict[str, Any]) -> Clause:
     clause = Clause(
         id=data["id"],
