@@ -1,0 +1,40 @@
+# LEDGER — Keel, at 4434ee7
+#
+# One row per clause. The question: does it ACTUALLY fire, and what saw it?
+#
+# WITNESS    exactly one of three dispositions, and no clause may have none. Either the
+#            occasion algebra extends it (its fingerprint is a regex on
+#            tool_input.command, so tests/test_occasion_algebra.py ranges over it), or a
+#            session in eval/corpus drives it through the real dispatcher and requires
+#            the denial to name it, or a LIVE waiver parks it with research and an
+#            expiry. That totality is itself a law:
+#            test_no_clause_escapes_both_the_algebra_and_the_corpus.
+#            Neither disposition is a subset of the other and a clause may have both.
+# LABEL      machine-checked: the totality law is part of the suite, and a lapsing
+#            waiver reddens it with no edit -- inaction restores the demand.
+
+repo	piece	event	fingerprint_kind	witness	label
+Keel	A01	PreToolUse	regex@tool_input.command	occasion-algebra + corpus:a01-recovery.jsonl,a01-unverified-push.jsonl	machine-checked
+Keel	A02	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	A03	PreToolUse	regex@tool_input.command	occasion-algebra + corpus:a03-force-push-unfetched.jsonl	machine-checked
+Keel	C03-verify-what-returns	Stop	always@-	corpus:c03-inherited-unread.jsonl	machine-checked
+Keel	C08-check-can-fail	Stop	always@-	waiver(live)	machine-checked
+Keel	C09-checker-excludes-self	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	D01	PreToolUse	regex@tool_name	corpus:d01-blind-dispatch.jsonl	machine-checked
+Keel	P01	PreToolUse	regex@tool_name	corpus:p01-plan-from-nothing.jsonl	machine-checked
+Keel	P02	PreToolUse	regex@tool_name	corpus:p02-plan-without-asking.jsonl	machine-checked
+Keel	T01	Stop	always@-	corpus:t01-done-while-dirty.jsonl	machine-checked
+Keel	T02	Stop	always@-	corpus:t02-push-report-not-landing.jsonl	machine-checked
+Keel	U01	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U02	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U03	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U06	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U08	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U09	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U10	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U12	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U13	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U19	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U20	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U24	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
+Keel	U25	PreToolUse	regex@tool_input.command	occasion-algebra	machine-checked
