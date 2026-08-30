@@ -23,8 +23,11 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import pathlib
+import subprocess
 import sys
+import tempfile
 import unittest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -90,12 +93,78 @@ class EventSurface(unittest.TestCase):
                     C._admit(probe)
                 self.assertEqual(caught.exception.code, "CLAUSE-EVENT-UNKNOWN")
 
-    def test_an_enforceable_event_is_admitted(self):
-        """The other half of the control: _admit is not simply refusing everything."""
+    def test_every_enforceable_event_is_admitted(self):
+        """The other half of the control: _admit is not simply refusing everything.
+
+        This used to build `dataclasses.replace(proto, event=proto.event)` -- which is `proto`
+        -- and then assert `proto.event in C._EVENTS`. `proto` comes from `load_default()`,
+        which has already put it through `_admit`, so both statements were guaranteed by the
+        line that produced the value. It could not fail, and it covered exactly one event: the
+        first row's.
+
+        Every event in `_EVENTS` is now admitted, so the control is over the whole set rather
+        than over whichever event happens to sort first."""
         proto = C.load_default()[0]
-        admitted = C._admit(dataclasses.replace(proto, event=proto.event))
-        self.assertEqual(admitted.event, proto.event)
-        self.assertIn(proto.event, C._EVENTS)
+        self.assertTrue(C._EVENTS, "no event is enforceable; the refusal control is vacuous")
+        for event in sorted(C._EVENTS):
+            with self.subTest(event=event):
+                admitted = C._admit(dataclasses.replace(proto, id="ZZZ-probe", event=event))
+                self.assertEqual(admitted.event, event)
+
+    def test_every_routed_event_actually_gets_a_decision(self):
+        """The module docstring says "every routed event must have a decision". Nothing checked it.
+
+        The two laws above compare DECLARATIONS -- hook-file keys against `HANDLERS` keys, and
+        `_EVENTS` against `_NON_ENFORCING`. An event present in both places whose handler raises,
+        hangs, or returns something the host cannot read passes all of them. And the dispatcher's
+        contract is not "does not crash": it fails OPEN, so a handler that dies prints nothing and
+        exits 0, which is indistinguishable from a clean allow unless the exit code and the
+        payload are both read.
+
+        Every registered event is therefore SENT, and each must come back with exit 0 and a body
+        the host can parse -- `{}` for an allow is a decision; a traceback is not.
+        """
+        registered = sorted(set(dispatch.HANDLERS))
+        self.assertTrue(registered, "no event is routed at all; this law is vacuous")
+        with tempfile.TemporaryDirectory(prefix="keel-event-surface-") as state:
+            for event in registered:
+                with self.subTest(event=event):
+                    payload = {"hook_event_name": event, "session_id": f"surface-{event}",
+                               "cwd": "/tmp", "tool_name": "Bash",
+                               "tool_input": {"command": "echo hello"},
+                               "last_assistant_message": "done"}
+                    done = subprocess.run(
+                        [sys.executable, "-m", "keel.dispatch"], input=json.dumps(payload),
+                        text=True, capture_output=True, timeout=120,
+                        env={**os.environ, "KEEL_STATE_DIR": state,
+                             "CLAUDE_PLUGIN_ROOT": str(REPO / "plugin"),
+                             "PYTHONPATH": str(REPO / "plugin")})
+                    self.assertEqual(0, done.returncode,
+                                     f"{event}: dispatcher exited {done.returncode}\n"
+                                     f"{done.stderr[-800:]}")
+                    self.assertNotIn("Traceback", done.stderr,
+                                     f"{event}: the handler raised; keel fails open, so this "
+                                     f"reaches the host as a silent allow\n{done.stderr[-800:]}")
+                    try:
+                        body = json.loads(done.stdout or "{}")
+                    except json.JSONDecodeError:
+                        self.fail(f"{event}: the dispatcher printed something the host cannot "
+                                  f"parse, so it rendered no decision: {done.stdout[:400]!r}")
+                    # THE ACTUAL PROPERTY, and the reason exit code alone is not enough. Keel
+                    # fails OPEN by design: a handler that raises still exits 0 and still prints
+                    # a body. What it does NOT do quietly is pass the call -- it says so, in a
+                    # systemMessage naming the event and the exception, and on stderr. So the
+                    # law is that no routed event comes back UNCHECKED, and the notice keel
+                    # already emits is what makes that observable.
+                    self.assertNotIn(
+                        "WITHOUT BEING CHECKED", json.dumps(body),
+                        f"{event}: the handler did not render a decision; keel failed open and "
+                        f"said so. This event is registered and routed, so a call arriving on it "
+                        f"is passed unchecked.\n{done.stdout[:600]}")
+                    self.assertNotIn(
+                        "NOT-EVALUABLE, failing open", done.stderr,
+                        f"{event}: the dispatcher reported NOT-EVALUABLE for a routed "
+                        f"event\n{done.stderr[-800:]}")
 
 
 if __name__ == "__main__":
