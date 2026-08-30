@@ -1,0 +1,4 @@
+{"description": "a patch is applied without anything having read the target", "clause": "U12", "derailment": "patch -p1 with no search of the file it rewrites", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "patch -p1 < changes.txt"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "rg 'def main' src/"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "rg 'def main' src/"}}

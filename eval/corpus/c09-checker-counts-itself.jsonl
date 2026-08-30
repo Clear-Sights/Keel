@@ -1,0 +1,4 @@
+{"description": "a process check whose own grep is one of the processes it counts", "clause": "C09-checker-excludes-self", "derailment": "ps | grep names the grep as a match, so the check reports a survivor that is the check", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "ps aux | grep python"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "ps aux | grep -v grep | grep python"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "ps aux | grep -v grep | grep python"}}

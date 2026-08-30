@@ -1,0 +1,4 @@
+{"description": "a delete with no test run standing behind it", "clause": "U20", "derailment": "rm removes a build product with nothing having shown the tree still passes", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "rm build/output.o"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "pytest -q"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "pytest -q"}}

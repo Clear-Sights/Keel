@@ -1,0 +1,4 @@
+{"description": "a branch is switched to without verifying it exists", "clause": "U09", "derailment": "git switch to a name nothing has resolved: a typo creates or detaches instead", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git switch release-2"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git rev-parse --verify release-2"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git rev-parse --verify release-2"}}

@@ -1,0 +1,4 @@
+{"description": "a process is killed without anything having looked at the table", "clause": "U03", "derailment": "kill names a pid no ps or pgrep in this session produced", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "kill 4821"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "ps aux"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "ps aux"}}

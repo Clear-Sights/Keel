@@ -1,0 +1,4 @@
+{"description": "an in-place rewrite with nothing comparing before and after", "clause": "U19", "derailment": "sed -i edits the file and no command establishes what changed", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "sed -i s/old/new/ config.txt"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "sha256sum config.txt"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "sha256sum config.txt"}}

@@ -1,0 +1,4 @@
+{"description": "a mutating HTTP request carries no authorization", "clause": "U06", "derailment": "curl -X POST with no Authorization header: the failure will read as a server problem", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "curl -X POST https://api.example.com/v1/items"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "curl -H 'Authorization: Bearer t' -X POST https://api.example.com/v1/items"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "curl -H 'Authorization: Bearer t' -X POST https://api.example.com/v1/items"}}

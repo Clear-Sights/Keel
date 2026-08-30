@@ -1,0 +1,4 @@
+{"description": "the dispatcher is run before anything established it can run", "clause": "U01", "derailment": "dispatch.sh invoked with no probe of the child's capability", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "dispatch.sh"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 probe_child_capability.py --writable-home"}}
+{"hook_event_name": "PostToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 probe_child_capability.py --writable-home"}}

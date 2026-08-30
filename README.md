@@ -253,10 +253,17 @@ dispatch code, not guessed:
 ## Evidence
 
 `python3 eval/replay.py` from the repository root replays recorded sessions through the real
-dispatcher: three derailments[^m-derailments] (a push with no status on record, a force-push with no fetch, a
-"done" claim over a dirty tree) each denied at or before the event where the session went wrong,
-a recovery session where the same denied call passes after its guard, and a benign control that
-stays silent — 5/5,[^m-replay] standard library only, and succeeds iff every session meets its expectation.
+dispatcher: 23 derailments[^m-derailments] — **one for every clause that is not parked by a live
+waiver** — each denied at or before the event where the session went wrong, and each required to
+name the clause it declares rather than merely to deny, so a session is evidence about its own
+row and not about the table. Plus a recovery session where the same denied call passes after its
+guard, and a benign control that stays silent — 25/25,[^m-replay] standard library only, and
+succeeds iff every session meets its expectation.
+
+Two of those 23 needed the shape the A03 session already used: a clause declared SUPERSET of
+another in `OVERLAPS.tsv` speaks first, so `U02` and `U13` are reached by discharging `U01` and
+`U12` in the session before the narrower question is asked. Written the naive way they read as
+unreachable, which is what the "first fire must name the declared clause" rule is for.
 
 ## Why this is not a deny list
 
