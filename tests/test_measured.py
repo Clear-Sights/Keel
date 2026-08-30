@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import csv
 import os
+import shlex
 import subprocess
 import unittest
 
@@ -111,6 +112,49 @@ class EveryMeasuredRowStillMeasuresThat(unittest.TestCase):
                          "a measured row's denominator disagrees with the command behind it")
         self.assertGreater(evaluated, 0,
                            "no row carries a numeric denominator, so this test checked nothing")
+
+    # THE TWO HALVES OF A RATIO MUST COME FROM ONE OBSERVATION. Each row's VALUE and
+    # DENOMINATOR are recomputed above by their own command, in their own process. That
+    # makes each half true on its own and says nothing about the pair: `23/25` is
+    # `fires(glob A) / files(glob B)` and `25/25` is `passed(replay A) / sessions(replay B)`.
+    # A corpus that changed between the two, or a replay that is not deterministic, would
+    # publish a coherent-looking fraction that no single run ever produced. These rows name
+    # the joint measurement that produces both numbers at once.
+    JOINT = {
+        "derailments": (
+            'import glob,json; paths=sorted(glob.glob("eval/corpus/*.jsonl")); '
+            'print(sum(json.loads(open(p).readline()).get("expect","fires")=="fires" '
+            'for p in paths), len(paths))'),
+        "replay": (
+            'import re,subprocess; '
+            'p=subprocess.run(["python3","eval/replay.py"],capture_output=True,text=True); '
+            'm=re.search(r"REPLAY sessions=(\\d+) passed=(\\d+) failed=0",p.stdout); '
+            'print(m.group(2), m.group(1)) if p.returncode==0 and m else print("FAIL FAIL")'),
+    }
+
+    def test_every_ratio_is_produced_by_a_single_run(self) -> None:
+        published = {key: (value.strip(), denominator.strip())
+                     for key, value, denominator, *_ in rows()}
+        missing = sorted(set(self.JOINT) - set(published))
+        self.assertEqual([], missing,
+                         f"JOINT names rows MEASURED.tsv no longer carries: {missing}")
+        # Every row with a numeric denominator is a ratio, so every one of them needs a
+        # joint measurement. A row added without one is the defect, not an omission.
+        ratios = sorted(key for key, (_v, d) in published.items() if d != "-")
+        self.assertEqual(ratios, sorted(self.JOINT),
+                         "a row publishes a ratio with no joint measurement behind it")
+        wrong = []
+        for key, script in sorted(self.JOINT.items()):
+            got, code = self._measure(f"python3 -c {shlex.quote(script)}")
+            if code != 0:
+                wrong.append(f"{key}: its joint command exited {code}")
+                continue
+            parts = tuple(got.split())
+            if parts != published[key]:
+                wrong.append(f"{key}: publishes {published[key][0]}/{published[key][1]}, "
+                             f"but one run produced {'/'.join(parts)}")
+        self.assertEqual([], wrong,
+                         "a published ratio was assembled from two separate observations")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Move a value away from what its command prints, and this must go red naming the row.
