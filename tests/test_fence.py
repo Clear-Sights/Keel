@@ -674,6 +674,17 @@ SPELLED_TOTAL_RX = re.compile(
 )
 
 
+# Spelled totals no source can settle. Each is ORDINARY ENGLISH that SPELLED_TOTAL_RX reads as a
+# counted noun phrase -- "the one thing", "the two rows" -- not a claim about a quantity anything
+# computes. They are named here rather than left in a printed residue nobody reads, so a genuinely
+# unbacked total cannot hide among them.
+UNJOINABLE_TOTALS = (
+    "POINTS.md:173 'the one thing this'",   # "...which is the one thing this mechanism refuses"
+    "POINTS.md:179 'the two rows'",         # "the two rows above key on" -- a back-reference
+    "SKILL.md:129 'The one test defines'",  # "do not define. The one test defines."
+)
+
+
 class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
     """Every spelled-out total on a shipped page, joined to the thing it counts.
 
@@ -749,13 +760,33 @@ class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
     def test_the_check_reports_what_it_cannot_join(self) -> None:
         """Name the totals no source can settle, so the residue is visible rather than assumed."""
         counted = self.counted()
+        occurrences = list(self.occurrences())
         unjoined = sorted({
             f"{page.name}:{line} {phrase!r}"
-            for page, line, _, noun, phrase in self.occurrences() if noun not in counted
+            for page, line, _, noun, phrase in occurrences if noun not in counted
         })
-        self.assertIsInstance(unjoined, list)
-        print(f"\nDENOMINATOR subject=spelled-totals joined={len(counted)} "
-              f"unjoined={len(unjoined)}")
+        # THE DENOMINATOR IS OCCURRENCES, NOT DEFINITIONS. This printed
+        # `joined={len(counted)}` -- the number of noun-to-count definitions available, which
+        # includes definitions that matched no occurrence at all. The number that belongs beside
+        # `unjoined` is how many occurrences were actually settled, and those two can differ
+        # without anything noticing.
+        joined = [o for o in occurrences if o[3] in counted]
+        print(f"\nDENOMINATOR subject=spelled-totals occurrences={len(occurrences)} "
+              f"joined={len(joined)} unjoined={len(unjoined)} definitions={len(counted)}")
+        self.assertEqual(
+            len(occurrences), len(joined) + len(unjoined),
+            "an occurrence is either joined to a computed count or named as unjoined; it cannot "
+            "be both or neither")
+        # `assertIsInstance(unjoined, list)` stood here, over a value built by `sorted(...)`,
+        # which returns a list always: it could not fail, and the residue this test is named for
+        # was only printed. The residue is DECLARED instead, so a new spelled total that no
+        # source can settle has to be named rather than absorbed into a number nobody reads.
+        self.assertEqual(
+            sorted(UNJOINABLE_TOTALS), unjoined,
+            "the set of spelled totals no source can settle has changed. A new one means a page "
+            "states a number nothing computes -- give it a source, or name it in "
+            "UNJOINABLE_TOTALS with the reason. One that disappeared now has a source, so take "
+            "it off the list.")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Retitle ACTS.md against its own headings, and this must go red.

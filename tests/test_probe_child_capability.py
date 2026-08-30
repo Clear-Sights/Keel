@@ -37,7 +37,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN, REPO, smoke_replace
 
 PROBE = PLUGIN / "tools" / "probe_child_capability.py"
 
@@ -65,7 +65,24 @@ class TheProbeExists(unittest.TestCase):
         A probe kept anywhere else would be unrunnable for every installing user -- the same defect
         in a new location.
         """
-        self.assertEqual(PLUGIN, PROBE.parent.parent)
+        # NOT `PROBE.parent.parent == PLUGIN`. PROBE is DEFINED as
+        # `PLUGIN / "tools" / "probe_child_capability.py"`, so that equality is arithmetic on a
+        # path this module built, true whatever is or is not on disk -- it would pass with the
+        # probe deleted, or moved, or never written. The claim is that the file SHIPS: it exists,
+        # inside the subtree the marketplace installs, and not in the development tree beside it.
+        installed = REPO / "plugin"
+        self.assertTrue((installed / ".claude-plugin" / "plugin.json").is_file(),
+                        f"{installed} is not the installed plugin subtree, so locating the probe "
+                        f"inside it proves nothing")
+        found = sorted(installed.rglob("probe_child_capability.py"))
+        self.assertEqual(
+            [PROBE], found,
+            f"the probe is not where the plugin installs it. Found {found}; expected exactly "
+            f"{PROBE}. A probe kept outside `plugin/` is unrunnable for every installing user.")
+        self.assertEqual(
+            [], sorted((REPO / "tests").rglob("probe_child_capability.py")),
+            "a copy of the probe lives under tests/, which is not installed; the shipped one is "
+            "then not the one being exercised")
 
 
 class TheProbeRuns(unittest.TestCase):
