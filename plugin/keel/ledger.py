@@ -34,7 +34,14 @@ from dataclasses import dataclass, asdict
 
 # Obligations are UN-WINDOWED within a session: a promise does not expire because an hour passed.
 # Events may be windowed for cost; demands never are.
-OPEN, DISCHARGED = "open", "discharged"
+# NO `state` FIELD, and this is the reason rather than an omission. Openness is COMPUTED from
+# row kinds -- `open_ids` is the demand rows minus the discharge rows -- so a stored state would
+# be a second source of truth for the same fact, and the two drift the moment a discharge row is
+# appended without the earlier demand row being rewritten, which this append-only journal never
+# does. `Demand` used to carry `state: str = OPEN`, serialized into every row by `asdict` and
+# read by nothing: a discharged demand went on carrying `"state": "open"` on disk forever. A
+# `DISCHARGED = "discharged"` constant sat beside it with no reference anywhere -- the state it
+# named could not be reached, because nothing ever assigned the field.
 
 
 def state_dir() -> pathlib.Path:
@@ -128,7 +135,6 @@ class Demand:
     clause_id: str
     subject: str
     reason: str
-    state: str = OPEN
 
 
 class Ledger:
