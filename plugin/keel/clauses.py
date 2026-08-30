@@ -21,12 +21,37 @@ from typing import Any
 # anchor shape, read by everything that needs it.
 CONSTRUCTION_ANCHOR = re.compile(r"POINTS\.md#[a-z0-9][a-z0-9-]*")
 
+# The events a clause may target. A clause naming anything else is refused
+# CLAUSE-EVENT-UNKNOWN by `_admit`, and because a single `_admit` failure makes the whole
+# table unloadable -- which the dispatcher reports as a deny -- such a clause would deny
+# every tool call, not merely fail to fire.
+#
+# This is a STRICT SUBSET of what the dispatcher routes, and that gap was undeclared: the
+# plugin registers eight events in hooks.json and HANDLERS routes all eight, but only these
+# five can carry enforcement. The other three are named below rather than left as an
+# absence, so that adding a handler without deciding whether clauses may target it is a
+# decision someone has to make out loud. `tests/test_event_surface.py` holds the two sets to
+# exactly the dispatcher's own, so neither can drift alone.
 _EVENTS = {
     "PreToolUse",
     "PostToolUse",
     "Stop",
     "SubagentStop",
     "SessionStart",
+}
+
+# Routed by the dispatcher and registered with the host, but deliberately NOT targetable by a
+# clause. Each entry says why it is bookkeeping rather than an enforcement point. An event in
+# neither this set nor `_EVENTS` is undecided, and the law in tests/test_event_surface.py
+# goes red rather than letting it default to unenforceable in silence.
+_NON_ENFORCING = {
+    "SubagentStart": "seeds a subagent's session state; the obligations it seeds are enforced "
+                     "at SubagentStop, which is where a subagent can still be denied",
+    "UserPromptSubmit": "records the turn boundary. Denying here would refuse a prompt before "
+                        "any tool is proposed, which is not what any clause in this table is "
+                        "about",
+    "PreCompact": "records that context was compacted. There is no act to permit or refuse, "
+                  "and a deny would block compaction rather than any behaviour",
 }
 
 
