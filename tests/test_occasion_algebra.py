@@ -39,7 +39,7 @@ import unittest
 from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
-from keel.clauses import _regex_predicate
+from keel.clauses import _regex_predicate, load_default, waiver_status
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 # Beside MEASURED.tsv at the repository root, NOT inside `plugin/`: `plugin/` is what the
@@ -154,6 +154,67 @@ class OccasionAlgebra(unittest.TestCase):
                 f"{len(self.commands)} fixture commands: it can never fire. Either give it a "
                 f"fixture that exercises its occasion, or withdraw it. It cannot be parked: this "
                 f"table has no field that stops a clause firing.")
+
+    def test_no_clause_escapes_both_the_algebra_and_the_corpus(self):
+        """Every clause is graded by SOMETHING. A clause in neither place is graded by nothing.
+
+        `extensions()` admits a clause only when its fingerprint is `kind: regex` AND keyed
+        `on: tool_input.command`. That is correct for what this module computes -- an algebra over
+        command strings -- but it is a silent filter, and the two laws above range over its output.
+        A clause it drops is not held to them and nothing said so: no warning, no count, no `else`.
+
+        Seven of the twenty-four are dropped today. Four are `kind: always` (C03, C08, T01, T02)
+        and three are keyed `on: tool_name` (D01, P01, P02). Before this law, five of those seven
+        had no evidence of any kind that they can deny, and the table-wide guarantee read as
+        though it covered them.
+
+        This is the totality: a clause is either extended here, or it is named by a replay session
+        in `eval/corpus`, which drives it through the real dispatcher and requires the denial to
+        name it. Neither is a subset of the other and a clause may have both. What no clause may
+        have is neither.
+        """
+        corpus = REPO / "eval" / "corpus"
+        declared = set()
+        for session in sorted(corpus.glob("*.jsonl")):
+            header = json.loads(session.read_text().splitlines()[0])
+            if header.get("clause"):
+                declared.add(header["clause"])
+
+        # A clause parked by a LIVE waiver is the third disposition, and it is a real one: it
+        # cannot be driven, because `_applicable` skips it. It is not silence -- the waiver
+        # carries its research and an expiry. The expiry is why this stays honest: on the day it
+        # lapses the clause enforces again with no edit, and this law goes red until a session
+        # for it exists. Inaction restores the demand rather than retiring it.
+        parked = {clause.id for clause in load_default()
+                  if waiver_status(clause) == "live"}
+
+        ungraded = sorted(c["id"] for c in self.records
+                          if c["id"] not in self.ext and c["id"] not in declared
+                          and c["id"] not in parked)
+        self.assertFalse(
+            ungraded,
+            f"these clauses are held by nothing: {ungraded}. `extensions()` drops them (their "
+            f"fingerprint is not a regex on {COMMAND!r}), no session in eval/corpus declares "
+            f"them, and no live waiver parks them -- so nothing in this repository has observed "
+            f"them deny. Either give one a corpus session naming it, or withdraw it. If one was "
+            f"parked, its waiver has lapsed and the clause is enforcing again.")
+
+    def test_every_corpus_session_declares_a_clause_that_exists(self):
+        """A session naming a clause the table does not carry grades a rule nobody ships."""
+        corpus = REPO / "eval" / "corpus"
+        known = {c["id"] for c in self.records}
+        for session in sorted(corpus.glob("*.jsonl")):
+            header = json.loads(session.read_text().splitlines()[0])
+            declared = header.get("clause")
+            if declared is None:
+                self.assertEqual(
+                    header.get("expect"), "none",
+                    f"{session.name} declares no clause and is not a control session; a session "
+                    f"that names no clause is evidence about nothing")
+                continue
+            self.assertIn(declared, known,
+                          f"{session.name} declares {declared}, which is not a clause in "
+                          f"clauses.json")
 
     def test_every_clause_matches_its_own_positive_fixtures(self):
         """A positive fixture its own fingerprint misses means the two disagree about the occasion."""

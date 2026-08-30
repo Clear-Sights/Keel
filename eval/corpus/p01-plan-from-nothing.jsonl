@@ -1,0 +1,2 @@
+{"description": "a session presents a plan without having read, globbed or grepped anything", "clause": "P01", "derailment": "the plan is offered for approval on no inspected evidence; approving it commits the session to a shape nobody checked", "derails_at": 0}
+{"hook_event_name": "PreToolUse", "session_id": "p01", "cwd": "/work/repo", "tool_name": "ExitPlanMode", "tool_input": {"plan": "rewrite the dispatcher"}}

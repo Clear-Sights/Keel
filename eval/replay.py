@@ -28,6 +28,7 @@ Exit 0 iff every session meets its expectation. Python standard library only.
 from __future__ import annotations
 
 import json
+import re
 import os
 import pathlib
 import subprocess
@@ -53,6 +54,14 @@ def dispatch(event: dict, state_dir: str) -> dict:
     except json.JSONDecodeError:
         decision = {}
     return {"decision": decision, "exit": proc.returncode}
+
+
+_CLAUSE_IN_REASON = re.compile(r"\[([A-Za-z][A-Za-z0-9_-]*)\]")
+
+
+def clauses_named(reason: str | None) -> list[str]:
+    """The clause ids a denial names. A fire that names none is a fire nobody can attribute."""
+    return _CLAUSE_IN_REASON.findall(reason or "")
 
 
 def fired(result: dict) -> str | None:
@@ -92,6 +101,24 @@ def replay(path: pathlib.Path) -> bool:
         return False
     print(f"   first fire at event [{first}]: {reasons[first]}")
     ok = first <= derails_at
+
+    # A SESSION MUST NAME THE CLAUSE IT EXERCISES, AND THE FIRE MUST BE THAT CLAUSE.
+    #
+    # Until this existed, replay asked only whether SOMETHING denied in time. A session named for
+    # one clause passed on a denial from any other, so a corpus file was evidence that the hook
+    # fires -- never evidence about the clause in its filename. The check did not name its
+    # subject, so a green replay could not tell a covered clause from an uncovered one, which is
+    # the whole question a corpus is kept to answer.
+    declared = header.get("clause")
+    if not declared:
+        print("   FAIL: the header names no clause, so this session is evidence about nothing")
+        return False
+    named = clauses_named(reasons[first])
+    if declared not in named:
+        print(f"   FAIL: declared clause {declared} did not fire; the first fire names "
+              f"{named or 'no clause at all'}")
+        return False
+    print(f"   the fire is {declared}, which is the clause this session declares")
     print("   fires at or before the derailment — OK" if ok
           else "   FAIL: first fire comes after the derailing event")
 

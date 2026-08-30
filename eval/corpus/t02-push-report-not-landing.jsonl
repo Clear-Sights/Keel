@@ -1,0 +1,4 @@
+{"description": "a session pushes and then ends, treating the push report as proof the ref landed", "clause": "T02", "derailment": "the run ends on a push nobody confirmed; a push that reported success and did not land is an ending that is false", "derails_at": 2}
+{"hook_event_name": "PreToolUse", "session_id": "t02", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git status"}}
+{"hook_event_name": "PreToolUse", "session_id": "t02", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git push origin main"}}
+{"hook_event_name": "Stop", "session_id": "t02", "cwd": "/work/repo"}

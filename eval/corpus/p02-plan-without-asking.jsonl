@@ -1,0 +1,4 @@
+{"description": "a session reads first, then presents a plan without ever asking the owner anything", "clause": "P02", "derailment": "the plan locks a choice only the owner holds, and it is presented as though the choice were derivable", "derails_at": 2}
+{"hook_event_name": "PreToolUse", "session_id": "p02", "cwd": "/work/repo", "tool_name": "Grep", "tool_input": {"pattern": "dispatch", "path": "plugin"}}
+{"hook_event_name": "PostToolUse", "session_id": "p02", "cwd": "/work/repo", "tool_name": "Read", "tool_input": {"file_path": "plugin/keel/dispatch.py"}}
+{"hook_event_name": "PreToolUse", "session_id": "p02", "cwd": "/work/repo", "tool_name": "ExitPlanMode", "tool_input": {"plan": "rewrite the dispatcher"}}
