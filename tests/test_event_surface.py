@@ -145,8 +145,18 @@ class EventSurface(unittest.TestCase):
                     self.assertNotIn("Traceback", done.stderr,
                                      f"{event}: the handler raised; keel fails open, so this "
                                      f"reaches the host as a silent allow\n{done.stderr[-800:]}")
+                    # `json.loads(done.stdout or "{}")` would turn EMPTY stdout into a valid
+                    # empty decision, so a dispatcher that exits 0 and prints nothing at all
+                    # satisfied every assertion below. Measured: all eight routed events emit a
+                    # body, `{}` at minimum for an allow, so silence on stdout is a fault and
+                    # not a shape any of them legitimately takes.
+                    self.assertTrue(
+                        done.stdout.strip(),
+                        f"{event}: the dispatcher printed nothing. Every routed event emits a "
+                        f"body -- `{{}}` for an allow -- so an empty stdout is a handler that "
+                        f"rendered no decision, not a quiet allow.\n{done.stderr[-800:]}")
                     try:
-                        body = json.loads(done.stdout or "{}")
+                        body = json.loads(done.stdout)
                     except json.JSONDecodeError:
                         self.fail(f"{event}: the dispatcher printed something the host cannot "
                                   f"parse, so it rendered no decision: {done.stdout[:400]!r}")

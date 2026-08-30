@@ -51,9 +51,34 @@ def dispatch(event: dict, state_dir: str) -> dict:
     )
     try:
         decision = json.loads(proc.stdout or "{}")
+        parsed = True
     except json.JSONDecodeError:
-        decision = {}
-    return {"decision": decision, "exit": proc.returncode}
+        decision, parsed = {}, False
+    return {"decision": decision, "exit": proc.returncode, "parsed": parsed,
+            "stdout": proc.stdout, "stderr": proc.stderr[-400:]}
+
+
+def crashed(result: dict) -> str | None:
+    """Why this dispatch rendered no decision, or None if it rendered one.
+
+    SILENCE AND A CRASH ARE THE SAME BYTES TO `fired`. A hook that dies prints nothing, so
+    `fired` returns None -- exactly as it does for an allow -- and a control session then reads
+    "silent on every event -- OK" over a dispatcher that never evaluated a clause. `fired` reads
+    exit 2 as a block and treats EVERY OTHER non-zero exit as silence, which is where a crash
+    lands. Keel's contract is 0 for a rendered decision and 2 for a block, so anything else is a
+    fault; unparseable stdout is never a decision either.
+
+    Keel also fails OPEN on an internal error -- exit 0, with a notice saying the call was
+    allowed without being checked. That is the honest behaviour and it is exactly what makes the
+    fault observable here, so it counts as a fault too rather than as quiet.
+    """
+    if result["exit"] not in (0, 2):
+        return f"the dispatcher exited {result['exit']}: {result['stderr'].strip()!r}"
+    if not result["parsed"]:
+        return "the dispatcher printed something that is not JSON, so it rendered no decision"
+    if "WITHOUT BEING CHECKED" in result["stdout"]:
+        return "keel failed open: the event was allowed without being checked"
+    return None
 
 
 _CLAUSE_IN_REASON = re.compile(r"\[([A-Za-z][A-Za-z0-9_-]*)\]")
@@ -88,6 +113,21 @@ def replay(path: pathlib.Path) -> bool:
     first = next((i for i, reason in enumerate(reasons) if reason), None)
 
     print(f"\n== {path.stem}: {header['description']}")
+
+    # A SESSION WITH NO EVENTS EVALUATED NOTHING and would otherwise pass: with `results` empty
+    # `first` is None, which a control session reads as correct silence, and the file still
+    # counts toward `sessions` and `passed`. An empty denominator is not a clean one.
+    if not events:
+        print("   FAIL: this session carries no events, so it is evidence about nothing")
+        return False
+
+    # A CRASH IS NOT SILENCE. Checked before anything reads `reasons`, so no later branch can
+    # read a dead hook as an allow.
+    faults = [(i, why) for i, why in ((i, crashed(r)) for i, r in enumerate(results)) if why]
+    if faults:
+        for index, why in faults:
+            print(f"   FAIL: event [{index}] rendered no decision -- {why}")
+        return False
     if expect == "none":
         ok = first is None
         print("   control session: " + ("silent on every event — OK"
