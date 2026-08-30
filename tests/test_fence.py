@@ -346,6 +346,41 @@ class SharedVocabulary(unittest.TestCase):
                 f"report a refresh that silently skipped this source",
             )
 
+        # THE REFRESH COMMAND MUST RE-RESOLVE WHAT THE PIN CLAIMS. Naming a path in the command
+        # string is weaker than resolving it: `echo plugin/clauses/ADMISSION.md` mentions the
+        # path and re-resolves nothing. Each distinct source path must be rev-parsed, and so must
+        # the commit -- a refresh that updates blobs without re-reading the commit would leave the
+        # snapshot's identity pointing at a revision its contents no longer came from.
+        refresh = provenance.get("refresh_with", "")
+        self.assertRegex(
+            refresh, r"rev-parse\s+\S*origin/\w+(?!\S*:)",
+            f"the refresh command does not rev-parse the source branch, so it cannot update the "
+            f"commit this snapshot is pinned to: {refresh!r}")
+        for path in sorted({s["path"] for s in sources}):
+            self.assertRegex(
+                refresh, r"rev-parse\s+\S+:" + re.escape(path),
+                f"the refresh command names {path!r} but never rev-parses it, so running it "
+                f"would not re-read that source's blob: {refresh!r}")
+
+        self.assertRegex(
+            provenance.get("read_on", ""), r"^\d{4}-\d{2}-\d{2}$",
+            "provenance carries no ISO date for when the snapshot was read, so its age is "
+            "unknowable")
+        self.assertTrue(provenance.get("repository"),
+                        "provenance names no repository, so the commit sha identifies nothing")
+
+    # STATED LIMIT, so this class is not read as more than it is. Everything above checks that
+    # the pin is COMPLETE and RE-RESOLVABLE: every vendored list has exactly one supplying
+    # source, the commit and blobs are full shas, the repository and date are present, and the
+    # refresh command actually rev-parses each of them. It does NOT resolve them. The source is
+    # a separate repository that this checkout does not contain and CI has no access to, so
+    # fabricated-but-consistent provenance would pass and no test here can tell.
+    #
+    # What is verified instead is the half that lives on this side: the vendored WORDS appear in
+    # the pages verbatim (test_the_definition_is_quoted_verbatim,
+    # test_every_shape_has_its_own_row_in_the_shapes_table), which is the drift the class
+    # docstring names as the real risk -- a paraphrase turning one taxonomy into two.
+
     def test_the_definition_is_quoted_verbatim(self) -> None:
         """Both halves rest on one sentence; a drift of a word makes two ideas that resemble
         each other, and nothing downstream would report it."""

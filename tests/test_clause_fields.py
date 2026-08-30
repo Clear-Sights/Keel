@@ -50,6 +50,13 @@ def _code_only(source: str) -> str:
     the form `_mentions` is built to find. Blanking those made four fields look unread and
     reddened four tests. A docstring is a string that stands alone as a statement; a dict key is
     not, and stays.
+
+    THE LIMIT THIS LEAVES, stated because it errs toward a silent pass rather than a noisy one.
+    Blanking prose still leaves code that is compiled but UNREACHABLE: `if False:
+    row.get("costly")` is code, so a field named only there counts as read by the dispatcher.
+    Reachability is not a question a source scan answers. What bounds it is that the shipped
+    runtime contains no such branch -- `test_no_dead_branch_hides_a_field_read` asserts that, so
+    the gap is measured rather than assumed empty, and reddens the moment one appears.
     """
     try:
         tree = ast.parse(source)
@@ -182,6 +189,31 @@ class NoTestAssertsFromWhatTheProductIgnores(unittest.TestCase):
     # The clause fields no code reads. Authored prose beside a row is legitimate -- this is the
     # list of what is allowed to be prose, and adding to it is a decision someone states here.
     ANNOTATION_ONLY = annotation_only_fields()
+
+    def test_no_dead_branch_hides_a_field_read(self) -> None:
+        """The bound on `_code_only`'s remaining limit, measured rather than assumed.
+
+        A clause field named only inside `if False:` would count as read by the dispatcher, and
+        no source scan can tell the difference. What CAN be established is that the runtime holds
+        no statically dead branch at all, which is what makes that gap empty here.
+        """
+        dead = []
+        for path in sorted(PLUGIN.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, (ast.If, ast.While)):
+                    continue
+                test = node.test
+                if (isinstance(test, ast.Constant) and not test.value) or (
+                        isinstance(test, ast.Name) and test.id == "False"):
+                    dead.append(f"{path.relative_to(PLUGIN)}:{node.lineno}")
+        self.assertEqual(
+            [], dead,
+            f"the runtime carries a statically dead branch: {dead}. A clause field named only "
+            f"inside one is counted as read by the dispatcher by the rule above, and no source "
+            f"scan can tell the difference. Either remove the branch, or rewrite the limit "
+            f"stated on `_code_only`, which says this set is empty.")
 
     def test_the_fields_nothing_reads_are_named(self) -> None:
         """Authored prose beside a row is legitimate. Being unable to list it is not.
