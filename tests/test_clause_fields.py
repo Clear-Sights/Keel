@@ -21,6 +21,7 @@ at runtime -- is invisible here, so this measures the ordinary spelling and says
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -33,6 +34,48 @@ from pathlib import Path
 from tests.plant_support import PLUGIN, REPO, smoke_replace
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
+
+
+def _code_only(source: str) -> str:
+    """`source` with comments and DOCSTRINGS blanked -- not every string literal.
+
+    `_mentions` looks for a field as a QUOTED literal, and `_sources` handed it whole files, so a
+    field named only in a runtime comment counted as read by the dispatcher. That is the one
+    exemption this module must never grant: it is how a field nothing consumes gets treated as
+    consumed, and the rule below then permits a test to reason from it.
+
+    ONLY comments and docstrings are removed, and the distinction is the whole point. A first
+    draft blanked every string constant and broke the check: `costly`, `waiver`, `window` and
+    `occasion` are read as `data.get("costly")` -- quoted literals in live code, which is exactly
+    the form `_mentions` is built to find. Blanking those made four fields look unread and
+    reddened four tests. A docstring is a string that stands alone as a statement; a dict key is
+    not, and stays.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source
+    lines = source.splitlines(keepends=True)
+    starts = [0]
+    for line in lines:
+        starts.append(starts[-1] + len(line))
+    out = list(source)
+    for node in ast.walk(tree):
+        # A bare string expression: a docstring, or prose parked as a statement.
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) \
+                and isinstance(node.value.value, str) \
+                and getattr(node.value, "end_lineno", None) is not None:
+            begin = starts[node.value.lineno - 1] + node.value.col_offset
+            finish = min(starts[node.value.end_lineno - 1] + node.value.end_col_offset, len(out))
+            for index in range(begin, finish):
+                if out[index] != "\n":
+                    out[index] = " "
+    blanked = "".join(out)
+    kept = []
+    for line in blanked.splitlines(keepends=True):
+        hash_at = line.find("#")
+        kept.append(line[:hash_at] + "\n" if hash_at != -1 else line)
+    return "".join(kept)
 
 
 def _sources(root: Path) -> str:
@@ -85,6 +128,26 @@ def _denying_clause(command: str, session: str, state: str) -> str | None:
     return found.group(1) if found else None
 
 
+
+def _clauses_at_stop(session: str, state: str) -> set:
+    """EVERY clause id named in this session's Stop block, through the REAL dispatcher.
+
+    A set, not the first match: one Stop can report several undischarged demands, and reading
+    only the first makes the answer depend on which clause happens to sort earliest. `git push`
+    raises A01's demand as well as arming T02, so a first-match reading of the armed session
+    returns A01 and says nothing about the clause under test.
+    """
+    event = json.dumps({"hook_event_name": "Stop", "session_id": session, "cwd": "/tmp",
+                        "last_assistant_message": "done"})
+    done = subprocess.run(
+        [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
+        env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
+             "PYTHONPATH": str(PLUGIN)})
+    body = json.loads(done.stdout or "{}")
+    reason = body.get("reason") or ""
+    return set(re.findall(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason))
+
+
 def _fields() -> list[str]:
     rows = json.loads(CLAUSES.read_text(encoding="utf-8"))
     return sorted({key for row in rows for key in row})
@@ -93,7 +156,7 @@ def _fields() -> list[str]:
 class NoTestAssertsFromWhatTheProductIgnores(unittest.TestCase):
     def setUp(self) -> None:
         self.fields = _fields()
-        self.runtime = _sources(PLUGIN)
+        self.runtime = _code_only(_sources(PLUGIN))
         self.suite = _sources(REPO / "tests")
 
     def test_the_check_has_a_subject(self) -> None:
@@ -250,6 +313,42 @@ class ActivationIsOnlyDeclaredWhereItIsHonoured(unittest.TestCase):
             [], inert,
             "a clause declares `activated_by` on an event the dispatcher never activates on, so "
             f"the field does nothing; only {list(self.ACTIVATABLE)} are honoured")
+
+    def test_activation_is_observed_and_not_merely_declared(self) -> None:
+        """Drive a session with and without the activating occasion, and watch the difference.
+
+        The rule above compares two DECLARED JSON fields against a tuple this class writes, and
+        its sibling searches dispatch.py for a guard string. Neither sends an activation event or
+        observes a demand appearing, so `activated_by` could be ignored by the runtime entirely
+        and all of them stay green -- in a class whose docstring is about a field that LIES.
+
+        T02 is driven here because its activation is a plain observable: a `git push` arms it,
+        and a Stop before any push must not raise its demand. Two sessions, identical but for
+        the push, must differ -- and the assertion runs in BOTH directions, so a dispatcher that
+        raises the demand always, or never, fails.
+        """
+        rows = {r["id"]: r for r in json.loads(CLAUSES.read_text(encoding="utf-8"))}
+        clause = rows["T02"]
+        arming = next(f for f in clause["fixtures_activate"] if isinstance(f, str))
+
+        def stop_after(commands, session, state):
+            for command in commands:
+                _denying_clause(command, session, state)
+            return _clauses_at_stop(session, state)
+
+        with tempfile.TemporaryDirectory(prefix="keel-activation-") as state:
+            unarmed = stop_after(["echo hello"], "activation-unarmed", state)
+            armed = stop_after([arming], "activation-armed", state)
+
+        self.assertNotIn(
+            "T02", unarmed,
+            "a Stop with no activating occasion raised T02's demand anyway, so `activated_by` "
+            f"is not being honoured: the clause fires at every ending rather than after a "
+            f"push. Stop named {sorted(unarmed)}")
+        self.assertIn(
+            "T02", armed,
+            f"a Stop after {arming!r} did not raise T02's demand (Stop named "
+            f"{sorted(armed)}), so the activation this clause declares never arms it")
 
     def test_the_check_has_a_subject(self) -> None:
         """Nothing declaring activation makes the rule above vacuous."""

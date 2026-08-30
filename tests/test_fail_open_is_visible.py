@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import ast
 import json
 import os
 import subprocess
@@ -125,10 +126,33 @@ class FailOpensAreVisible(unittest.TestCase):
         dispatcher where that is the right thing to emit: an exit that can decide uses its deny
         or block wire, and one that cannot must say so where the user reads.
         """
-        source = DISPATCH.read_text(encoding="utf-8")
-        self.assertNotIn('print("{}")', source,
-                         "a bare `{}` on stdout is a fail-open that explains nothing; emit "
-                         "`_open_not_evaluable(...)` instead")
+        # BY SHAPE, NOT BY SPELLING. `assertNotIn('print("{}")', source)` matched one exact
+        # string, so `print({})`, `print(json.dumps({}))`, `print("{" + "}")` or a helper
+        # returning the same bytes all passed a law whose subject is the OUTPUT. The AST is read
+        # instead: any `print` whose argument evaluates to an empty object, however it is
+        # written, is the forbidden silent allow.
+        tree = ast.parse(DISPATCH.read_text(encoding="utf-8"))
+        offenders = []
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "print" and node.args):
+                continue
+            arg = node.args[0]
+            # `print("{}")` and `print('{}')`
+            if isinstance(arg, ast.Constant) and arg.value == "{}":
+                offenders.append(f"line {node.lineno}: print of the literal \"{{}}\"")
+            # `print({})`
+            elif isinstance(arg, ast.Dict) and not arg.keys:
+                offenders.append(f"line {node.lineno}: print of an empty dict")
+            # `print(json.dumps({}))` and any dumps of an empty literal
+            elif isinstance(arg, ast.Call) and isinstance(arg.func, ast.Attribute) \
+                    and arg.func.attr == "dumps" and arg.args \
+                    and isinstance(arg.args[0], ast.Dict) and not arg.args[0].keys:
+                offenders.append(f"line {node.lineno}: print of json.dumps of an empty dict")
+        self.assertEqual(
+            [], offenders,
+            f"a bare empty object on stdout is a fail-open that explains nothing; emit "
+            f"`_open_not_evaluable(...)` instead. Found: {offenders}")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         smoke_replace(
