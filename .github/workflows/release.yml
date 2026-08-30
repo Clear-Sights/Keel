@@ -26,7 +26,33 @@ jobs:
           echo "releasing v$VERSION"
 
       - name: Run the replay evidence
-        run: python3 eval/replay.py
+        id: replay
+        run: |
+          # THE REPLAY'S OWN DENOMINATOR, carried to the release notes. Those notes stated a
+          # hard-coded "5/5 corpus replay" while the corpus held 25 sessions, so every release
+          # published a false number about the verification it had just performed -- and the
+          # real number was on this step's stdout. Ported from the same defect in
+          # Clear-Sights/Ward, found there first.
+          set +e
+          python3 eval/replay.py | tee /tmp/replay.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "Corpus replay failed with status $status."
+            exit "$status"
+          fi
+          summary=$(sed -n 's/^REPLAY sessions=\([0-9][0-9]*\) passed=\([0-9][0-9]*\) failed=\([0-9][0-9]*\).*/\1 \2 \3/p' /tmp/replay.log | tail -1)
+          if [ -z "$summary" ]; then
+            echo "eval/replay.py printed no denominator; its exit code stands on nothing."
+            exit 1
+          fi
+          set -- $summary
+          if [ "$1" -eq 0 ] || [ "$2" -ne "$1" ] || [ "$3" -ne 0 ]; then
+            echo "Corpus replay reported sessions=$1 passed=$2 failed=$3."
+            exit 1
+          fi
+          echo "sessions=$1" >> "$GITHUB_OUTPUT"
+          echo "passed=$2" >> "$GITHUB_OUTPUT"
 
       - name: Build the install bundle (no eval, no tooling)
         run: |
@@ -71,5 +97,5 @@ jobs:
           git push origin "$TAG"
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes "Obligation-ledger hook for Claude Code and Codex: a costly call is denied until its cheap guard is on record, then the same call executes — and one skill whose pages carry each clause's positive construction. Verified at release time: the 5/5 corpus replay (\`python3 eval/replay.py\`). Install from \`keel-$VERSION.zip\` — it carries \`plugin/\` only (dispatcher, clause table, hooks, and the skill pages in one arm); the eval corpus lives in the repository, not the release bundle." \
+            --notes "Obligation-ledger hook for Claude Code and Codex: a costly call is denied until its cheap guard is on record, then the same call executes — and one skill whose pages carry each clause's positive construction. Verified at release time: the ${{ steps.replay.outputs.passed }}/${{ steps.replay.outputs.sessions }} corpus replay (\`python3 eval/replay.py\`). Install from \`keel-$VERSION.zip\` — it carries \`plugin/\` only (dispatcher, clause table, hooks, and the skill pages in one arm); the eval corpus lives in the repository, not the release bundle." \
             "keel-$VERSION.zip"
