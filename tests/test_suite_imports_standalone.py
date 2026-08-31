@@ -74,7 +74,11 @@ class EveryTestModuleLoadsAlone(unittest.TestCase):
         """Remove one module's stated dependency and this sweep must name that module."""
         smoke_replace(
             self, REPO / "tests" / "test_c08_activation.py",
-            b"from tests.plant_support import PLUGIN  # noqa: F401",
+            # The seam follows the module: `test_c08_activation` now imports `smoke_replace`
+            # alongside `PLUGIN`, because its own plant became a real fault injection rather than
+            # a string edit. The dependency being removed is the same one -- the import that puts
+            # `keel` on `sys.path` -- so the property under test is unchanged.
+            b"from tests.plant_support import PLUGIN, smoke_replace",
             b"# dependency removed by the plant",
             "tests.test_suite_imports_standalone.EveryTestModuleLoadsAlone."
             "test_the_suite_declares_its_own_imports",

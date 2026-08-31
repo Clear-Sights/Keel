@@ -40,7 +40,7 @@ from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
 from keel import clauses as C
-from keel.clauses import _regex_predicate, load_default, waiver_status
+from keel.clauses import _base_predicate, load_default, waiver_status
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 # Beside MEASURED.tsv at the repository root, NOT inside `plugin/`: `plugin/` is what the
@@ -83,9 +83,22 @@ def extensions(records, commands):
     out = {}
     for c in records:
         fp = c.get("fingerprint")
-        if isinstance(fp, dict) and fp.get("kind") == "regex" and fp.get("on") == COMMAND:
-            out[c["id"]] = frozenset(n for n, s in enumerate(commands)
-                                     if _regex_predicate(fp, s))
+        if not (isinstance(fp, dict) and fp.get("on") == COMMAND):
+            continue
+        # NO KIND BRANCH. Selecting on `kind == "regex"` here was a SILENT EXCLUSION: a clause
+        # whose fingerprint used any other kind simply never entered `out`, so both laws below
+        # passed over it while still reporting a denominator. It was known to drop four clauses;
+        # migrating the table to invocation matching would have taken that to twenty-one, and
+        # the module would have graded two rows of twenty-four while reading exactly as green as
+        # a full pass. A law that quietly stops evaluating its population is the defect this
+        # module exists to find, one level up. Asking the dispatcher's own entry point instead
+        # means a kind added later is covered on the day it is added, with no edit here.
+        event = {"hook_event_name": c.get("event"),
+                 "tool_name": (c.get("tools") or ["Bash"])[0],
+                 "session_id": "occasion-algebra"}
+        out[c["id"]] = frozenset(
+            n for n, s in enumerate(commands)
+            if _base_predicate(fp, {**event, "tool_input": {"command": s}}))
     return out
 
 
@@ -491,10 +504,26 @@ class OccasionAlgebra(unittest.TestCase):
         """
         smoke_replace(
             self, CLAUSES,
-            b'"pattern": "(?:^|[;&|\\\\n]\\\\s*)\\\\s*(?:git\\\\s+apply|patch\\\\s+-p\\\\d+)\\\\b"',
-            b'"pattern": "(?:^|[;&|\\\\n]\\\\s*)\\\\s*(?:git\\\\s+apply|patch\\\\s+-p\\\\d+|rm)\\\\b"',
+            # RE-AIMED for the invocation representation. The fault is unchanged: widen one
+            # fingerprint until it swallows occasions another clause owns, and this module must
+            # go red naming the pair. Under `kind: program` the widening is an added argv entry
+            # plus the removal of the `then_matches` gate, because BOTH bound the extension.
+            #
+            # Two earlier aims failed and are recorded rather than dropped. Adding `["rm"]` alone
+            # left the target GREEN: `then_matches` still demanded a `.patch`/`.diff` argument,
+            # so the added program matched nothing. Relaxing `then_matches` alone also left it
+            # green: U12 and U13 already carry a declared row, so a relation that merely CHANGES
+            # between two declared clauses is not an undeclared one. Only reaching a clause with
+            # no declared row -- A02 and U20, which own the deletes -- makes the red carry
+            # information. The `expected` string below was read off that run, not predicted.
+            b'"argv": [\n        [\n          "git",\n          "apply"\n        ],\n'
+            b'        [\n          "patch"\n        ]\n      ],\n'
+            b'      "then_matches": "[\\\\w./-]+\\\\.(?:patch|diff)"',
+            b'"argv": [\n        [\n          "git",\n          "apply"\n        ],\n'
+            b'        [\n          "patch"\n        ],\n        [\n          "rm"\n        ]\n      ],\n'
+            b'      "then_matches": "."',
             "tests.test_occasion_algebra.OccasionAlgebra.test_every_relation_is_declared",
-            "U12",
+            "U13 OVERLAP U20",
         )
 
 
