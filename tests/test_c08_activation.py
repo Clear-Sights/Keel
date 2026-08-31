@@ -29,7 +29,7 @@ import unittest
 # nothing had run the insert yet. It failed only OUTSIDE CI, which sets `PYTHONPATH: plugin` --
 # two spellings of one requirement, neither checked against the other. See
 # `tests/test_suite_imports_standalone.py`, which now makes that unreachable rather than unlikely.
-from tests.plant_support import PLUGIN  # noqa: F401  -- imported for its sys.path effect
+from tests.plant_support import PLUGIN, smoke_replace
 from keel import clauses as C
 
 # the pre-fix spelling, kept ONLY so the teeth test below can show this file is not vacuous
@@ -50,6 +50,13 @@ LOOKALIKES = [
     "F=plugin/makoto/checks/writeThrashRevert.py",
     "M=$SP/plugin_mut/makoto/checks/verifierExitMasking.py",
     "T=plugin/makoto/checks/canonFingerprints.py",
+    # ADDED because the three above could not activate even with the assignment rule DISARMED:
+    # the activation names the program, and none of their BASENAMES carries `check` or `verify`
+    # (`checks/` is in the path, not the program). So every one of them was refused for a reason
+    # unrelated to the property under test, and the cell was weaker than it read. This one is a
+    # real assignment of a real checker path, and it is refused ONLY because an assignment is not
+    # an invocation -- which is what makes the plant below able to redden the cell at all.
+    "F=tools/check_schema.py",
 ]
 
 
@@ -68,19 +75,28 @@ def c08() -> C.Clause:
 
 
 class OccasionIsAnInvocation(unittest.TestCase):
+    # DRIVEN THROUGH THE PREDICATE, not through a second copy of it. These two cells used to
+    # compile `activated_by["pattern"]` and `re.search` it against the command themselves, which
+    # is a second spelling of the rule the dispatcher applies -- the same defect that let a `;`
+    # inside quotes discharge a push guard. It also broke the moment the row stopped being a
+    # regex: under `kind: program` the pattern is matched against argv[0], so searching it over
+    # the whole command reported that `F=path/to/checks/x.py` ACTIVATED, which the dispatcher
+    # never did. Asking `_base_predicate` is asking what actually happens.
+    def _activates(self, command: str) -> bool:
+        predicate = c08().activated_by
+        return C._base_predicate(predicate, C._fixture_event(predicate, command)) is True
+
     def test_TEETH_real_checker_invocations_still_activate(self) -> None:
-        pattern = c08().activated_by["pattern"]
         for command in INVOCATIONS:
             with self.subTest(command=command):
-                self.assertIsNotNone(re.search(pattern, command),
-                                     "narrowing the occasion must not lose a real checker run")
+                self.assertTrue(self._activates(command),
+                                "narrowing the occasion must not lose a real checker run")
 
     def test_TEETH_a_variable_assignment_is_not_an_invocation(self) -> None:
-        pattern = c08().activated_by["pattern"]
         for command in LOOKALIKES:
             with self.subTest(command=command):
-                self.assertIsNone(re.search(pattern, command),
-                                  "an assignment keyed an obligation nothing can discharge")
+                self.assertFalse(self._activates(command),
+                                 "an assignment keyed an obligation nothing can discharge")
 
     def test_TEETH_the_key_never_captures_an_assignment(self) -> None:
         """Activation and keying are separate patterns; both had the defect, so both are checked."""
@@ -90,19 +106,28 @@ class OccasionIsAnInvocation(unittest.TestCase):
                     self.assertIsNone(re.search(spec["pattern"], command))
 
     def test_the_check_can_fail(self) -> None:
-        """Put the pre-fix character class back and the assertion above must go red.
+        """RE-AIMED at the mechanism that now provides the property.
 
-        Without this, `assertIsNone` would pass just as happily against a pattern that matches
-        nothing at all, and the two tests above would prove nothing about the narrowing.
+        The old plant re-broadened a character class inside the activation regex, because the
+        narrowing lived in that class. It does not any more: under `kind: program` the predicate
+        asks what the segment INVOKES, and `F=path/to/checks/x.py` invokes nothing -- the
+        tokenizer consumes a `VAR=value` prefix and finds no program behind it, so no pattern
+        could make an assignment activate. The property became structural, which is stronger than
+        a character class and is exactly why the old seam no longer exists to plant.
+
+        So the plant is now the tokenizer rule itself: stop recognising an assignment prefix, and
+        the assignment is read as the program it is not, and the TEETH cell above must go red.
         """
-        narrowed = c08().activated_by["pattern"]
-        self.assertIn(_NARROW_CLASS, narrowed, "the narrowed class is what ships")
-        broad = narrowed.replace(_NARROW_CLASS, _BROAD_CLASS)
-        self.assertNotEqual(broad, narrowed, "the plant must actually change the pattern")
-        for command in LOOKALIKES:
-            with self.subTest(command=command):
-                self.assertIsNotNone(re.search(broad, command),
-                                     "the old spelling must match, or these tests are vacuous")
+        smoke_replace(
+            self, PLUGIN / "keel" / "clauses.py",
+            b'if "=" in token and not token.startswith("-") '
+            b'and token.split("=", 1)[0].isidentifier():',
+            b'if False and "=" in token and not token.startswith("-") '
+            b'and token.split("=", 1)[0].isidentifier():',
+            "tests.test_c08_activation.OccasionIsAnInvocation."
+            "test_TEETH_a_variable_assignment_is_not_an_invocation",
+            "an assignment keyed an obligation nothing can discharge",
+        )
 
 
 if __name__ == "__main__":

@@ -62,6 +62,11 @@ class ClauseError(Exception):
         super().__init__(f"{code}: {detail}")
 
 
+# The one field a command covering reads. Named once so the loader's admissibility
+# rule and the predicates agree on what "reads the command" means.
+COMMAND_FIELD = "tool_input.command"
+
+
 @dataclass(frozen=True)
 class Clause:
     id: str
@@ -104,6 +109,10 @@ class Clause:
     # loader checks SHAPE only; resolution against the page's actual headings, and that no
     # section is left unclaimed, is the test fence's half -- it owns the page, this owns the row.
     construction: str = ""
+    # Required when a covering matches the raw command as TEXT rather than as an invocation.
+    # Text cannot tell an invocation from a mention, so a row that needs it must name what was
+    # tried -- the loader refuses the row otherwise, the way it refuses a missing `construction`.
+    why_no_program: str = ""
 
 
 def waiver_status(clause: Clause, today: date | None = None) -> str:
@@ -258,6 +267,21 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
         if predicate.get("scope") == "segment":
             return any(_regex_predicate(predicate, segment) for segment in segments(value))
         return _regex_predicate(predicate, value)
+    if kind == "program":
+        if not isinstance(value, str):
+            return False
+        # `any_of` composes whole program-predicates rather than widening one. U20's occasion is
+        # three unrelated invocations -- a bare `rm`, `git reset --hard`, `find ... -delete` --
+        # whose flag requirements differ per program. Folding them into one `then_matches` would
+        # either demand a flag of `rm` that it does not take, or make `--hard` optional for `git
+        # reset`, and the second is a false positive on every `git reset --soft`.
+        alternatives = predicate.get("any_of")
+        if alternatives is not None:
+            return any(
+                _base_predicate(dict(alt, kind="program", on=predicate.get("on", "")), event)
+                for alt in alternatives
+            )
+        return any(_segment_matches_program(predicate, segment) for segment in segments(value))
     return False
 
 
@@ -268,6 +292,175 @@ def _regex_predicate(predicate: dict[str, Any], value: str) -> bool:
         re.search(entry, value) is None
         for entry in predicate.get("unless") or []
     )
+
+
+_WRAPPERS = frozenset({"sudo", "env", "time", "nice", "exec", "command", "builtin"})
+
+
+_INTERPRETERS = re.compile(r"^python[0-9.]*$")
+
+
+# A shell reached with `-c` EXECUTES its argument. Measured before this existed: `bash -c 'git
+# push origin main'` read as argv ['bash', 'git'] and A01 DID NOT FIRE, while the identical plain
+# push did -- so seven characters of prefix walked any command past the whole table. That is a
+# MISSED ACTIVATION, and a missed activation is not the cheap direction: the costly act proceeds
+# with its guard removed, which is exactly what a false discharge buys. The argument is re-parsed
+# as the command it is, which cannot reopen the mention hole -- reaching this branch requires a
+# shell to have been INVOKED with `-c`, not a string that merely looks like one.
+_SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "ash", "fish"})
+
+# Launchers whose job is to run ANOTHER program in a prepared environment. `python3 -m pytest`
+# was already normalised to `pytest`; `uv run pytest` was not, and read as ['uv', 'run'] -- the
+# same invocation, seen differently because one route was Python's and the other was not. The
+# table is what removes that privilege: the delegated program is the subject in every ecosystem,
+# not only where the interpreter happens to be CPython.
+_RUN_LAUNCHERS = frozenset({"uv", "poetry", "pipenv", "pdm", "rye", "hatch", "nix"})
+_DIRECT_LAUNCHERS = frozenset({"npx", "bunx", "pnpx", "dlx"})
+
+# Options that consume the NEXT token as their value, per program. Finite and declared rather
+# than inferred: a value we fail to consume becomes a phantom subcommand, and a subcommand we
+# invent is a clause matching something that never ran. Only git's documented pre-subcommand
+# globals are listed, because those are the ones that can appear BEFORE the subcommand at all.
+# Options that are KNOWN to take no value, so the subcommand behind them is still reachable.
+# Declared for the same reason the value-taking set is: the alternative to a declaration here is
+# a guess, and a guess in this position forges a subcommand.
+_NO_VALUE_OPTIONS = {
+    "npm": frozenset({"--silent", "--quiet", "-s", "--verbose", "--no-color"}),
+    "yarn": frozenset({"--silent", "--verbose"}),
+    "pnpm": frozenset({"--silent"}),
+    "cargo": frozenset({"--quiet", "-q", "--verbose", "-v", "--offline", "--locked", "--release"}),
+    "go": frozenset({"-v", "-x"}),
+    "deno": frozenset({"-A", "--quiet"}),
+    "docker": frozenset({"--debug"}),
+    "git": frozenset({"--no-pager", "--paginate", "--bare", "--literal-pathspecs"}),
+}
+
+
+_VALUE_OPTIONS = {
+    "git": frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}),
+}
+
+
+def _invocation_tokens(segment: str) -> list[str]:
+    """The segment's tokens from the invoked program onward. One owner for the stripping rules."""
+    tokens = segment.split()
+    index = 0
+    while index < len(tokens):
+        # Quotes and a subshell's opening paren are SHELL SYNTAX, not part of the program name.
+        # Measured against this estate's own gates: `( cd "$STAGE" && "$VENV/bin/python" -m
+        # pytest ... )` yielded `python"` with the quote attached, so the interpreter was not
+        # recognised and the pytest behind it was invisible.
+        token = tokens[index].strip("\"'()")
+        if not token:
+            index += 1
+            continue
+        if "=" in token and not token.startswith("-") and token.split("=", 1)[0].isidentifier():
+            index += 1          # VAR=value prefix
+            continue
+        # The BASENAME decides, because an interpreter is just as much an interpreter when it is
+        # reached by path: `"$VENV/bin/python" -m pytest` is a pytest run, and testing the whole
+        # token against the interpreter pattern says it is not.
+        name = token.rsplit("/", 1)[-1]
+        if name in _WRAPPERS:
+            index += 1
+            continue
+        if _INTERPRETERS.match(name):
+            if index + 2 < len(tokens) and tokens[index + 1] == "-m":
+                module = tokens[index + 2].strip("\"'").rsplit(".", 1)[-1]
+                return [module, *tokens[index + 3:]]
+            index += 1
+            continue
+        # A shell's `-c` argument IS the command. Re-parse it and answer about what it runs.
+        if name in _SHELLS:
+            rest = tokens[index + 1:]
+            if "-c" in rest:
+                inner = " ".join(rest[rest.index("-c") + 1:]).strip("\"'")
+                # Guarded against a self-referential `sh -c "sh -c ..."` chain: one unwrap per
+                # level, and an empty argument answers nothing rather than answering about `sh`.
+                return _invocation_tokens(inner) if inner.strip() else []
+        # `uv run pytest` and `python3 -m pytest` are one invocation reached two ways.
+        if name in _RUN_LAUNCHERS and index + 2 < len(tokens) and tokens[index + 1] == "run":
+            return _invocation_tokens(" ".join(tokens[index + 2:]))
+        if name in _DIRECT_LAUNCHERS and index + 1 < len(tokens):
+            return _invocation_tokens(" ".join(tokens[index + 1:]))
+        return [name, *tokens[index + 1:]]
+    return []
+
+
+def leading_argv(segment: str) -> list[str]:
+    """The argv a shell segment actually EXECUTES, program first, wrappers and env stripped.
+
+    `leading_program` is this function's first element and delegates to it, so the rule for what
+    counts as the invoked program is written ONCE. Two copies of that walk is precisely how a
+    predicate starts disagreeing with the discharge it is paired with.
+
+    WHY MORE THAN THE PROGRAM NAME. `leading_program` returns `git` for `git push` and for `git
+    status` alike, so it can distinguish a checker by its script name -- C08's case -- and cannot
+    distinguish the eighteen clauses of this table whose occasion and guard are BOTH `git
+    <subcommand>`. The discriminator there is the subcommand, and the subcommand is the first
+    argument that is not an option.
+    """
+    tokens = _invocation_tokens(segment)
+    if not tokens:
+        return []
+    argv = [tokens[0]]
+    takes_value = _VALUE_OPTIONS.get(tokens[0], frozenset())
+    index = 1
+    while index < len(tokens):
+        token = tokens[index].strip("\"'")
+        if token.startswith("-"):
+            # `--opt=value` carries its own value; `-C dir` consumes the next token. An option
+            # whose value we failed to consume would land in the subcommand slot: `git -C /tmp
+            # status` read as subcommand `/tmp`, and the clause would never match a real one.
+            if "=" not in token and token in takes_value:
+                index += 2
+                continue
+            if "=" in token or token in _NO_VALUE_OPTIONS.get(argv[0], frozenset()):
+                index += 1
+                continue
+            # REFUSE RATHER THAN GUESS. Whether an unlisted option consumes the next token is
+            # not knowable from the command text, and guessing "it does not" was measured to
+            # FORGE a subcommand: `npm --prefix test install` read as ['npm', 'test'], byte-
+            # identical to a real `npm test`, so a clause discharging on the test run was
+            # licensed by a command that ran no tests. Answering [program] instead loses the
+            # narrowing and costs an interruption; inventing a subcommand removes a guard. The
+            # asymmetry decides, and the fix for the loss is to DECLARE the option, not to guess.
+            return [argv[0]]
+        argv.append(token)
+        break   # STOP AT THE FIRST ONE. Everything after belongs to the subcommand, not to the
+                # invocation: scanning on would read `git commit -m push` as `git push` and
+                # match a clause about pushing on a commit -- a false LICENCE, the one direction
+                # this table cannot afford to be wrong in.
+    return argv
+
+
+def leading_program(segment: str) -> str:
+    """The program a shell segment actually EXECUTES, as a bare basename.
+
+    WHY A PROGRAM AND NOT A PATTERN. Every other predicate in this table matches text against
+    the command about to run, which is the right instrument when the guard IS a look -- `git
+    status` before a push is a look whose occurrence is its own success, and a regex sees it.
+    It is the wrong instrument when the guard is a JUDGEMENT some program renders: whether a
+    checker can fail, whether a push landed, whether a rewrite preserved behaviour. Those have
+    answers, the answers are exit codes, and matching the text of the question is not reading
+    the answer. This function is what lets a clause name the program instead.
+
+    LEADING, not anywhere. The token must be what the segment invokes, so a program named
+    inside an argument does not discharge anything: `grep meta_test.py notes.md` reads a file
+    ABOUT the guard and runs no guard. That is the same failure the sibling estate's exit-mask
+    recognizer documents ("The runner must be the LEADING command of a statement (an actual
+    invocation), NOT an argument"), and it is worth restating here because a discharge is a
+    licence -- a false one is strictly worse than a missed one, which merely blocks.
+
+    Interpreter and wrapper prefixes are stripped so one name covers the spellings a caller
+    actually types: `python3 tools/x.py`, `./tools/x.py`, `env python3 tools/x.py` and
+    `tools/x.py` all yield `x.py`. `python3 -m pytest` yields `pytest`, because the module IS
+    the program there. A leading VARIABLE ASSIGNMENT is skipped rather than returned: C08's own
+    `_note` records a live session where `F=plugin/.../writeThrashRevert.py` was taken for a
+    checker, keying 19 demand rows on a token naming nothing runnable.
+    """
+    tokens = _invocation_tokens(segment)
+    return tokens[0] if tokens else ""
 
 
 def segments(command: str) -> list[str]:
@@ -284,18 +477,58 @@ def segments(command: str) -> list[str]:
     into `['make 2>', '1', 'tee log']` -- two segments that are not commands, and a real one
     whose text no longer resembles what ran.
 
-    A NEWLINE IS A SEPARATOR, and leaving it out was a hole straight through the fence. A shell
-    starts a new command at a newline exactly as it does at `;`, but this scanner did not, so
-    `# note\nrm -rf build/` was ONE segment whose text begins with `#`. Measured on the shipped
-    table: prefixing any command with a comment line allowed it -- `rm -rf build/`,
-    `git push --force origin main`, `kill -9 1234`, `curl -X POST ...` all went from deny to
-    allow behind two characters and a newline. A quoted newline still cannot separate, because
-    the quote branch above consumes it like any other character, which is the same rule the
-    other operators already follow.
+    A HEREDOC BODY IS DATA, NOT COMMANDS, and this is the third rule, measured the same way. The
+    scanner read `cat <<EOF\n; git rev-parse --verify main\nEOF` as two segments and handed the
+    second to the predicates as though something had run it -- so U09 DISCHARGED on a heredoc
+    that executed nothing, and the guard it protects was spent by a document. Quoting was already
+    handled and heredocs were not, which left the exact same hole one syntax over: text the shell
+    never executes, read as an invocation. The body is consumed to its delimiter and contributes
+    no segment; the `cat <<EOF` line itself still does, because that command really does run.
     """
     out, buf, quote, i = [], [], "", 0
+    pending_heredocs: list[tuple[str, bool]] = []
     while i < len(command):
         ch = command[i]
+        # `<<WORD` / `<<-WORD` / `<<"WORD"`: remember the delimiter, keep scanning this line.
+        if not quote and ch == "<" and command[i:i + 2] == "<<":
+            j = i + 2
+            strip_tabs = j < len(command) and command[j] == "-"
+            j += 1 if strip_tabs else 0
+            while j < len(command) and command[j] in " \t":
+                j += 1
+            k, delim_quote = j, ""
+            if k < len(command) and command[k] in "'\"":
+                delim_quote = command[k]
+                k += 1
+                start = k
+                while k < len(command) and command[k] != delim_quote:
+                    k += 1
+                word = command[start:k]
+                k += 1
+            else:
+                start = k
+                while k < len(command) and (command[k].isalnum() or command[k] in "_-."):
+                    k += 1
+                word = command[start:k]
+            if word:
+                pending_heredocs.append((word, strip_tabs))
+                buf.append(command[i:k])
+                i = k
+                continue
+        if not quote and ch == "\n" and pending_heredocs:
+            # Close the line, then swallow every pending body without scanning it.
+            out.append("".join(buf))
+            buf = []
+            i += 1
+            for word, strip_tabs in pending_heredocs:
+                while i < len(command):
+                    end = command.find("\n", i)
+                    line = command[i:] if end == -1 else command[i:end]
+                    i = len(command) if end == -1 else end + 1
+                    if (line.lstrip("\t") if strip_tabs else line).strip() == word:
+                        break
+            pending_heredocs = []
+            continue
         if quote:
             buf.append(ch)
             if ch == quote:
@@ -307,6 +540,16 @@ def segments(command: str) -> list[str]:
             quote = ch
             buf.append(ch)
         elif ch in ";|&\n":
+            # A NEWLINE IS A SEPARATOR. A shell starts a new command at a newline exactly as it
+            # does at `;`, and omitting it was a hole straight through the fence: `# note\nrm -rf
+            # build/` was ONE segment whose text begins with `#`, so prefixing any command with a
+            # comment line walked it past the table -- measured on the shipped clauses, `rm -rf
+            # build/`, `git push --force origin main` and `kill -9 1234` all went from deny to
+            # allow behind two characters and a newline. That is a MISSED ACTIVATION, which costs
+            # what a false discharge costs: the act proceeds with its guard removed. A quoted
+            # newline still cannot separate, because the quote branch above consumes it first --
+            # the same rule the other operators already follow. `\n\n` is not a `||`-style
+            # doubled operator, so the doubling skip below must not apply to it.
             if ch == "&" and buf and buf[-1] in "<>":
                 buf.append(ch)
                 i += 1
@@ -322,10 +565,44 @@ def segments(command: str) -> list[str]:
     return [segment.strip() for segment in out if segment.strip()]
 
 
+def _segment_matches_program(predicate: dict[str, Any], segment: str) -> bool:
+    """Does THIS one segment satisfy the invocation predicate? One owner, used by both callers."""
+    alternatives = predicate.get("any_of")
+    if alternatives is not None:
+        return any(_segment_matches_program(dict(alt), segment) for alt in alternatives)
+    argv = leading_argv(segment)
+    if not argv:
+        return False
+    if any(re.search(entry, segment) for entry in predicate.get("unless") or []):
+        return False
+    then = predicate.get("then_matches")
+    if then is not None and not re.search(then, segment):
+        return False
+    names, pattern = predicate.get("names"), predicate.get("pattern")
+    if names is not None and argv[0] in names:
+        return True
+    if pattern is not None and re.fullmatch(pattern, argv[0]):
+        return True
+    for wanted in predicate.get("argv") or []:
+        if list(wanted) == argv[:len(wanted)]:
+            return True
+    return False
+
+
 def matching_segment(predicate: dict[str, Any], event: dict[str, Any]) -> str | None:
     """Return the first live segment for a segment-scoped predicate."""
     value = _resolve(event, predicate.get("on", ""))
-    if predicate.get("scope") != "segment" or not isinstance(value, str):
+    if not isinstance(value, str):
+        return None
+    # The program kind is segment-scoped BY CONSTRUCTION -- it matches the leading argv of a
+    # segment -- so it belongs here whether or not the clause spells `scope`. Leaving this
+    # regex-only was measured wrong: for `git apply --check checked.patch; git apply live.diff
+    # --index`, the subject came back `checked.patch`, naming the file that was CHECKED as the
+    # subject of the apply that ran on another. The deny then cited the wrong artifact.
+    if predicate.get("kind") == "program":
+        return next((segment for segment in segments(value)
+                     if _segment_matches_program(predicate, segment)), None)
+    if predicate.get("scope") != "segment":
         return None
     return next((segment for segment in segments(value)
                  if _regex_predicate(predicate, segment)), None)
@@ -502,6 +779,24 @@ def _admit(clause: Clause) -> Clause:
     _compile(clause.fingerprint, clause.id)
     _compile(clause.activated_by, clause.id)
     _compile(clause.discharged_by, clause.id)
+    # A COVERING OVER THE COMMAND IS AN INVOCATION, OR IT SAYS WHY NOT -- enforced HERE, in the
+    # product, rather than only in the suite. The rule was written as a test first, and the field
+    # law caught that: `why_no_program` was read by the suite and by nothing the plugin runs, so
+    # the suite was asserting a property of the table instead of a property of the plugin. This
+    # is the same shape as the merged Swale loader refusing a row that carries neither
+    # `construction` nor `why_none` -- the loader is where an admissibility rule belongs, because
+    # a table that cannot state why it reads raw text is a table nobody should be able to ship.
+    #
+    # Matching TEXT against the command cannot tell an invocation from a mention: `echo 'first;
+    # git status'` discharged a push guard, measured, because the pattern's own separator
+    # alternation matched a `;` inside quotes. `kind: program` decides on the leading argv of a
+    # segment instead, and text may then only narrow WHICH VARIANT ran.
+    for predicate in (clause.fingerprint, clause.activated_by, clause.discharged_by):
+        if not isinstance(predicate, dict):
+            continue
+        if predicate.get("kind") == "regex" and predicate.get("on") == COMMAND_FIELD:
+            if not getattr(clause, "why_no_program", None):
+                raise ClauseError("CLAUSE-TEXT-COVERING-UNDISPOSITIONED", clause.id)
     disc = _discriminator(clause)
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
@@ -556,6 +851,7 @@ def _load_object(data: dict[str, Any]) -> Clause:
         fixtures_activate=data.get("fixtures_activate"),
         waiver=data.get("waiver"),
         construction=data.get("construction") or "",
+        why_no_program=data.get("why_no_program") or "",
     )
     return _admit(clause)
 

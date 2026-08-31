@@ -10,14 +10,24 @@
     "guard": "run `git status` first",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+push\\b"
+      "argv": [
+        [
+          "git",
+          "push"
+        ]
+      ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+status\\b"
+      "argv": [
+        [
+          "git",
+          "status"
+        ]
+      ]
     },
     "window": "session",
     "deny_reason": "push with no `git status` on record this session; run `git status` first",
@@ -48,16 +58,45 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+      "argv": [
+        [
+          "rm"
+        ],
+        [
+          "find"
+        ],
+        [
+          "truncate"
+        ],
+        [
+          "git",
+          "clean"
+        ]
+      ],
+      "then_matches": "(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r|\\s-delete\\b|\\bclean\\b)"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\||\\n)\\s*(ls\\b|find\\b|git\\s+status\\b|du\\b)",
+      "argv": [
+        [
+          "ls"
+        ],
+        [
+          "find"
+        ],
+        [
+          "du"
+        ],
+        [
+          "git",
+          "status"
+        ]
+      ],
       "unless": [
-        "(^|&&|;|\\||\\n)\\s*find\\b[^|;]*-delete"
+        "(^|&&|;|\\|)\\s*find\\b[^|;]*-delete"
       ]
     },
     "window": "session",
@@ -91,17 +130,28 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b[^|;]*(--force|\\s-f\\b)",
+      "argv": [
+        [
+          "git",
+          "push"
+        ]
+      ],
+      "then_matches": "(--force\\b|\\s-f\\b)",
       "unless": [
         "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b[^|;]*--force-with-lease"
       ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+fetch\\b"
+      "argv": [
+        [
+          "git",
+          "fetch"
+        ]
+      ]
     },
     "window": "session",
     "deny_reason": "force-push without a prior `git fetch`; fetch first, or use --force-with-lease which carries its own check",
@@ -172,14 +222,13 @@
       "kind": "always"
     },
     "activated_by": {
-      "kind": "regex",
+      "kind": "program",
       "event": "PreToolUse",
       "tools": [
         "Bash"
       ],
       "on": "tool_input.command",
-      "scope": "segment",
-      "pattern": "(?:^|\\s)((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
+      "pattern": "(?:pytest|unittest|[^\\s]*(?:check|verify)[^\\s]*\\.(?:py|sh))",
       "key_from": {
         "on": "tool_input.command",
         "pattern": "(?:^|[;&|\\n]\\s*)\\s*((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
@@ -257,7 +306,8 @@
       "ps -eo pid,comm | awk -v self_pid=$$ '$1 != self_pid'",
       "systemctl is-active worker.service"
     ],
-    "_note": "Admission test: a checker included in its own observation can create a stable false-positive process count. That apparent presence is then used as fact, and repeated checks reproduce the same observer contamination; doing nothing never reveals the absent target. Recovery requires interrupting the accepted result and rerunning from a correctly separated observer, effectively restarting the decision path (3). The verdict's broad pgrep/pkill/killall branch is narrowed away because it does not require a grep process in a ps pipeline and would interrupt ordinary process operations unrelated to self-inclusion. The remaining fingerprint names the concrete self-match surface, while the guard requires an identity-bearing inverted filter rather than a name-only grep trick."
+    "_note": "Admission test: a checker included in its own observation can create a stable false-positive process count. That apparent presence is then used as fact, and repeated checks reproduce the same observer contamination; doing nothing never reveals the absent target. Recovery requires interrupting the accepted result and rerunning from a correctly separated observer, effectively restarting the decision path (3). The verdict's broad pgrep/pkill/killall branch is narrowed away because it does not require a grep process in a ps pipeline and would interrupt ordinary process operations unrelated to self-inclusion. The remaining fingerprint names the concrete self-match surface, while the guard requires an identity-bearing inverted filter rather than a name-only grep trick.",
+    "why_no_program": "The occasion is a PIPELINE SHAPE -- `ps ... | grep ...` -- and the guard is an exclusion flag inside the second stage. An invocation predicate sees each stage as its own segment, so the relationship between them, which is the entire subject, is not expressible as a property of one invocation. Tried: argv on `ps`, which fires on every process listing whether or not it is piped into a matcher."
   },
   {
     "id": "D01",
@@ -384,9 +434,14 @@
       "kind": "always"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(^|&&|;|\\||\\n)\\s*git\\s+status\\b"
+      "argv": [
+        [
+          "git",
+          "status"
+        ]
+      ]
     },
     "window": "session",
     "deny_reason": "ending with no `git status` on record: dirty is unfinished, and an ending nobody checked is the one that looks complete",
@@ -415,9 +470,18 @@
       "kind": "always"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "git\\s+(ls-remote|fetch)\\b"
+      "argv": [
+        [
+          "git",
+          "ls-remote"
+        ],
+        [
+          "git",
+          "fetch"
+        ]
+      ]
     },
     "window": "session",
     "deny_reason": "ending with no fetch or ls-remote on record: a push report is not proof it landed",
@@ -432,9 +496,14 @@
     ],
     "_fixture_note": "terminal clause: fixtures validate discharged_by (the guard), since the fingerprint is `always`",
     "activated_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+push\\b"
+      "argv": [
+        [
+          "git",
+          "push"
+        ]
+      ]
     },
     "fixtures_activate": [
       "git push -u origin main",
@@ -452,14 +521,19 @@
     "guard": "run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --writable-home --response-transport --result-write`",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)/?(?:tmp/sect/run/)?dispatch\\.sh\\b"
+      "names": [
+        "dispatch.sh"
+      ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "\\bpython3?\\b[^\\n]*(?:probe_child_capability\\.py)[^\\n]*--writable-home[^\\n]*--response-transport[^\\n]*--result-write\\b"
+      "names": [
+        "probe_child_capability.py"
+      ],
+      "then_matches": "--writable-home[^\\n]*--response-transport[^\\n]*--result-write\\b"
     },
     "window": "session",
     "deny_reason": "launch a nested worker without its guard; run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --writable-home --response-transport --result-write`",
@@ -489,14 +563,20 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)/?(?:tmp/sect/run/)?dispatch\\.sh\\s+[A-Za-z0-9][\\w.-]*\\b"
+      "names": [
+        "dispatch.sh"
+      ],
+      "then_matches": "dispatch\\.sh\\s+[A-Za-z0-9][\\w.-]*"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "\\bpython3?\\b[^\\n]*probe_child_capability\\.py[^\\n]*--target\\s+\\S+[^\\n]*--after-failure[^\\n]*--require-change\\b"
+      "names": [
+        "probe_child_capability.py"
+      ],
+      "then_matches": "--target\\s+\\S+[^\\n]*--after-failure[^\\n]*--require-change\\b"
     },
     "window": "session",
     "deny_reason": "re-launch a nested-worker target without its guard; run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --target TARGET --after-failure --require-change`",
@@ -522,14 +602,21 @@
     "guard": "run `ps`, `pgrep`, or an equivalent observer-namespace process listing",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:sudo\\s+)?(?:kill(?:all)?|pkill)\\b"
+      "names": [
+        "kill",
+        "killall",
+        "pkill"
+      ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:ps\\b|pgrep\\b)"
+      "names": [
+        "ps",
+        "pgrep"
+      ]
     },
     "window": "session",
     "deny_reason": "use a PID in a signal operation without its guard; run `ps`, `pgrep`, or an equivalent observer-namespace process listing",
@@ -558,14 +645,20 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*curl\\b[^\\n]*(?:-X|--request)\\s*(?:POST|PUT|PATCH|DELETE)\\b"
+      "names": [
+        "curl"
+      ],
+      "then_matches": "(?:-X|--request)\\s*(?:POST|PUT|PATCH|DELETE)\\b"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "\\bcurl\\b[^\\n]*(?:-H|--header)\\s+[\"']?Authorization:"
+      "names": [
+        "curl"
+      ],
+      "then_matches": "(?:-H|--header)\\s+[\\\"']?Authorization:"
     },
     "window": "session",
     "deny_reason": "send a mutating request to an external service without its guard; run an authenticated read canary such as `curl ... -H 'Authorization: ...'`",
@@ -590,14 +683,23 @@
     "guard": "run a signer canary such as `printf test | gpg --clearsign`",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+commit\\b[^\\n]*(?:\\s-S(?:\\s|$)|--gpg-sign\\b)"
+      "argv": [
+        [
+          "git",
+          "commit"
+        ]
+      ],
+      "then_matches": "(\\s-S(?:\\s|$)|--gpg-sign\\b)"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:printf\\b[^\\n]*\\|\\s*gpg\\s+--clearsign\\b|gpg\\s+--detach-sign\\b)"
+      "names": [
+        "gpg"
+      ],
+      "then_matches": "(--clearsign\\b|--detach-sign\\b)"
     },
     "window": "session",
     "deny_reason": "create a signed git commit without its guard; run a signer canary such as `printf test | gpg --clearsign`",
@@ -626,18 +728,40 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+(?:switch|checkout)\\s+[\\w./-]+\\b",
+      "argv": [
+        [
+          "git",
+          "switch"
+        ],
+        [
+          "git",
+          "checkout"
+        ]
+      ],
       "unless": [
         "(?:^|[;&|\\n]\\s*)\\s*git\\s+(?:switch|checkout)\\s+-(?:q|b|B)(?:\\s|$)",
-        "(?:^|[;&|\\n]\\s*)\\s*git\\s+checkout\\s+[\\w./-]*\\.[A-Za-z][A-Za-z0-9]{0,9}(?:\\s|[;&|\\n]|$)"
+        "(?:^|[;&|\\n]\\s*)\\s*git\\s+checkout\\s+[\\w./-]*\\.[A-Za-z][A-Za-z0-9]{0,9}(?:\\s|[;&|]|$)"
       ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+(?:rev-parse\\b[^\\n]*--verify\\b|(?:checkout|switch)\\s+(?:-q\\s+)?-[bB]\\s|branch\\s+[\\w./-]+)"
+      "argv": [
+        [
+          "git",
+          "rev-parse"
+        ],
+        [
+          "git",
+          "branch"
+        ],
+        [
+          "git",
+          "show-ref"
+        ]
+      ]
     },
     "window": "session",
     "deny_reason": "switch or check out a git ref that was never verified or created this session; run `git rev-parse --verify REF`, or create it with `git checkout -b/-B REF`",
@@ -680,17 +804,23 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*jq\\b[^\\n]*(?:\\.[A-Za-z_][\\w]*|\\[)",
+      "names": [
+        "jq"
+      ],
+      "then_matches": "(\\.[A-Za-z_]\\w*|\\[)",
       "unless": [
         "(?:^|[;&|\\n]\\s*)\\s*jq\\b[^\\n]*\\s-e\\b"
       ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*jq\\b[^\\n]*(?:\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+      "names": [
+        "jq"
+      ],
+      "then_matches": "(\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
     },
     "window": "session",
     "deny_reason": "traverse structured JSON whose structure was never once looked at; run `jq 'keys'`, `jq 'type'`, or a `jq -e` type/key assertion on the file first",
@@ -716,14 +846,25 @@
     "guard": "run `rg`/`grep` for the patch context and read the target immediately before applying",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:git\\s+apply|patch\\s+-p\\d+)\\b"
+      "argv": [
+        [
+          "git",
+          "apply"
+        ],
+        [
+          "patch"
+        ]
+      ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rg|grep)\\b"
+      "names": [
+        "rg",
+        "grep"
+      ]
     },
     "window": "session",
     "deny_reason": "apply a patch without its guard; run `rg`/`grep` for the patch context and read the target immediately before applying",
@@ -752,18 +893,32 @@
       "group": 1
     },
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "scope": "segment",
-      "pattern": "^\\s*(?:git\\s+apply|patch\\s+-p\\d+)\\b[^\\n]*?(?:\"[\\w./-]+\\.(?:patch|diff)\"|'[\\w./-]+\\.(?:patch|diff)'|[\\w./-]+\\.(?:patch|diff)\\b)",
+      "argv": [
+        [
+          "git",
+          "apply"
+        ],
+        [
+          "patch"
+        ]
+      ],
+      "then_matches": "[\\w./-]+\\.(?:patch|diff)",
       "unless": [
         "^\\s*git\\s+apply\\b[^\\n]*--check\\b"
       ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*git\\s+apply\\b[^\\n]*--check\\b"
+      "argv": [
+        [
+          "git",
+          "apply"
+        ]
+      ],
+      "then_matches": "--check\\b"
     },
     "window": "session",
     "deny_reason": "apply a generated patch without its guard; run `git apply --check PATCH` first",
@@ -790,14 +945,25 @@
     "guard": "look at the text you are about to rewrite: `rg`/`grep` for the pattern, or `cmp`/checksum the file",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:sed\\s+-i|perl\\s+-pi|python3?\\b[^\\n]*\\b(?:rewrite|replace)\\b)"
+      "names": [
+        "sed",
+        "perl"
+      ],
+      "then_matches": "(\\s-i\\b|\\s-pi\\b)"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:cmp\\b|sha256sum\\b|shasum\\b|rg\\b|grep\\b)"
+      "names": [
+        "cmp",
+        "sha256sum",
+        "shasum",
+        "rg",
+        "grep",
+        "diff"
+      ]
     },
     "window": "session",
     "deny_reason": "perform an in-place text rewrite without ever looking at the text; `rg`/`grep` the pattern first (or `cmp`/checksum the file)",
@@ -823,17 +989,53 @@
     "guard": "run an independent behavior observer such as the relevant test or probe first",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:rm\\b|git\\s+reset\\s+--hard\\b|truncate\\b|find\\b[^\\n]*\\s-delete\\b)",
-      "unless": [
-        "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+      "any_of": [
+        {
+          "names": [
+            "rm",
+            "truncate"
+          ],
+          "unless": [
+            "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+          ]
+        },
+        {
+          "argv": [
+            [
+              "git",
+              "reset"
+            ]
+          ],
+          "then_matches": "--hard\\b",
+          "unless": [
+            "(?:^|[;&|\\n]\\s*)\\s*(rm\\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\\b|find\\b[^|;]*-delete\\b|git\\s+clean\\b[^|;]*-[a-zA-Z]*f)"
+          ]
+        }
       ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:pytest\\b|go\\s+test\\b|cargo\\s+test\\b|npm\\s+test\\b|curl\\b)"
+      "names": [
+        "pytest",
+        "curl"
+      ],
+      "argv": [
+        [
+          "go",
+          "test"
+        ],
+        [
+          "cargo",
+          "test"
+        ],
+        [
+          "npm",
+          "test"
+        ]
+      ]
     },
     "window": "session",
     "deny_reason": "make a destructive behavior-changing mutation without its guard; run an independent behavior observer such as the relevant test or probe first",
@@ -860,9 +1062,22 @@
     "guard": "run the suite with warnings promoted to errors on a supported runtime",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:npm\\s+publish\\b|twine\\s+upload\\b|cargo\\s+publish\\b)"
+      "argv": [
+        [
+          "npm",
+          "publish"
+        ],
+        [
+          "twine",
+          "upload"
+        ],
+        [
+          "cargo",
+          "publish"
+        ]
+      ]
     },
     "discharged_by": {
       "kind": "regex",
@@ -880,7 +1095,8 @@
     "fixtures_neg": [
       "python -W error -m pytest",
       "PYTHONWARNINGS=error tox -e py312"
-    ]
+    ],
+    "why_no_program": "The guard is a WARNINGS-AS-ERRORS run, whose whole signal is an environment assignment (`PYTHONWARNINGS=error`, `RUSTFLAGS=-Dwarnings`) or a `-W error` flag. `leading_argv` deliberately SKIPS a leading VAR=value prefix, because a variable is not the program being run -- so the one token that distinguishes this guard from an ordinary test run is invisible to an invocation predicate by construction. Tried: argv on the runner, which matches every plain `pytest` and would license a publish after a suite that promoted nothing."
   },
   {
     "id": "U25",
@@ -912,6 +1128,7 @@
     "fixtures_neg": [
       "pytest -q tests/test_scanner.py -k prefix_distractor",
       "python3 -m pytest -q tests/test_parser.py"
-    ]
+    ],
+    "why_no_program": "Both sides turn on what a runner was POINTED AT, not on what ran: a scanner used as acceptance and its prefix-distractor regression test are the same program with different arguments. Tried: `argv` on the runner (`pytest`, `go test`, `npm test`), which matches every ordinary suite run in this estate and would discharge the clause on a test that never exercised a distractor -- a false licence. Tried: `then_matches` on the segment for the distractor's name, which works only while the file keeps that name and silently stops covering the moment it is renamed. `leading_argv` stops at the first non-option token by design, because scanning further reads `git commit -m push` as `git push`, so the argument list this needs is deliberately out of its reach."
   }
 ]

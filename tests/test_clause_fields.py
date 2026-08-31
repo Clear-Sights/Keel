@@ -32,6 +32,7 @@ import unittest
 from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
+from keel import clauses as C
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 
@@ -273,13 +274,23 @@ class OneClauseDecliningAnotherStaysInStep(unittest.TestCase):
     """
 
     def test_u20_declines_exactly_what_a02_claims(self) -> None:
+        # DERIVED, no longer a string copy held in step. This compared A02's fingerprint pattern
+        # against a verbatim copy of it inside U20's `unless`, which pinned the copy but bound the
+        # law to one REPRESENTATION: once A02 became an invocation predicate there was no pattern
+        # to copy, and the cell whose whole purpose was to stop a silent drift would itself have
+        # gone stale. The property was always the behaviour, not the sameness of two strings, so
+        # it is asked of the predicates -- which needs no copy to exist and cannot be fooled by
+        # one that does.
         rows = {r["id"]: r for r in json.loads(CLAUSES.read_text(encoding="utf-8"))}
-        a02 = rows["A02"]["fingerprint"]["pattern"]
-        declined = rows["U20"]["fingerprint"].get("unless") or []
-        self.assertIn(
-            a02, declined,
-            "U20 no longer declines A02's occasion verbatim, so a bulk delete raises both again: "
-            "one command, two remedies with nothing in common")
+        u20 = rows["U20"]["fingerprint"]
+        claimed = [f for f in rows["A02"]["fixtures_pos"] if isinstance(f, str)]
+        self.assertTrue(claimed, "A02 ships no string fixture; nothing is compared below")
+        still_raised = [f for f in claimed
+                        if C._base_predicate(u20, C._fixture_event(u20, f))]
+        self.assertEqual(
+            [], still_raised,
+            "U20 no longer declines A02's occasion, so a bulk delete raises both again: one "
+            f"command, two remedies with nothing in common -- {still_raised}")
 
     def test_the_decline_is_observed_and_not_merely_declared(self) -> None:
         """Drive A02's own occasion through the real dispatcher and watch U20 stay silent.
@@ -309,8 +320,10 @@ class OneClauseDecliningAnotherStaysInStep(unittest.TestCase):
 
             # CONTROL, in the same test: U20 must still be reachable on its own occasion, or
             # "U20 did not fire" above would be satisfied by a U20 that never fires at all.
+            a02_fp = rows["A02"]["fingerprint"]
             u20_only = [f for f in rows["U20"]["fixtures_pos"]
-                        if isinstance(f, str) and not re.search(rows["A02"]["fingerprint"]["pattern"], f)]
+                        if isinstance(f, str)
+                        and not C._base_predicate(a02_fp, C._fixture_event(a02_fp, f))]
             self.assertTrue(u20_only, "no U20 fixture falls outside A02; the control is vacuous")
             denied = _denying_clause(u20_only[0], "decline-control", state)
             self.assertEqual(

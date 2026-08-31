@@ -98,8 +98,12 @@ class ACommentLineDoesNotDisarmTheTable(unittest.TestCase):
                 predicate = getattr(clause, name, None)
                 if not isinstance(predicate, dict):
                     continue
-                if predicate.get("kind") != "regex":
-                    continue
+                # NO KIND BRANCH. Selecting `kind == "regex"` here bound this law to one
+                # REPRESENTATION of a command covering rather than to the property it is about,
+                # which is whether a comment line disarms a row. When the table migrated to
+                # invocation matching the loop kept passing while examining ten fixtures instead
+                # of thirty-one -- and only the floor below reported it. The property is the same
+                # for every kind, so the question is asked of every command predicate.
                 if predicate.get("on") != "tool_input.command":
                     continue
                 for fixture in self._positives(clause, name):
