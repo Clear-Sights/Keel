@@ -50,13 +50,22 @@ def _event(command: str) -> dict:
 class EveryCommandCoveringIsAnInvocationOrSaysWhyNot(unittest.TestCase):
     def test_no_clause_reads_the_command_as_text_without_saying_why(self):
         undispositioned = []
+        # ALL THREE SIDES, READ INDEPENDENTLY. This was `fingerprint or activated_by`, which
+        # examines the activation side ONLY on clauses that have no fingerprint -- so every
+        # clause carrying both had that side skipped. Here the loader caught what this reader
+        # could not (C08 and T02 both carry a third side), so nothing shipped broken; in the
+        # development tree, which had no such loader rule, the identical reader reported zero
+        # while T02's activation was a raw-command regex whose separator alternation lacked
+        # `\n`, and a comment line disarmed the push obligation. A law that reports a clean
+        # census only because something else is watching is a law that will mislead its reader.
         for clause in _raw():
-            sides = (clause.get("fingerprint") or clause.get("activated_by") or {},
-                     clause.get("discharged_by") or {})
-            reads_text = any(s.get("kind") == "regex" and s.get("on") == "tool_input.command"
-                             for s in sides)
-            if reads_text and not clause.get("why_no_program"):
-                undispositioned.append(clause["id"])
+            for name in ("fingerprint", "activated_by", "discharged_by"):
+                side = clause.get(name)
+                if not isinstance(side, dict):
+                    continue
+                if (side.get("kind") == "regex" and side.get("on") == "tool_input.command"
+                        and not clause.get("why_no_program")):
+                    undispositioned.append(f"{clause['id']}.{name}")
         self.assertEqual(undispositioned, [], "clauses matching the raw command as text with no "
                                               f"why_no_program: {undispositioned}")
 
@@ -146,7 +155,7 @@ class EveryCommandCoveringIsAnInvocationOrSaysWhyNot(unittest.TestCase):
             b'      "pattern": "(^|&&|;|\\\\|)\\\\s*git\\\\s+status\\\\b"\n    }',
             "tests.test_invocation_coverings.EveryCommandCoveringIsAnInvocationOrSaysWhyNot."
             "test_no_clause_reads_the_command_as_text_without_saying_why",
-            "with no why_no_program: ['A01']")
+            "with no why_no_program: ['A01.discharged_by']")
 
 
 if __name__ == "__main__":
