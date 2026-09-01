@@ -410,10 +410,17 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                     # Here there are not two acts: the plant IS the observation, so there is no
                     # order for it to be in. An ordinary run of the same checker still demands
                     # and does not discharge, because the guard requires the fault-proving form.
-                aid = derive_id(session, agent, cl.id, "activated")
-                ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
-                                     subject="activated", reason="occasion observed"))
-                ledger.discharge(session, agent, aid, "occasion observed")
+                else:
+                    # The UNKEYED shape only. Dropping the `continue` above to let one act both
+                    # raise and satisfy a keyed obligation also dropped the keyed branch into
+                    # this pair, so every keyed activation wrote a demand and its immediate
+                    # discharge under the subject "activated" -- rows that net to zero and mean
+                    # nothing, in the journal whose whole job is saying what was owed. Benign to
+                    # the verdict, junk to a reader, and two shapes wearing one code path.
+                    aid = derive_id(session, agent, cl.id, "activated")
+                    ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
+                                         subject="activated", reason="occasion observed"))
+                    ledger.discharge(session, agent, aid, "occasion observed")
             if C.discharges(cl, event):
                 key = C.event_key(cl.discharged_by, event)
                 if cl.discharged_by.get("key_from") is not None and not key:
