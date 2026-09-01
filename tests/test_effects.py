@@ -212,7 +212,19 @@ class TheObserverSeesTheWorld(Repo):
         listener.listen(1)
         self.addCleanup(listener.close)
         port = listener.getsockname()[1]
-        self.assertFalse(self.observe("git status")["net_out"])
+        # The negative half needs a host that opens no connections of its own while a local
+        # command runs. A CI runner is not one -- measured, its counters moved during `git
+        # status` -- and the observer counts the host's connections as the act's (stated on the
+        # effect). So the half is reported NOT-EVALUABLE on such a host, never asserted false.
+        quiet = self.observe("git status")
+        if quiet["net_out"]:
+            ambient = effects.net_active_opens()
+            time.sleep(1.0)
+            if effects.net_active_opens() != ambient:
+                self.skipTest("this host opens connections on its own; the negative half is "
+                              "NOT-EVALUABLE here, not passed")
+            quiet = self.observe("git status")
+        self.assertFalse(quiet["net_out"])
         self.assertTrue(self.observe(
             f"python3 -c \"import socket; socket.create_connection(('127.0.0.1', {port}))\"")["net_out"])
 
