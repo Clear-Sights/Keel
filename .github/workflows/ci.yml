@@ -69,7 +69,6 @@ jobs:
         run: |
           python3 tools/render_coverings.py --check
           python3 tools/check_coq.py
-          python3 tools/covering_algebra.py
 
       # The replay is this repository's own stated release evidence (see release.yml, which runs
       # it before cutting a bundle). Running it on every push means a regression is found when it

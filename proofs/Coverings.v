@@ -107,16 +107,32 @@ Section Coverings.
     forall r segs, Q segs <-> Q (map (rename r) segs).
 
   (** THEOREM 3 (impossibility). A name-agnostic covering cannot separate two acts that differ
-      only in which program is invoked.
+      only in which program is invoked -- and a NOMINAL covering with any name in and any name
+      out is therefore never name-agnostic.
 
       This is the exact boundary. At the moment a covering runs BEFORE the act, the only thing
       distinguishing "publish the artifact" from "run the suite" is the name -- the two are the
-      same shape, one segment, no edges, same arity. So no name-agnostic covering can tell them
-      apart, and demanding one is demanding something that does not exist. Not "hard": absent. *)
+      same shape, one segment, no edges, same arity. Take the act `[p]` with p wanted and the
+      act `[q]` with q not: a nominal covering accepts the first and rejects the second, and a
+      renaming sends one onto the other. So no name-agnostic covering can tell them apart, and
+      demanding one is demanding something that does not exist. Not "hard": absent.
+
+      Stated on segments so it depends on no scanner: the nominal shape is the one `structural`
+      reads off `scan`, with `scan` factored out. *)
+  Definition nominal_segs (wanted : Program -> Prop) (segs : list Segment) : Prop :=
+    exists s p rest, In s segs /\ seg_argv s = p :: rest /\ wanted p.
+
   Theorem name_agnostic_cannot_separate_by_name :
-    forall Q, name_agnostic Q ->
-    forall r segs, Q segs -> Q (map (rename r) segs).
-  Proof. intros Q Hag r segs HQ. apply (Hag r segs). exact HQ. Qed.
+    forall (wanted : Program -> Prop) p q, wanted p -> ~ wanted q ->
+    ~ name_agnostic (nominal_segs wanted).
+  Proof.
+    intros wanted p q Hp Hq Hag.
+    destruct (Hag (fun _ => q) [ {| seg_argv := [p] |} ]) as [Hfwd _].
+    destruct Hfwd as [s [p' [rest [Hin [Hargv Hw]]]]].
+    { exists {| seg_argv := [p] |}, p, []. repeat split; [left; reflexivity | exact Hp]. }
+    simpl in Hin. destruct Hin as [Hs | []]. subst s. simpl in Hargv.
+    injection Hargv as Hp' _. subst p'. exact (Hq Hw).
+  Qed.
 
   (** THEOREM 4 (what survives). A covering over TOPOLOGY -- the shape of the action graph
       rather than its labels -- is name-agnostic. Segment count, and by the same argument the

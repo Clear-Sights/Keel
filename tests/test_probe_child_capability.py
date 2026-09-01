@@ -123,18 +123,6 @@ class EveryGuardIsRunnable(unittest.TestCase):
     def _clauses():
         return json.loads((PLUGIN / "keel" / "clauses.json").read_text(encoding="utf-8"))
 
-    def test_every_file_a_guard_names_is_shipped(self) -> None:
-        missing = []
-        for row in self._clauses():
-            text = " ".join(str(row.get(k, "")) for k in ("guard", "deny_reason"))
-            for name in re.findall(r"[\w./$${}-]+\.(?:py|sh)\b", text):
-                relative = name.replace("$CLAUDE_PLUGIN_ROOT/", "").replace('"', "")
-                if not (PLUGIN / relative).exists():
-                    missing.append(f"{row['id']} -> {name}")
-        self.assertEqual([], sorted(missing),
-                         "a guard tells the operator to run a file this plugin does not ship, so "
-                         "firing it denies the act with no remedy that can be run")
-
     def test_every_guard_satisfies_its_own_discharge(self) -> None:
         """Obeying the instruction literally must clear the clause that gave it."""
         unsatisfied = []

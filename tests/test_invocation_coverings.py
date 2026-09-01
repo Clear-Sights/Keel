@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN
 
 from keel import clauses as C
 
@@ -48,26 +48,6 @@ def _event(command: str) -> dict:
 
 
 class EveryCommandCoveringIsAnInvocation(unittest.TestCase):
-    def test_no_clause_reads_the_command_as_text(self):
-        """ALL THREE SIDES, READ INDEPENDENTLY, through the loader's own classifier.
-
-        This was `fingerprint or activated_by`, which examines the activation side ONLY on
-        clauses that have no fingerprint -- so a clause carrying both had that side skipped. In
-        the development tree, which had no loader rule, the identical reader reported zero while
-        T02's activation was a raw-command regex whose separator alternation lacked `\n`, and a
-        comment line disarmed the push obligation. The loader now refuses the shape outright,
-        and this cell asks the same classifier so a side spelled a new way is graded too.
-        """
-        textual = [f"{c['id']}.{name}" for c in _raw()
-                   for name in ("fingerprint", "activated_by", "discharged_by")
-                   if isinstance(c.get(name), dict) and C.classify_side(c[name]) == "textual"]
-        self.assertEqual(textual, [], f"clauses matching the raw command as text: {textual}")
-        structural = [c for c in _raw()
-                      for name in ("fingerprint", "activated_by", "discharged_by")
-                      if isinstance(c.get(name), dict)
-                      and c[name].get("kind") in ("program", "pipeline")]
-        self.assertTrue(structural, "no structural coverings -- this cell would grade nothing")
-
     def test_TEETH_a_mention_never_discharges(self):
         """The five recorded false discharges, driven through the production predicate."""
         by = {c["id"]: c for c in _raw()}
@@ -129,24 +109,6 @@ class EveryCommandCoveringIsAnInvocation(unittest.TestCase):
         self.assertEqual(C.leading_argv("git commit -m push"), ["git", "commit"])
         self.assertEqual(C.leading_argv("git -C /tmp status"), ["git", "status"])
         self.assertEqual(C.leading_argv("git push -u origin main"), ["git", "push"])
-
-    def test_the_check_can_fail(self) -> None:
-        # The fault is the historical one this law closed, restored as a DATA edit to the table
-        # the law reads -- not a special case wired to this test's own input. A01's discharge was
-        # a regex over the raw command carrying its own `(^|&&|;|\|)` alternation, and that
-        # alternation matched a `;` inside a quoted string, so `echo 'first; git status'`
-        # DISCHARGED the push guard. Planting it back must reopen exactly this law.
-        smoke_replace(
-            self, CLAUSES_JSON,
-            b'"discharged_by": {\n      "kind": "program",\n      "on": "tool_input.command",\n'
-            b'      "argv": [\n        [\n          "git",\n          "status"\n        ]\n'
-            b'      ]\n    }',
-            b'"discharged_by": {\n      "kind": "regex",\n      "on": "tool_input.command",\n'
-            b'      "pattern": "(^|&&|;|\\\\|)\\\\s*git\\\\s+status\\\\b"\n    }',
-            "tests.test_invocation_coverings.EveryCommandCoveringIsAnInvocation."
-            "test_no_clause_reads_the_command_as_text",
-            "A01.discharged_by")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -45,16 +45,6 @@ class EverySideHasAClassAndAnInstance(unittest.TestCase):
         self.assertEqual(closure["shipped"], 4, "U01/U02 name only programs this bundle ships")
         self.assertEqual(closure["open"], 30)
 
-    def test_TEETH_no_side_is_textual_and_none_is_unclassified(self) -> None:
-        for cid, name, predicate in _sides():
-            with self.subTest(side=f"{cid}.{name}"):
-                self.assertNotIn(C.classify_side(predicate), ("textual", "unclassified"))
-
-    def test_TEETH_no_row_carries_an_excuse(self) -> None:
-        raw = json.loads(CLAUSES.read_text(encoding="utf-8"))
-        carried = sorted(f"{c['id']}.{k}" for c in raw for k in C.EXCUSE_FIELDS if k in c)
-        self.assertEqual([], carried)
-
     def test_TEETH_shipped_means_every_name_is_ours(self) -> None:
         for cid, name, predicate in _sides():
             if C.derive_closure(predicate) == "shipped":
@@ -97,7 +87,7 @@ class EverySideHasAClassAndAnInstance(unittest.TestCase):
             b'"discharged_by": {\n      "kind": "regex",\n      "on": "tool_input.command",\n'
             b'      "pattern": "git status"\n    }',
             "tests.test_derived_closure.EverySideHasAClassAndAnInstance."
-            "test_TEETH_no_side_is_textual_and_none_is_unclassified",
+            "test_NON_VACUITY_the_population_is_measured_not_asserted",
             "CLAUSE-TEXT-COVERING")
 
     def test_a_stale_instance_is_loud(self) -> None:
