@@ -301,7 +301,7 @@
       "renewed": 0,
       "because": "NOT EVALUABLE against this host: no exit status reaches PostToolUse in any form. Measured over 71 recorded Bash PostToolUse payloads in makoto.record.db (the raw hook events, not the transcript): tool_response is a dict in every one, keyed (stdout, stderr, interrupted, isImage, noOutputExpected), plus returnCodeInterpretation once carrying the string 'No matches found'. No exit_code member under any spelling, and no 'Error: Exit code N' string -- that form is the TRANSCRIPT's rendering of a failed call, not the payload. Failing runs do produce PostToolUse events, so the clause is not merely unobserved: the evidence it asks for is absent from an event that arrives. Matching failure text in tool_response.stdout was measured instead and rejected: it fired on a real failure AND on a passing run (121 passed, 1 xfailed) in an 18-run sample, and predicates over prose are what this table exists to avoid. Ledger cost of leaving it live: 114 demand rows in one session, 0 discharges ever, every Stop blocked. Renew only by re-arguing this research; if the host ships an exit status, delete the waiver instead."
     },
-    "_fixture_note": "terminal keyed clause: fixtures_pos/neg validate the PostToolUse failure guard; fixtures_activate validate checker recognition. The guard reads tool_response as TEXT, not tool_response.exit_code: the host sends no exit-code field. A SUCCEEDING Bash call yields a dict keyed (stdout, stderr, interrupted, isImage, noOutputExpected); a FAILING one yields the STRING 'Error: Exit code N\\n<output>'. Measured over 2279 recorded tool results (1985 dict / 175 str / 119 list, 67 distinct keys) -- no exit_code member under any spelling. The engine returns False for a non-str under kind=regex, so the success dict cannot discharge and only a real failure does.",
+    "_fixture_note": "terminal keyed clause: fixtures_pos/neg validate the PostToolUse failure guard; fixtures_activate validate checker recognition. The guard reads tool_response.exit_code under kind=nonzero -- read that off `discharged_by`, not off this sentence.\n\nCORRECTED, and the correction is the point. This note previously said the guard 'reads tool_response as TEXT, not tool_response.exit_code' and that a FAILING call yields the STRING 'Error: Exit code N'. Both were stale: the first described a regex guard the table has not shipped for some time, and the second is contradicted by the waiver directly below it, which measured raw hook payloads and found that form to be the TRANSCRIPT's rendering of a failed call rather than anything the hook receives. The two claims sat side by side, and the stale one pointed the wrong way: a reader deciding renewal from it concludes the host DOES ship a status and deletes the waiver. That is the expensive direction, reached from the clause's own file.\n\nThe 2279-tool-result census the old note cited is NOT re-stated here, because its source is not identified and cannot be re-run; treat it as withdrawn rather than as evidence. The waiver's 71-payload measurement names its source and stands until re-measured.\n\nNEITHER number is reproducible from this repository today, which is the real defect behind this clause being the only one of 24 that does not enforce. `plugin/keel/recorder.py` and `tools/payload_census.py` exist so the next reader does not have to take either on trust: enable KEEL_RECORD_SHAPES in a session with the plugin installed, exercise a succeeding AND a failing command, and run the census. It prints its denominator and refuses a verdict on zero payloads. Decide this waiver against that table, never against prose -- including this paragraph.",
     "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PreToolUse activation records the normalized checker command as its own obligation; only a nonzero PostToolUse for the equal key discharges it. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py.",
     "fixtures_discharge": [
       1,
@@ -655,7 +655,11 @@
     "fixtures_no_discharge": [
       "echo 'probe_child_capability.py --writable-home /t --result-write'",
       "probe_child_capability.py --writable-home /t"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "shipped",
+      "why": "The guard names `probe_child_capability.py`, which is Keel's own and ships in the bundle at $CLAUDE_PLUGIN_ROOT/tools/. There is no second name for this act: the probe is the only thing that answers whether a child can write a home, carry a response and write a result, because it is the thing that asks. The set is closed at one, and tests/test_named_program_ships.py keeps it closed by requiring the file to be in the bundle -- renamed or dropped, the clause would deny with a remedy nobody could run."
+    }
   },
   {
     "id": "U02",
@@ -705,7 +709,11 @@
     "fixtures_no_discharge": [
       "echo 'probe_child_capability.py --target x --require-change'",
       "probe_child_capability.py --target x"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "shipped",
+      "why": "Same program as U01 and the same argument, under a different invocation (`--target ... --after-failure --require-change`). The re-launch question is about a target that already failed once, and only the probe records what changed, so no other program can answer it."
+    }
   },
   {
     "id": "U03",
@@ -752,7 +760,11 @@
     "fixtures_no_discharge": [
       "echo 'ps aux'",
       "psql"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "open",
+      "why": "The guard names `ps` and `pgrep`, and the act -- listing processes in the observer's namespace -- has many other spellings: `top -b`, `pidof`, `pstree`, or reading /proc directly. TRIED AND REJECTED: composing over a host tool enum, the move U10/U12/U19 made. The host ships no process-listing tool, so there is nothing closed to compose with, and `Read` of /proc/<pid> would key on a pid rather than on the signal target this clause keys on. Lengthening the name list leaves the covering exactly as monotone as it is now, so the list stays at the two spellings the corpus actually shows and the limit is stated instead."
+    }
   },
   {
     "id": "U06",
@@ -801,7 +813,11 @@
     "fixtures_no_discharge": [
       "echo \"curl -H 'Authorization: Bearer t' https://x\"",
       "curl https://x"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "open",
+      "why": "The guard names `curl`, and an authenticated read canary can equally be `wget --header`, `http`/`httpie`, or a language runtime's own client. TRIED AND REJECTED: the host's `WebFetch`, which is a closed enum and would have composed cleanly -- it cannot carry an Authorization header, so it does not perform this act at all. A canary that is not authenticated answers a different question than the one U06 asks, and admitting it would discharge the obligation with evidence about the wrong thing."
+    }
   },
   {
     "id": "U08",
@@ -850,7 +866,11 @@
     "fixtures_no_discharge": [
       "echo 'gpg --clearsign f'",
       "gpg --list-keys"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "open",
+      "why": "The guard names `gpg`, and a signer canary can be `gpg2`, `sq sign`, `ssh-keygen -Y sign`, or a smartcard agent's own tool. TRIED AND REJECTED: a host enum -- there is no signing tool in the host surface. Also rejected: keying on git's own `commit -S`, which is the COSTLY ACT this clause guards, not a probe of the signer; using it as the guard would let the act license itself, the same self-licence `dispatch.pre_tool_use` already refuses for `git push && git status`."
+    }
   },
   {
     "id": "U09",
@@ -941,14 +961,18 @@
     "id": "U10",
     "event": "PreToolUse",
     "tools": [
-      "Bash"
+      "Bash",
+      "Read"
     ],
     "occasion": "the trace is about to traverse structured JSON data",
     "costly": "traverse structured JSON data",
     "guard": "look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file",
     "subject": {
-      "on": "tool_input.command",
-      "pattern": "\\s([\\w./-]+\\.json)\\s*$",
+      "on": [
+        "tool_input.command",
+        "tool_input.file_path"
+      ],
+      "pattern": "(?:^|\\s)([\\w./-]+\\.json)\\s*$",
       "group": 1
     },
     "fingerprint": {
@@ -963,12 +987,21 @@
       ]
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "jq"
-      ],
-      "then_matches": "(\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+      "any_of": [
+        {
+          "kind": "program",
+          "on": "tool_input.command",
+          "names": [
+            "jq"
+          ],
+          "then_matches": "(\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+        },
+        {
+          "kind": "regex",
+          "on": "tool_name",
+          "pattern": "^Read$"
+        }
+      ]
     },
     "window": "session",
     "deny_reason": "traverse structured JSON whose structure was never once looked at; run `jq 'keys'`, `jq 'type'`, or a `jq -e` type/key assertion on the file first",
@@ -981,17 +1014,36 @@
       "jq -e 'type == \"object\" and has(\"items\")' response.json",
       "python3 -m json.tool response.json"
     ],
-    "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges.",
+    "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges. COMPOSED over the host surface, the same move U12 and U19 took to Grep: reading the file IS looking at its structure, and `Read` is a CLOSED host enum, so naming it retires a vocabulary instead of widening one -- a `jq`-only guard is monotone in vocabulary (Coverings.v Thm 5) and is defeated by inspecting the file any other way. The subject had to move with it: a Read carries its file in `tool_input.file_path`, not in a command, so with a single-field subject the composed guard would key to \"\" and discharge nothing.",
     "fixtures_discharge": [
       "jq -e . f.json",
       "jq 'keys' f.json",
       "jq 'type' f.json",
-      "jq 'has(\"k\")' f.json"
+      "jq 'has(\"k\")' f.json",
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "f.json"
+        }
+      }
     ],
     "fixtures_no_discharge": [
       "echo 'jq -e . f.json'",
-      "jq . f.json"
-    ]
+      "jq . f.json",
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "f.json",
+          "content": "{}"
+        }
+      }
+    ],
+    "guard_vocabulary": {
+      "closure": "composed",
+      "why": "The `jq` name list is joined by a branch matching the host `Read` on `tool_name`, a CLOSED enum: reading the file IS looking at its structure, so the act is covered however the shell command is spelled. The subject moves with the guard -- `subject.on` names both `tool_input.command` and `tool_input.file_path` -- because a Read carries its file in the second, and a composition whose subject stayed on one surface would discharge nothing while reading as done."
+    }
   },
   {
     "id": "U12",
@@ -1090,7 +1142,11 @@
           "file_path": "/x"
         }
       }
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "composed",
+      "why": "The `rg`/`grep` names are joined by a branch matching the host `Grep` on `tool_name`. Searching before applying a patch is the act, and the host's own search tool performs it; `tool_name` is a closed enum, so naming it retires the shell vocabulary rather than extending it. U12 keys on `session_id`, so unlike U10 its composition needed no subject change."
+    }
   },
   {
     "id": "U13",
@@ -1281,7 +1337,11 @@
           "file_path": "/x"
         }
       }
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "composed",
+      "why": "Same composition as U12 and for the same reason -- a branch on the host `Grep` -- over a longer shell list, because the comparison act this clause guards is spelled more ways at the shell than the search in U12 is."
+    }
   },
   {
     "id": "U20",
@@ -1365,7 +1425,11 @@
     "fixtures_no_discharge": [
       "echo 'go test ./...'",
       "go build ./..."
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "open",
+      "why": "The guard names `pytest` and `curl` as stand-ins for `an independent behavior observer`, and that category is unbounded by construction: any program that observes the subject's behavior qualifies, which is the point of the clause. TRIED AND REJECTED: discharging on evidence in `tool_response.stdout` -- that a run PRODUCED a result -- which would be name-agnostic. It fails for the reason the positive form works elsewhere: that form compares a claim against the number a run produced, and both are observations. Here there is no number the obligation refers to, so the check would have to match output words like `passed` or `ok`, moving the lexicon from program names to output words and leaving it exactly as monotone."
+    }
   },
   {
     "id": "U24",
@@ -1455,7 +1519,11 @@
       "echo 'note; PYTHONWARNINGS=error pytest'",
       "grep -rn 'x; PYTHONWARNINGS=error' notes.md",
       "pytest -q"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "open",
+      "why": "The guard names ten runners and four test frameworks, and the category has no end: `bazel test`, `ctest`, `mvn test`, `dotnet test` and `deno test` are all suites and none is listed. TRIED AND REJECTED: discharging on `tool_response.stdout` carrying a suite's result, which would be name-agnostic -- it degenerates into matching output words (`passed`, `ok`, `FAILED`), which is the same monotone covering with the lexicon moved from program names to result words. Also rejected: a host tool enum, since the host ships no test runner. What IS closed here is the CONFIGURATION half rather than the runner: promoting warnings to errors has few spellings (`-W error`, `PYTHONWARNINGS=error`, `-Werror`, `-D warnings`), and that half is what the guard discriminates on. The runner names are the open half, stated as such."
+    }
   },
   {
     "id": "U25",
@@ -1550,6 +1618,10 @@
       "echo 'pytest -k prefix'",
       "pytest -q",
       "grep -rn 'pytest -k prefix' notes.md"
-    ]
+    ],
+    "guard_vocabulary": {
+      "closure": "open",
+      "why": "The guard names `pytest` and `unittest`, and a prefix-distractor regression test can be run by any framework at all. TRIED AND REJECTED: keying on the TEST's own identity rather than its runner -- the distractor test is one this repository writes, so its path is knowable and would be name-agnostic across runners. It fails because the path is an argument to the command, not the program, and a mention of that path (`echo`, `grep` over a notes file) would then discharge the obligation; the invocation/mention distinction is exactly what the program covering exists to keep. Also rejected: a host tool enum, since the host ships no test runner. That the runner is in practice whatever THIS repository uses is a fact about today's tree, not a closure, and writing it as one would be a limit softened by circumstance."
+    }
   }
 ]

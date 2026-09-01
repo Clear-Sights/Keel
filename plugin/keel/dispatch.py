@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 from . import clauses as C
-from . import journal, wire
+from . import journal, recorder, wire
 from .ledger import Demand, Ledger, derive_id, legacy_state, state_dir
 
 # A HEADER ON THE COMMAND, and nowhere else. The exemption is the one thing that turns the whole
@@ -106,6 +106,9 @@ def _ids(event: dict) -> tuple[str, str]:
     return str(event.get("session_id") or ""), str(event.get("agent_id") or "")
 
 
+_MISSING_FIELD = None
+
+
 def _subject(clause, event: dict) -> str:
     """The ledger key. It must yield the SAME value for the costly act and for its guard.
 
@@ -120,7 +123,19 @@ def _subject(clause, event: dict) -> str:
     """
     spec = clause.subject
     if isinstance(spec, dict):
-        raw = _get(event, spec.get("on") or "tool_input.command")
+        # `on` may name SEVERAL fields, tried in order. One act and its guard do not always
+        # arrive through the same surface: a jq traversal carries its file in the command,
+        # while the host `Read` that inspects the same file carries it in `tool_input.file_path`.
+        # With a single field the guard yields no key at all, so it can never discharge the
+        # demand it plainly satisfies -- the guard would be composed over two surfaces while the
+        # SUBJECT stayed nominal, and the composition would silently do nothing.
+        fields = C.subject_fields(spec)
+        raw = _MISSING_FIELD
+        for field in fields:
+            candidate = _get(event, field)
+            if isinstance(candidate, str) and candidate:
+                raw = candidate
+                break
         # A segment-scoped predicate matched ONE segment; the subject must be extracted
         # from that segment, not the whole string, or a two-command line keys the wrong
         # operand and the deny names something the guard cannot discharge.
@@ -555,6 +570,11 @@ def _record(event: dict, out: dict) -> None:
     "did Keel catch anything this session?" stops being unanswerable.
     """
     try:
+        # The SHAPE census, off unless asked for. It runs before the decision branches because
+        # it records what the host SENT, which is independent of what Keel decided -- and the
+        # question it exists to answer (does any tool_response key carry an exit status) is
+        # about events Keel allowed just as much as ones it denied.
+        recorder.record(event)
         hook = event.get("hook_event_name")
         wire_out = out.get("hookSpecificOutput") if isinstance(out, dict) else None
         if isinstance(wire_out, dict) and wire_out.get("permissionDecision") == "deny":
