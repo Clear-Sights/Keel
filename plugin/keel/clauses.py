@@ -120,6 +120,17 @@ class Clause:
     # Text cannot tell an invocation from a mention, so a row that needs it must name what was
     # tried -- the loader refuses the row otherwise, the way it refuses a missing `construction`.
     why_no_program: str = ""
+    # A guard that names programs is monotone in vocabulary (Coverings.v, Thm 5): it is
+    # discharged by the names it lists and defeated by doing the same act under any other name.
+    # That is sometimes fine and sometimes the whole hole, and the difference cannot be read off
+    # the name list -- so each such guard states which it is, and the loader refuses one that
+    # says nothing. Two dispositions are closed: `shipped`, the program is this bundle's own and
+    # there is no other name for the act; `composed`, the guard also matches a CLOSED host enum,
+    # which retires a vocabulary rather than widening one. `open` is the honest third: the act
+    # has many names, no host surface performs it, and the argument says what was tried. An open
+    # guard is a STATED LIMIT, not a defect to be quietly closed by lengthening the list --
+    # lengthening it leaves the covering exactly as monotone as it was.
+    guard_vocabulary: dict[str, Any] | None = None
 
 
 def waiver_status(clause: Clause, today: date | None = None) -> str:
@@ -838,6 +849,31 @@ def discharges(clause: Clause, event: dict) -> bool | None:
     return result
 
 
+def _guard_names(predicate: Any) -> list[str]:
+    """Every program name a guard names, compound branches included."""
+    if not isinstance(predicate, dict):
+        return []
+    found = list(predicate.get("names") or [])
+    for sub in (predicate.get("any_of") or []) + (predicate.get("all_of") or []):
+        found += _guard_names(sub)
+    return found
+
+
+def _matches_a_tool_enum(predicate: Any) -> bool:
+    """True when some branch of the guard reads `tool_name`.
+
+    This is what makes `composed` a CHECK rather than a claim: `tool_name` is a closed host
+    enum, so a branch reading it covers the act however the operator spells the shell command.
+    A clause may say it composed; this asks the table whether it did.
+    """
+    if not isinstance(predicate, dict):
+        return False
+    if predicate.get("on") == "tool_name":
+        return True
+    return any(_matches_a_tool_enum(sub)
+               for sub in (predicate.get("any_of") or []) + (predicate.get("all_of") or []))
+
+
 def subject_fields(spec: Any) -> list[str]:
     """The event fields a subject extractor may read, in order.
 
@@ -1011,6 +1047,22 @@ def _admit(clause: Clause) -> Clause:
         if predicate.get("kind") == "regex" and predicate.get("on") == COMMAND_FIELD:
             if not getattr(clause, "why_no_program", None):
                 raise ClauseError("CLAUSE-TEXT-COVERING-UNDISPOSITIONED", clause.id)
+    if _guard_names(clause.discharged_by):
+        disposition = (clause.guard_vocabulary or {}).get("closure")
+        if disposition not in ("shipped", "composed", "open"):
+            raise ClauseError(
+                "CLAUSE-GUARD-VOCABULARY-UNDISPOSITIONED",
+                f"{clause.id}: its guard names programs, so it is monotone in vocabulary and "
+                f"must declare closure as shipped, composed or open with an argument")
+        if not (clause.guard_vocabulary or {}).get("why"):
+            raise ClauseError(
+                "CLAUSE-GUARD-VOCABULARY-UNARGUED",
+                f"{clause.id}: closure {disposition!r} is asserted with no argument")
+        if disposition == "composed" and not _matches_a_tool_enum(clause.discharged_by):
+            raise ClauseError(
+                "CLAUSE-GUARD-VOCABULARY-NOT-COMPOSED",
+                f"{clause.id}: declares closure 'composed' but no branch of its guard matches "
+                f"the host tool enum, so the claim is a sentence the table can contradict")
     disc = _discriminator(clause)
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
@@ -1100,6 +1152,7 @@ def _load_object(data: dict[str, Any]) -> Clause:
         waiver=data.get("waiver"),
         construction=data.get("construction") or "",
         why_no_program=data.get("why_no_program") or "",
+        guard_vocabulary=data.get("guard_vocabulary"),
     )
     return _admit(clause)
 
