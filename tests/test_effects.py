@@ -264,13 +264,24 @@ class TheDispatcherEnforcesAnEffect(Repo):
                               text=True, env=env, timeout=60)
         return json.loads(done.stdout.strip() or "{}")
 
-    def _act(self, command: str, run: bool = True) -> tuple[dict, dict]:
+    def _act(self, command: str, run: bool = True, live: bool = True) -> tuple[dict, dict]:
+        """A Bash call through the hook. `live` measures the world around it; otherwise the
+        PostToolUse event carries an explicit empty record, because on a shared host the
+        world moves on its own (a CI runner opened connections during `git status`) and only
+        the act under test is meant to be observed."""
         before = self._hook(hook_event_name="PreToolUse", tool_name="Bash",
                             tool_input={"command": command})
         if run and not before:
             subprocess.run(command, shell=True, cwd=self.repo, capture_output=True)
-        after = self._hook(hook_event_name="PostToolUse", tool_name="Bash",
-                           tool_input={"command": command}, tool_response={"stdout": ""})
+        post = dict(hook_event_name="PostToolUse", tool_name="Bash",
+                    tool_input={"command": command}, tool_response={"stdout": ""})
+        if not live:
+            record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
+                                     "pids_gone", "pids_spawned") else False
+                      for n in effects.EFFECTS}
+            record["remote_landed"] = None
+            post["keel_effect"] = record
+        after = self._hook(**post)
         return before, after
 
     @staticmethod
@@ -279,8 +290,8 @@ class TheDispatcherEnforcesAnEffect(Repo):
 
     def test_a_rewrite_nobody_looked_at_refuses_the_next_call_until_the_diff_is_seen(self) -> None:
         # The session's opening debt, paid the way any session pays it.
-        self.assertEqual({}, self._act("git status")[0])
-        self.assertEqual({}, self._act("git fetch origin", run=False)[0])
+        self.assertEqual({}, self._act("git status", live=False)[0])
+        self.assertEqual({}, self._act("git fetch origin", run=False, live=False)[0])
         # The act itself is not refused: nothing before it could tell it from `cat`.
         before, _ = self._act("printf changed > a.txt")
         self.assertEqual({}, before)
@@ -294,7 +305,7 @@ class TheDispatcherEnforcesAnEffect(Repo):
         # did around this test -- on a CI runner the network counters move on their own, and a
         # connection nobody in this test opened is still an observed effect (U06, U24). The
         # claim here is about the rewrite: after the diff, none of its three clauses is owed.
-        self.assertEqual({}, self._act("git diff")[0])
+        self.assertEqual({}, self._act("git diff", live=False)[0])
         after = self.denied(self._hook(hook_event_name="PreToolUse", tool_name="Bash",
                                        tool_input={"command": "echo next"}))
         for paid in ("U12", "U13", "U19"):
