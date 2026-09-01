@@ -250,6 +250,24 @@ def _measure_probe(spec: dict[str, Any]) -> bool | None:
 
 
 def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
+    # COMPOSITION ACROSS FIELDS, and it has to live here rather than inside one kind. `any_of`
+    # already existed, but only INSIDE `kind == "program"`, so it could only ever compose two
+    # readings of `tool_input.command`. That made one act unexpressible: the SAME act performed
+    # through a different host surface. Searching is `grep` in a Bash command AND it is the host's
+    # own `Grep` tool -- one obligation, two surfaces, different `on` fields. With no top-level
+    # composition the guard could name only one of them, so an agent that searched the ordinary
+    # way was told it had not. Measured before this change: the `Grep` tool discharged neither
+    # U12 nor U19.
+    #
+    # A predicate carrying `any_of`/`all_of` and NO `kind` of its own is therefore a COMPOSITION
+    # of whole predicates, each evaluated on its own terms. `kind`-bearing predicates are
+    # untouched, so U20's and U24's existing program-level `any_of` keeps its current meaning --
+    # this branch cannot reach them, because they declare a `kind`.
+    if predicate.get("kind") is None:
+        if predicate.get("any_of"):
+            return any(_base_predicate(sub, event) for sub in predicate["any_of"])
+        if predicate.get("all_of"):
+            return all(_base_predicate(sub, event) for sub in predicate["all_of"])
     if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
         return False
     tools = predicate.get("tools")
