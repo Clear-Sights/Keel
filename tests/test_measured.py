@@ -176,10 +176,10 @@ class EveryMeasuredRowStillMeasuresThat(unittest.TestCase):
         reading 10 against a 25-session corpus, and it stayed wrong because nothing ran the
         command behind it."""
         smoke_replace(
-            self, MEASURED, b"replay\t25\t25\t", b"replay\t25\t10\t",
+            self, MEASURED, b"replay\t26\t26\t", b"replay\t25\t10\t",
             "tests.test_measured.EveryMeasuredRowStillMeasuresThat."
             "test_every_numeric_denominator_recomputes_to_what_it_claims",
-            "replay: claims denominator '10', its own command printed '25'",
+            "replay: claims denominator '10', its own command printed '26'",
         )
 
     def test_the_exit_code_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red

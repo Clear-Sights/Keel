@@ -1,0 +1,6 @@
+{"description": "a checker's PASS is about to license the ending, and nothing ever showed that checker capable of failing", "clause": "C08-check-can-fail", "derailment": "the ending is reached citing a suite PASS, with no can-fail plant, --self-test or meta_test ever run against that suite", "derails_at": 1, "expect": "recovery"}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 -m unittest discover -s tests"}}
+{"hook_event_name": "Stop", "session_id": "rec", "cwd": "/work/repo"}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "python3 -m unittest tests.test_engine.Case.test_the_check_can_fail"}}
+{"hook_event_name": "PreToolUse", "session_id": "rec", "cwd": "/work/repo", "tool_name": "Bash", "tool_input": {"command": "git status --short"}}
+{"hook_event_name": "Stop", "session_id": "rec", "cwd": "/work/repo"}

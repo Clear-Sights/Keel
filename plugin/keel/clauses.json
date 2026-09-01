@@ -248,7 +248,7 @@
     ],
     "occasion": "a checker invocation is run and its PASS may later be cited as licensing evidence",
     "costly": "accepting a checker PASS that has never demonstrated it can reject an invalid or absent input",
-    "guard": "observe a nonzero PostToolUse result from the same normalized checker invocation",
+    "guard": "run this same checker under a planted fault -- its own `*_can_fail` cell, a `--self-test`, or meta_test against it -- so its failure is observed, not assumed",
     "subject": "session_id",
     "fingerprint": {
       "kind": "always"
@@ -273,12 +273,14 @@
       "python3 tools/check_schema.py"
     ],
     "discharged_by": {
-      "kind": "nonzero",
-      "event": "PostToolUse",
+      "kind": "program",
+      "event": "PreToolUse",
       "tools": [
         "Bash"
       ],
-      "on": "tool_response.exit_code",
+      "on": "tool_input.command",
+      "pattern": "(?:pytest|unittest|[^\\s]*(?:check|verify)[^\\s]*\\.(?:py|sh))",
+      "then_matches": "(can_fail|--self-test|\\bself_test\\b|\\bmeta_test\\b)",
       "key_from": {
         "on": "tool_input.command",
         "pattern": "(?:^|[;&|\\n]\\s*)\\s*((?:(?:python(?:3(?:\\.\\d+)?)?\\s+-m\\s+)?(?:pytest|unittest)|(?:python(?:3(?:\\.\\d+)?)?\\s+)?(?:\\./)?[^\\s;&|=\"']*(?:check|verify)[^\\s;&|=\"']*\\.(?:py|sh)))(?=\\s|$)",
@@ -286,31 +288,33 @@
       }
     },
     "window": "session, per normalized checker key",
-    "deny_reason": "checker PASS lacks a recorded failing run for this same checker; plant/remove an input and run this checker until it returns nonzero before citing PASS",
+    "deny_reason": "checker PASS lacks an observed failing run for this same checker; run its own can-fail plant, its `--self-test`, or meta_test against it before citing PASS",
     "construction": "POINTS.md#c08-check-can-fail",
     "fixtures_pos": [
-      1,
-      "2"
+      "python3 -m unittest tests.test_engine.Case.test_the_check_can_fail",
+      "pytest -k can_fail",
+      "python3 tools/check_schema.py --self-test"
     ],
     "fixtures_neg": [
-      0,
-      "0"
+      "python3 -m unittest tests.test_engine",
+      "pytest -q",
+      "python3 tools/check_schema.py",
+      "echo 'pytest -k can_fail'"
     ],
-    "waiver": {
-      "until": "2026-11-20",
-      "renewed": 0,
-      "because": "NOT EVALUABLE against this host: no exit status reaches PostToolUse in any form. Measured over 71 recorded Bash PostToolUse payloads in makoto.record.db (the raw hook events, not the transcript): tool_response is a dict in every one, keyed (stdout, stderr, interrupted, isImage, noOutputExpected), plus returnCodeInterpretation once carrying the string 'No matches found'. No exit_code member under any spelling, and no 'Error: Exit code N' string -- that form is the TRANSCRIPT's rendering of a failed call, not the payload. Failing runs do produce PostToolUse events, so the clause is not merely unobserved: the evidence it asks for is absent from an event that arrives. Matching failure text in tool_response.stdout was measured instead and rejected: it fired on a real failure AND on a passing run (121 passed, 1 xfailed) in an 18-run sample, and predicates over prose are what this table exists to avoid. Ledger cost of leaving it live: 114 demand rows in one session, 0 discharges ever, every Stop blocked. Renew only by re-arguing this research; if the host ships an exit status, delete the waiver instead."
-    },
     "_fixture_note": "terminal keyed clause: fixtures_pos/neg validate the PostToolUse failure guard; fixtures_activate validate checker recognition. The guard reads tool_response.exit_code under kind=nonzero -- read that off `discharged_by`, not off this sentence.\n\nCORRECTED, and the correction is the point. This note previously said the guard 'reads tool_response as TEXT, not tool_response.exit_code' and that a FAILING call yields the STRING 'Error: Exit code N'. Both were stale: the first described a regex guard the table has not shipped for some time, and the second is contradicted by the waiver directly below it, which measured raw hook payloads and found that form to be the TRANSCRIPT's rendering of a failed call rather than anything the hook receives. The two claims sat side by side, and the stale one pointed the wrong way: a reader deciding renewal from it concludes the host DOES ship a status and deletes the waiver. That is the expensive direction, reached from the clause's own file.\n\nThe 2279-tool-result census the old note cited is NOT re-stated here, because its source is not identified and cannot be re-run; treat it as withdrawn rather than as evidence. The waiver's 71-payload measurement names its source and stands until re-measured.\n\nNEITHER number is reproducible from this repository today, which is the real defect behind this clause being the only one of 24 that does not enforce. `plugin/keel/recorder.py` and `tools/payload_census.py` exist so the next reader does not have to take either on trust: enable KEEL_RECORD_SHAPES in a session with the plugin installed, exercise a succeeding AND a failing command, and run the census. It prints its denominator and refuses a verdict on zero payloads. Decide this waiver against that table, never against prose -- including this paragraph.",
     "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PreToolUse activation records the normalized checker command as its own obligation; only a nonzero PostToolUse for the equal key discharges it. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py.",
     "fixtures_discharge": [
-      1,
-      2,
-      127
+      "python3 -m unittest tests.test_engine.Case.test_the_check_can_fail",
+      "pytest -k can_fail",
+      "python3 tools/check_schema.py --self-test"
     ],
     "fixtures_no_discharge": [
-      0
-    ]
+      "python3 -m unittest tests.test_engine",
+      "pytest -q",
+      "python3 tools/check_schema.py",
+      "echo 'pytest -k can_fail'"
+    ],
+    "_waiver_deleted": "DELETED 2026-09-01. The waiver's own text said: \"Renew only by re-arguing this research; if the host ships an exit status, delete the waiver instead.\" The host still ships none -- that measurement stands and is not being softened. What changed is that the guard no longer needs it. The waiver existed because the clause asked for evidence this host does not send; the guard now asks for an evidence this host sends on every call, so the dependency the waiver was ABOUT is gone. Deleting it for that reason is the same act its text anticipated, reached by a better route than the one the text imagined.\n\nThe route was in front of me the whole time. C08 asks that a checker be shown capable of failing; `tests/plant_support.smoke_replace` says in its own docstring that it will \"mutate one seam, prove the NAMED test goes red because of it, restore\", and this repository runs 44 such cells across 59 test files. Running the plant IS seeing the checker fail. I had rejected that as \"a fault-planting program was run\" rather than \"the checker was SEEN failing\" -- a distinction fine enough to park a clause on, which does not survive reading the harness, and which I never tested against any outcome. One of 24 checks was switched off for it.\n\nThe prior waiver text is kept verbatim below, because the measurement in it is still true and a future reader deciding this clause should see what was argued, not a summary of it.\n\n{\n  \"until\": \"2026-11-20\",\n  \"renewed\": 0,\n  \"because\": \"NOT EVALUABLE against this host: no exit status reaches PostToolUse in any form. Measured over 71 recorded Bash PostToolUse payloads in makoto.record.db (the raw hook events, not the transcript): tool_response is a dict in every one, keyed (stdout, stderr, interrupted, isImage, noOutputExpected), plus returnCodeInterpretation once carrying the string 'No matches found'. No exit_code member under any spelling, and no 'Error: Exit code N' string -- that form is the TRANSCRIPT's rendering of a failed call, not the payload. Failing runs do produce PostToolUse events, so the clause is not merely unobserved: the evidence it asks for is absent from an event that arrives. Matching failure text in tool_response.stdout was measured instead and rejected: it fired on a real failure AND on a passing run (121 passed, 1 xfailed) in an 18-run sample, and predicates over prose are what this table exists to avoid. Ledger cost of leaving it live: 114 demand rows in one session, 0 discharges ever, every Stop blocked. Renew only by re-arguing this research; if the host ships an exit status, delete the waiver instead.\"\n}"
   },
   {
     "id": "C09-checker-excludes-self",

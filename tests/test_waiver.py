@@ -52,6 +52,27 @@ STOP = {"hook_event_name": "Stop", "session_id": "w", "agent_id": ""}
 
 
 def waived_clause() -> C.Clause:
+    """A SHIPPED clause with a live waiver attached for the length of one cell.
+
+    It used to return the shipped clause that CARRIED a waiver, and C08 was the only one. That
+    coupled the waiver machinery to the estate happening to have a parked clause: the day C08
+    was un-waived -- which is the outcome the machinery exists to make reachable -- every cell
+    here raised, so the tests guarding the mechanism failed precisely because the mechanism had
+    done its job. A parked clause is a temporary state; a mechanism for parking is permanent,
+    and the second must not be testable only while the first is true.
+
+    The clause is still a REAL shipped row driven through the real dispatcher, so nothing here
+    tests a fiction. Only the waiver is synthetic, and it has to be: the table now carries none.
+    """
+    for clause in C.load_default():
+        if clause.id.startswith("C08"):
+            return dataclasses.replace(
+                clause, waiver={"until": "2099-01-01", "renewed": 0,
+                                "because": "synthetic, for the machinery cells in this module"})
+    raise AssertionError("C08 is not in the shipped clause table")
+
+
+def unwaived_clause() -> C.Clause:
     for clause in C.load_default():
         if clause.id.startswith("C08"):
             return clause
@@ -104,11 +125,17 @@ class WaiverIsDefaultDead(unittest.TestCase):
         self.assertEqual(24, len(table))
         self.assertIn("C08-check-can-fail", [c.id for c in table])
 
+    def test_TEETH_the_shipped_table_parks_nothing(self) -> None:
+        """Every one of the 24 enforces. This is the assertion that would have to be EDITED to
+        park a clause again, which is the point: parking is a decision someone states here, not
+        a field that quietly appears in the table."""
+        parked = [c.id for c in C.load_default() if C.waiver_status(c) != "none"]
+        self.assertEqual([], parked, "a clause is parked; say so here with its reason")
+
     def test_TEETH_a_clause_without_a_waiver_is_untouched(self) -> None:
         for clause in C.load_default():
-            if not clause.id.startswith("C08"):
-                with self.subTest(clause=clause.id):
-                    self.assertEqual("none", C.waiver_status(clause))
+            with self.subTest(clause=clause.id):
+                self.assertEqual("none", C.waiver_status(clause))
 
     def test_the_check_can_fail(self) -> None:
         """Both directions come from the SAME driver, so neither assertion can be vacuous.

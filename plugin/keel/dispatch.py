@@ -395,7 +395,21 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                     did = derive_id(session, agent, cl.id, subject)
                     ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
                                          subject=subject, reason=cl.deny_reason))
-                    continue
+                    # NO `continue` HERE, and the reason is the whole shape of a keyed standing
+                    # clause: ONE ACT CAN BE BOTH THE OCCASION AND THE GUARD. C08 is the case --
+                    # running a checker's own can-fail plant both produces a PASS that could be
+                    # cited AND observes that checker failing. Skipping the discharge branch
+                    # after demanding made such an act raise an obligation it had already
+                    # satisfied, so proving a checker can fail left the ending blocked by the
+                    # very clause the proof answers. Both sides key on `standing:{key}`, so the
+                    # discharge below lands on the row just raised and the pair nets clean.
+                    #
+                    # This is NOT the self-licence `pre_tool_use` refuses. That one is two
+                    # SEGMENTS in one string with the act before the guard -- `git push && git
+                    # status` -- where the guard arrives too late to have licensed anything.
+                    # Here there are not two acts: the plant IS the observation, so there is no
+                    # order for it to be in. An ordinary run of the same checker still demands
+                    # and does not discharge, because the guard requires the fault-proving form.
                 aid = derive_id(session, agent, cl.id, "activated")
                 ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
                                      subject="activated", reason="occasion observed"))

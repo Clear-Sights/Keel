@@ -213,7 +213,7 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 | `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first (`ls`, `find` without -delete, or `git status`) | [POINTS.md#a02](plugin/POINTS.md#a02) |
 | `A03` | overwrite remote history that was never read, discarding commits with no local copy | fetch the ref first (`git fetch`) | [POINTS.md#a03](plugin/POINTS.md#a03) |
 | `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](plugin/POINTS.md#c03-verify-what-returns) |
-| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | observe a nonzero PostToolUse result from the same normalized checker invocation | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
+| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault -- its own `*_can_fail` cell, a `--self-test`, or meta_test against it -- so its failure is observed, not assumed | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
 | `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | run a process listing filtered by the shell or checker PID before trusting the match | [POINTS.md#c09-checker-excludes-self](plugin/POINTS.md#c09-checker-excludes-self) |
 | `D01` | fan out work with nothing probed first | probe the ground first with a read or a search, so the brief describes what is there | [POINTS.md#d01](plugin/POINTS.md#d01) |
 | `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | [POINTS.md#p01](plugin/POINTS.md#p01) |
@@ -257,7 +257,7 @@ dispatcher: 23 derailments[^m-derailments] — **one for every clause that is no
 waiver** — each denied at or before the event where the session went wrong, and each required to
 name the clause it declares rather than merely to deny, so a session is evidence about its own
 row and not about the table. Plus a recovery session where the same denied call passes after its
-guard, and a benign control that stays silent — 25/25,[^m-replay] standard library only, and
+guard, and a benign control that stays silent — 26/26,[^m-replay] standard library only, and
 succeeds iff every session meets its expectation.
 
 Two of those 23 needed the shape the A03 session already used: a clause declared SUPERSET of
