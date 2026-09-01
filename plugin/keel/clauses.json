@@ -41,6 +41,14 @@
       "git log --oneline -3",
       "git diff --cached",
       "gh pr view 6"
+    ],
+    "fixtures_discharge": [
+      "git status",
+      "git status --short"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'git status'",
+      "git stash"
     ]
   },
   {
@@ -113,7 +121,17 @@
       "rm single-file.txt",
       "git status --short"
     ],
-    "_note": "Subject: the operand keyed per demand. A trailing-slash path when there is one; otherwise the destructive form itself, because `git clean -fd` and `find ... -delete` name no path and an unkeyable occasion makes this clause abstain rather than deny."
+    "_note": "Subject: the operand keyed per demand. A trailing-slash path when there is one; otherwise the destructive form itself, because `git clean -fd` and `find ... -delete` name no path and an unkeyable occasion makes this clause abstain rather than deny.",
+    "fixtures_discharge": [
+      "ls -la",
+      "find . -name x",
+      "du -sh .",
+      "git status"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'ls -la'",
+      "lsof"
+    ]
   },
   {
     "id": "A03",
@@ -164,6 +182,13 @@
       "git push --force-with-lease origin main",
       "git fetch origin main",
       "git push origin main"
+    ],
+    "fixtures_discharge": [
+      "git fetch origin"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'git fetch origin'",
+      "git fetchall"
     ]
   },
   {
@@ -206,7 +231,14 @@
       "Agent",
       "Task"
     ],
-    "_note": "Admission test: a delegated result is inherited as finished work by default. If nobody inspects it, later work is built on an unverified artifact and the missing observation cannot be reconstructed after the session ends; healing requires discarding the inherited result and restarting the work, path (3). The verdict row warns that a broad Read/Glob/Grep discharge can license one unit with activity about another. Tool-name events expose no shared unit or artifact operand, so an extractor would abstain rather than protect; this clause tightens the observable guard to an actual Read and activates only after dispatch. The remaining session-level approximation is admitted only if the frozen-corpus measurement reports no candidate false positives and its terminal firing rate stays below HIGH_INTERRUPT."
+    "_note": "Admission test: a delegated result is inherited as finished work by default. If nobody inspects it, later work is built on an unverified artifact and the missing observation cannot be reconstructed after the session ends; healing requires discarding the inherited result and restarting the work, path (3). The verdict row warns that a broad Read/Glob/Grep discharge can license one unit with activity about another. Tool-name events expose no shared unit or artifact operand, so an extractor would abstain rather than protect; this clause tightens the observable guard to an actual Read and activates only after dispatch. The remaining session-level approximation is admitted only if the frozen-corpus measurement reports no candidate false positives and its terminal firing rate stays below HIGH_INTERRUPT.",
+    "fixtures_discharge": [
+      "Read"
+    ],
+    "fixtures_no_discharge": [
+      "Write",
+      "Bash"
+    ]
   },
   {
     "id": "C08-check-can-fail",
@@ -270,7 +302,15 @@
       "because": "NOT EVALUABLE against this host: no exit status reaches PostToolUse in any form. Measured over 71 recorded Bash PostToolUse payloads in makoto.record.db (the raw hook events, not the transcript): tool_response is a dict in every one, keyed (stdout, stderr, interrupted, isImage, noOutputExpected), plus returnCodeInterpretation once carrying the string 'No matches found'. No exit_code member under any spelling, and no 'Error: Exit code N' string -- that form is the TRANSCRIPT's rendering of a failed call, not the payload. Failing runs do produce PostToolUse events, so the clause is not merely unobserved: the evidence it asks for is absent from an event that arrives. Matching failure text in tool_response.stdout was measured instead and rejected: it fired on a real failure AND on a passing run (121 passed, 1 xfailed) in an 18-run sample, and predicates over prose are what this table exists to avoid. Ledger cost of leaving it live: 114 demand rows in one session, 0 discharges ever, every Stop blocked. Renew only by re-arguing this research; if the host ships an exit status, delete the waiver instead."
     },
     "_fixture_note": "terminal keyed clause: fixtures_pos/neg validate the PostToolUse failure guard; fixtures_activate validate checker recognition. The guard reads tool_response as TEXT, not tool_response.exit_code: the host sends no exit-code field. A SUCCEEDING Bash call yields a dict keyed (stdout, stderr, interrupted, isImage, noOutputExpected); a FAILING one yields the STRING 'Error: Exit code N\\n<output>'. Measured over 2279 recorded tool results (1985 dict / 175 str / 119 list, 67 distinct keys) -- no exit_code member under any spelling. The engine returns False for a non-str under kind=regex, so the success dict cannot discharge and only a real failure does.",
-    "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PreToolUse activation records the normalized checker command as its own obligation; only a nonzero PostToolUse for the equal key discharges it. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py."
+    "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PreToolUse activation records the normalized checker command as its own obligation; only a nonzero PostToolUse for the equal key discharges it. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py.",
+    "fixtures_discharge": [
+      1,
+      2,
+      127
+    ],
+    "fixtures_no_discharge": [
+      0
+    ]
   },
   {
     "id": "C09-checker-excludes-self",
@@ -283,14 +323,26 @@
     "guard": "run a process listing filtered by the shell or checker PID before trusting the match",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "pipeline",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*ps\\b[^;\\n]*\\|\\s*(?:grep|rg)\\b"
+      "upstream": {
+        "names": [
+          "ps"
+        ]
+      },
+      "operator": "|",
+      "downstream_matches": "^(?:grep|rg)\\b"
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "pipeline",
       "on": "tool_input.command",
-      "pattern": "(?:ps\\b[^;\\n]*\\|[^;\\n]*(?:grep|rg)\\b[^;\\n]*(?:-v|--invert-match)[^;\\n]*(?:\\$\\$|\\$BASHPID|self_pid|SELF_PID)|ps\\b[^;\\n]*\\|[^;\\n]*awk\\b[^;\\n]*(?:\\$\\$|\\$BASHPID|self_pid|SELF_PID)[^;\\n]*(?:!=|!~))"
+      "upstream": {
+        "names": [
+          "ps"
+        ]
+      },
+      "operator": "|",
+      "downstream_matches": "(?:^(?:grep|rg)\\b[^\\n]*(?:-v|--invert-match)[^\\n]*(?:\\$\\$|\\$BASHPID|self_pid|SELF_PID)|^awk\\b[^\\n]*(?:\\$\\$|\\$BASHPID|self_pid|SELF_PID)[^\\n]*(?:!=|!~))"
     },
     "window": "session",
     "deny_reason": "trust a ps pipeline that can match its own checker; first filter the listing with grep -v/rg --invert-match or awk using $$, $BASHPID, or an explicit self_pid",
@@ -307,7 +359,17 @@
       "systemctl is-active worker.service"
     ],
     "_note": "Admission test: a checker included in its own observation can create a stable false-positive process count. That apparent presence is then used as fact, and repeated checks reproduce the same observer contamination; doing nothing never reveals the absent target. Recovery requires interrupting the accepted result and rerunning from a correctly separated observer, effectively restarting the decision path (3). The verdict's broad pgrep/pkill/killall branch is narrowed away because it does not require a grep process in a ps pipeline and would interrupt ordinary process operations unrelated to self-inclusion. The remaining fingerprint names the concrete self-match surface, while the guard requires an identity-bearing inverted filter rather than a name-only grep trick.",
-    "why_no_program": "The occasion is a PIPELINE SHAPE -- `ps ... | grep ...` -- and the guard is an exclusion flag inside the second stage. An invocation predicate sees each stage as its own segment, so the relationship between them, which is the entire subject, is not expressible as a property of one invocation. Tried: argv on `ps`, which fires on every process listing whether or not it is piped into a matcher."
+    "fixtures_discharge": [
+      "ps aux | grep -v $$",
+      "ps -eo pid,comm | awk -v self_pid=$$ '$1 != self_pid'",
+      "ps aux | grep node | grep -v $$"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'ps aux | grep -v $$'",
+      "ps aux ; grep -v $$",
+      "ps aux || grep -v $$",
+      "ps aux | grep worker"
+    ]
   },
   {
     "id": "D01",
@@ -346,7 +408,16 @@
       "Grep",
       "Bash"
     ],
-    "_note": "Measured hole: 52 Agent dispatches in one session, zero clauses. A subagent result is adopted as fact -- the built-upon shape. Citation contract: `cite the probe that preceded the dispatch`."
+    "_note": "Measured hole: 52 Agent dispatches in one session, zero clauses. A subagent result is adopted as fact -- the built-upon shape. Citation contract: `cite the probe that preceded the dispatch`.",
+    "fixtures_discharge": [
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "fixtures_no_discharge": [
+      "Write",
+      "Bash"
+    ]
   },
   {
     "id": "P01",
@@ -383,7 +454,16 @@
       "Grep",
       "Agent"
     ],
-    "_note": "Measured hole: 29 ExitPlanMode calls in one session, zero clauses. A plan is the perfect asymmetry -- it defines the path and its end, and nobody decides to follow it."
+    "_note": "Measured hole: 29 ExitPlanMode calls in one session, zero clauses. A plan is the perfect asymmetry -- it defines the path and its end, and nobody decides to follow it.",
+    "fixtures_discharge": [
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "fixtures_no_discharge": [
+      "Write",
+      "Bash"
+    ]
   },
   {
     "id": "P02",
@@ -418,7 +498,14 @@
       "Glob",
       "Grep"
     ],
-    "_note": "P01 guards the same occasion and accepts Read/Glob/Grep as discharge, which answers a different question: reading establishes what the repository IS, not what was ASKED FOR. A plan can therefore be adopted having read forty files and asked nothing, and P01 counts it discharged. The two failure modes are independent -- a plan grounded in the tree can still be a plan for the wrong task -- so this is a separate clause rather than a widened P01. Against the admission test: left alone, a plan built on a guessed reading is FOLLOWED, because a plan's default is adoption and nothing in the run re-opens the interpretation. The state it leaves is work completed under the wrong goal, and that heals only by throwing the session away and starting over -- path (3), an ACTION, and the most expensive one. Its interruption cost is bounded by the occasion: ExitPlanMode is rare per session and one question discharges it for the whole session."
+    "_note": "P01 guards the same occasion and accepts Read/Glob/Grep as discharge, which answers a different question: reading establishes what the repository IS, not what was ASKED FOR. A plan can therefore be adopted having read forty files and asked nothing, and P01 counts it discharged. The two failure modes are independent -- a plan grounded in the tree can still be a plan for the wrong task -- so this is a separate clause rather than a widened P01. Against the admission test: left alone, a plan built on a guessed reading is FOLLOWED, because a plan's default is adoption and nothing in the run re-opens the interpretation. The state it leaves is work completed under the wrong goal, and that heals only by throwing the session away and starting over -- path (3), an ACTION, and the most expensive one. Its interruption cost is bounded by the occasion: ExitPlanMode is rare per session and one question discharges it for the whole session.",
+    "fixtures_discharge": [
+      "AskUserQuestion"
+    ],
+    "fixtures_no_discharge": [
+      "Read",
+      "Bash"
+    ]
   },
   {
     "id": "T01",
@@ -454,7 +541,14 @@
       "git commit -m done",
       "git log --oneline -3"
     ],
-    "_fixture_note": "terminal clause: fixtures validate discharged_by (the guard), since the fingerprint is `always`"
+    "_fixture_note": "terminal clause: fixtures validate discharged_by (the guard), since the fingerprint is `always`",
+    "fixtures_discharge": [
+      "git status"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'git status'",
+      "git diff"
+    ]
   },
   {
     "id": "T02",
@@ -508,6 +602,14 @@
     "fixtures_activate": [
       "git push -u origin main",
       "cd /x && git push"
+    ],
+    "fixtures_discharge": [
+      "git ls-remote origin main",
+      "git fetch origin"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'git ls-remote origin'",
+      "git remote -v"
     ]
   },
   {
@@ -546,6 +648,13 @@
     "fixtures_neg": [
       "python3 tools/probe_child_capability.py --writable-home --response-transport --result-write",
       "pytest -q"
+    ],
+    "fixtures_discharge": [
+      "probe_child_capability.py --writable-home /t --response-transport pipe --result-write"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'probe_child_capability.py --writable-home /t --result-write'",
+      "probe_child_capability.py --writable-home /t"
     ]
   },
   {
@@ -589,6 +698,13 @@
       "python3 tools/probe_child_capability.py --target unit-a --after-failure --require-change",
       "python3 -m pytest -q",
       "dispatch.sh"
+    ],
+    "fixtures_discharge": [
+      "probe_child_capability.py --target x --after-failure retry --require-change"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'probe_child_capability.py --target x --require-change'",
+      "probe_child_capability.py --target x"
     ]
   },
   {
@@ -628,6 +744,14 @@
     "fixtures_neg": [
       "ps -ef",
       "pgrep -af worker"
+    ],
+    "fixtures_discharge": [
+      "ps aux",
+      "pgrep -f worker"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'ps aux'",
+      "psql"
     ]
   },
   {
@@ -670,6 +794,13 @@
     "fixtures_neg": [
       "curl -H 'Authorization: Bearer token' https://api.example.test/me",
       "curl -I https://example.test"
+    ],
+    "fixtures_discharge": [
+      "curl -H 'Authorization: Bearer t' https://x"
+    ],
+    "fixtures_no_discharge": [
+      "echo \"curl -H 'Authorization: Bearer t' https://x\"",
+      "curl https://x"
     ]
   },
   {
@@ -711,6 +842,14 @@
     "fixtures_neg": [
       "printf test | gpg --clearsign",
       "git status --short"
+    ],
+    "fixtures_discharge": [
+      "gpg --clearsign f",
+      "gpg --detach-sign f"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'gpg --clearsign f'",
+      "gpg --list-keys"
     ]
   },
   {
@@ -787,6 +926,15 @@
       "git checkout -B claude/gyroscope-terminal-clauses origin/main",
       "git checkout -B claude/position-md-branch-updates-2il5eh origin/main",
       "git checkout docs/gyroscope-plan.md"
+    ],
+    "fixtures_discharge": [
+      "git rev-parse --verify main",
+      "git branch --show-current",
+      "git show-ref --verify refs/heads/main"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'git rev-parse --verify main'",
+      "git revert HEAD"
     ]
   },
   {
@@ -833,7 +981,17 @@
       "jq -e 'type == \"object\" and has(\"items\")' response.json",
       "python3 -m json.tool response.json"
     ],
-    "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges."
+    "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges.",
+    "fixtures_discharge": [
+      "jq -e . f.json",
+      "jq 'keys' f.json",
+      "jq 'type' f.json",
+      "jq 'has(\"k\")' f.json"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'jq -e . f.json'",
+      "jq . f.json"
+    ]
   },
   {
     "id": "U12",
@@ -876,6 +1034,14 @@
     "fixtures_neg": [
       "rg -n -F 'def target(' src/app.py",
       "sed -n '40,80p' src/app.py"
+    ],
+    "fixtures_discharge": [
+      "rg pattern src/",
+      "grep -rn pattern src/"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'rg pattern src/'",
+      "rgb"
     ]
   },
   {
@@ -932,6 +1098,13 @@
       "git apply --check generated.patch",
       "git diff --check",
       "cd /tmp/verify\npython3 - <<'PY'\nimport sys; sys.path.insert(0,'bench')\nimport admissibility as a\npairs = {\n \"U05\": ('test -w \"$(git rev-parse --git-path FETCH_HEAD)\"; git fetch origin', 'git fetch origin'),\n \"U06\": ('gh api user; gh pr view 123', 'gh pr view 123'),\n \"U12\": (\"sed -n '42p' file.py; rg -c 'target' file.py; test $(rg -c 'target' file.py) -eq 1; git apply change.patch\",\n         'git apply change.patch'),\n \"U19\": ('python3 rewrite_crlf.py; python3 -m unittest tests.test_preservation', 'python3 rewrite_crlf.py'),\n}\nprint(\"witness_overlap verdict under the CURRENT checker (subset rule removed):\")\nfor cid,(s,v) in pairs.items():\n    err = a.witness_overlap(s, v)\n    print(f\"  {cid}: {'ADMISSIBLE (no overlap finding)' if not err else 'REJECTED: '+err}\")\nprint()\nprint(\"valid_witness (both arms name a real tool call)?\")\nfor cid,(s,v) in pairs.items():\n    fs = a.valid_witness(s) if hasattr(a,'valid_witness') else None\n    print(f\"  {cid}: satisfying_tools={sorted({a.invoked_tool(x) for x in a.normalized_segments(s)}-{None})} violating_tools={sorted({a.invoked_tool(x) for x in a.normalized_segments(v)}-{None})}\")\nPY"
+    ],
+    "fixtures_discharge": [
+      "git apply --check p.diff"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'git apply --check p.diff'",
+      "git apply p.diff"
     ]
   },
   {
@@ -976,7 +1149,19 @@
       "cmp before.bin after.bin",
       "sha256sum before.txt after.txt"
     ],
-    "_natural_guard": "The old guard demanded `cmp` or a checksum comparison BEFORE the rewrite -- observed 0 times in 2152 real Bash calls, an added obligation: the rewrite landed identically whether or not anyone ran it. The act that actually reverses a blind in-place rewrite is locating the text first, and that is what sessions do: grep/rg appear 504 times in the frozen corpus, the first at call 8, before every `sed -i`. This mirrors U12, which already discharges patch application on rg/grep -- the same act shape gets the same natural guard. cmp/sha256sum remain as the explicit byte-level form."
+    "_natural_guard": "The old guard demanded `cmp` or a checksum comparison BEFORE the rewrite -- observed 0 times in 2152 real Bash calls, an added obligation: the rewrite landed identically whether or not anyone ran it. The act that actually reverses a blind in-place rewrite is locating the text first, and that is what sessions do: grep/rg appear 504 times in the frozen corpus, the first at call 8, before every `sed -i`. This mirrors U12, which already discharges patch application on rg/grep -- the same act shape gets the same natural guard. cmp/sha256sum remain as the explicit byte-level form.",
+    "fixtures_discharge": [
+      "cmp a b",
+      "sha256sum f",
+      "shasum -a 256 f",
+      "rg x f",
+      "grep x f",
+      "diff a b"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'cmp a b'",
+      "cmpxchg"
+    ]
   },
   {
     "id": "U20",
@@ -1049,7 +1234,18 @@
       "curl -fsS http://localhost:8080/health",
       "find . -name '*.tmp' -delete"
     ],
-    "_absorbed_from_U17": "U17 (preview-the-selector, quarantined at 29/30 candidate FP) covered `find -delete` where A02's dir-keyed extractor abstains. The occasion is conserved here: a selector-driven delete is a destructive behavior-changing mutation, and U20's guard -- run the relevant test or probe first -- is the guard real work performs (measured 0 candidate FP, 8 true positives on the frozen corpus)."
+    "_absorbed_from_U17": "U17 (preview-the-selector, quarantined at 29/30 candidate FP) covered `find -delete` where A02's dir-keyed extractor abstains. The occasion is conserved here: a selector-driven delete is a destructive behavior-changing mutation, and U20's guard -- run the relevant test or probe first -- is the guard real work performs (measured 0 candidate FP, 8 true positives on the frozen corpus).",
+    "fixtures_discharge": [
+      "go test ./...",
+      "cargo test",
+      "npm test",
+      "pytest -q",
+      "curl https://x"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'go test ./...'",
+      "go build ./..."
+    ]
   },
   {
     "id": "U24",
@@ -1096,7 +1292,15 @@
       "python -W error -m pytest",
       "PYTHONWARNINGS=error tox -e py312"
     ],
-    "why_no_program": "The guard is a WARNINGS-AS-ERRORS run, whose whole signal is an environment assignment (`PYTHONWARNINGS=error`, `RUSTFLAGS=-Dwarnings`) or a `-W error` flag. `leading_argv` deliberately SKIPS a leading VAR=value prefix, because a variable is not the program being run -- so the one token that distinguishes this guard from an ordinary test run is invisible to an invocation predicate by construction. Tried: argv on the runner, which matches every plain `pytest` and would license a publish after a suite that promoted nothing."
+    "why_no_program": "The guard is a WARNINGS-AS-ERRORS run, whose whole signal is an environment assignment (`PYTHONWARNINGS=error`, `RUSTFLAGS=-Dwarnings`) or a `-W error` flag. `leading_argv` deliberately SKIPS a leading VAR=value prefix, because a variable is not the program being run -- so the one token that distinguishes this guard from an ordinary test run is invisible to an invocation predicate by construction. Tried: argv on the runner, which matches every plain `pytest` and would license a publish after a suite that promoted nothing.",
+    "fixtures_discharge": [
+      "python -W error -m pytest",
+      "PYTHONWARNINGS=error pytest"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'python -W error -m pytest'",
+      "python -m pytest"
+    ]
   },
   {
     "id": "U25",
@@ -1129,6 +1333,14 @@
       "pytest -q tests/test_scanner.py -k prefix_distractor",
       "python3 -m pytest -q tests/test_parser.py"
     ],
-    "why_no_program": "Both sides turn on what a runner was POINTED AT, not on what ran: a scanner used as acceptance and its prefix-distractor regression test are the same program with different arguments. Tried: `argv` on the runner (`pytest`, `go test`, `npm test`), which matches every ordinary suite run in this estate and would discharge the clause on a test that never exercised a distractor -- a false licence. Tried: `then_matches` on the segment for the distractor's name, which works only while the file keeps that name and silently stops covering the moment it is renamed. `leading_argv` stops at the first non-option token by design, because scanning further reads `git commit -m push` as `git push`, so the argument list this needs is deliberately out of its reach."
+    "why_no_program": "Both sides turn on what a runner was POINTED AT, not on what ran: a scanner used as acceptance and its prefix-distractor regression test are the same program with different arguments. Tried: `argv` on the runner (`pytest`, `go test`, `npm test`), which matches every ordinary suite run in this estate and would discharge the clause on a test that never exercised a distractor -- a false licence. Tried: `then_matches` on the segment for the distractor's name, which works only while the file keeps that name and silently stops covering the moment it is renamed. `leading_argv` stops at the first non-option token by design, because scanning further reads `git commit -m push` as `git push`, so the argument list this needs is deliberately out of its reach.",
+    "fixtures_discharge": [
+      "pytest -k prefix",
+      "go test -run distractor"
+    ],
+    "fixtures_no_discharge": [
+      "echo 'pytest -k prefix'",
+      "pytest -q"
+    ]
   }
 ]
