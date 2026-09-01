@@ -56,6 +56,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # coqc, for tools/check_coq.py. Without it that gate is NOT-EVALUABLE, and this is the one
+      # place the suite runs, so absence here would mean the proof is never graded anywhere.
+      - name: Install coqc
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq coq
+
+      # The proof is applied to the table, not cited over it: proofs/Clauses.v is generated from
+      # plugin/keel/clauses.json and must match it byte-for-byte; then both files compile and
+      # every result is graded for axioms. A stale instance, an axiom, or a side with no class
+      # is a red build.
+      - name: The proof covers the table
+        run: |
+          python3 tools/render_coverings.py --check
+          python3 tools/check_coq.py
+          python3 tools/covering_algebra.py
+
       # The replay is this repository's own stated release evidence (see release.yml, which runs
       # it before cutting a bundle). Running it on every push means a regression is found when it
       # lands rather than at release time.

@@ -22,9 +22,9 @@ not to close it, because the duplicate lives in the pattern, not in the router.
 
 So the rule is structural: what ran is decided by the invocation (`kind: program`, matching the
 leading argv of a segment), and text may only narrow WHICH VARIANT matched (`then_matches`,
-evaluated inside that segment alone). A clause that cannot be expressed that way is admissible,
-but it must SAY SO in `why_no_program`, naming what was tried -- the shape the merged Swale
-loader uses for a row carrying neither `construction` nor `why_none`.
+evaluated inside that segment alone). A clause that reads the raw command as text is REFUSED by
+the loader (`CLAUSE-TEXT-COVERING`), with no exemption field to write: Coverings.v Theorem 1
+says no pattern edit makes such a side mention-immune, so there is nothing to argue.
 """
 from __future__ import annotations
 
@@ -47,53 +47,26 @@ def _event(command: str) -> dict:
             "tool_input": {"command": command}, "session_id": "s"}
 
 
-class EveryCommandCoveringIsAnInvocationOrSaysWhyNot(unittest.TestCase):
-    def test_no_clause_reads_the_command_as_text_without_saying_why(self):
-        undispositioned = []
-        # ALL THREE SIDES, READ INDEPENDENTLY. This was `fingerprint or activated_by`, which
-        # examines the activation side ONLY on clauses that have no fingerprint -- so every
-        # clause carrying both had that side skipped. Here the loader caught what this reader
-        # could not (C08 and T02 both carry a third side), so nothing shipped broken; in the
-        # development tree, which had no such loader rule, the identical reader reported zero
-        # while T02's activation was a raw-command regex whose separator alternation lacked
-        # `\n`, and a comment line disarmed the push obligation. A law that reports a clean
-        # census only because something else is watching is a law that will mislead its reader.
-        for clause in _raw():
-            for name in ("fingerprint", "activated_by", "discharged_by"):
-                side = clause.get(name)
-                if not isinstance(side, dict):
-                    continue
-                if (side.get("kind") == "regex" and side.get("on") == "tool_input.command"
-                        and not clause.get("why_no_program")):
-                    undispositioned.append(f"{clause['id']}.{name}")
-        self.assertEqual(undispositioned, [], "clauses matching the raw command as text with no "
-                                              f"why_no_program: {undispositioned}")
+class EveryCommandCoveringIsAnInvocation(unittest.TestCase):
+    def test_no_clause_reads_the_command_as_text(self):
+        """ALL THREE SIDES, READ INDEPENDENTLY, through the loader's own classifier.
 
-    def test_why_no_program_is_an_argument_not_a_word(self):
-        """An exemption with no reasoning is the suppression that ages silently.
-
-        RE-AIMED because the population it graded went to ZERO, and it went to zero by design
-        rather than by drift. This cell used to require that exemptions exist, so that it could
-        not pass over an empty list. Both remaining exemptions have since been SUPERSEDED --
-        U24's guard reads the environment the act sets, U25's reads what the runner was pointed
-        at, and both facts were being computed by the scanner and discarded before any predicate
-        could ask for them. Neither was deleted as though it had been wrong; each was true, and
-        true because the information was gone.
-
-        Requiring a non-empty exemption list would now be a law demanding the debt stay. So the
-        assertion is the END STATE -- no covering reads the raw command as text -- with the
-        argument-quality rule still applied to any exemption that exists. Non-vacuity is carried
-        by the sibling cell, which asserts the structural population is non-empty."""
-        exempt = [c for c in _raw() if c.get("why_no_program")]
+        This was `fingerprint or activated_by`, which examines the activation side ONLY on
+        clauses that have no fingerprint -- so a clause carrying both had that side skipped. In
+        the development tree, which had no loader rule, the identical reader reported zero while
+        T02's activation was a raw-command regex whose separator alternation lacked `\n`, and a
+        comment line disarmed the push obligation. The loader now refuses the shape outright,
+        and this cell asks the same classifier so a side spelled a new way is graded too.
+        """
+        textual = [f"{c['id']}.{name}" for c in _raw()
+                   for name in ("fingerprint", "activated_by", "discharged_by")
+                   if isinstance(c.get(name), dict) and C.classify_side(c[name]) == "textual"]
+        self.assertEqual(textual, [], f"clauses matching the raw command as text: {textual}")
         structural = [c for c in _raw()
                       for name in ("fingerprint", "activated_by", "discharged_by")
                       if isinstance(c.get(name), dict)
                       and c[name].get("kind") in ("program", "pipeline")]
         self.assertTrue(structural, "no structural coverings -- this cell would grade nothing")
-        for clause in exempt:
-            why = clause["why_no_program"]
-            self.assertGreater(len(why), 120, f"{clause['id']}: too short to be an argument")
-            self.assertIn("Tried", why, f"{clause['id']}: does not name what was tried")
 
     def test_TEETH_a_mention_never_discharges(self):
         """The five recorded false discharges, driven through the production predicate."""
@@ -170,9 +143,9 @@ class EveryCommandCoveringIsAnInvocationOrSaysWhyNot(unittest.TestCase):
             b'      ]\n    }',
             b'"discharged_by": {\n      "kind": "regex",\n      "on": "tool_input.command",\n'
             b'      "pattern": "(^|&&|;|\\\\|)\\\\s*git\\\\s+status\\\\b"\n    }',
-            "tests.test_invocation_coverings.EveryCommandCoveringIsAnInvocationOrSaysWhyNot."
-            "test_no_clause_reads_the_command_as_text_without_saying_why",
-            "with no why_no_program: ['A01.discharged_by']")
+            "tests.test_invocation_coverings.EveryCommandCoveringIsAnInvocation."
+            "test_no_clause_reads_the_command_as_text",
+            "A01.discharged_by")
 
 
 if __name__ == "__main__":

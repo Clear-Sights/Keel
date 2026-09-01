@@ -155,10 +155,15 @@ Limits before capability claims — read these before the clause table below.
 - **A licence is scoped to its clause and session** — one observed guard licenses later
   matching calls for that clause anywhere in the same session, not just against the same file,
   branch, or command.
-- **A discharge records that the guard was invoked, not that it succeeded.** Except for
-  `C08-check-can-fail`, which requires an observed nonzero exit from the checker, discharge
-  predicates match the guard's command text at `PreToolUse`/`PostToolUse` — a guard command that
-  fails, or names a tool this repository does not have, still discharges.
+- **A discharge records that the guard was invoked, not that it succeeded.** Discharge
+  predicates match the guard's invocation at `PreToolUse`/`PostToolUse` — a guard command that
+  fails, or names a tool this repository does not have, still discharges. `C08-check-can-fail`
+  is discharged by running the checker under a plant, not by observing the plant fail.
+- **A covering that names programs is monotone in its vocabulary** (`proofs/Coverings.v`,
+  Theorem 5): the act spelled under an unlisted name is a miss on the occasion side and an
+  undischarged demand on the guard side. Which sides are nominal, and which are closed by a host
+  enum, is derived from the table and instantiated per side in the generated `proofs/Clauses.v`
+  — there is no field in which to argue an exception, and no waiver.
 - **It does not judge prose.** Every fingerprint is an exact predicate over command, tool, or
   path identity; a clause that would need to infer intent from a command string is not admitted.
 - **The denial is verified; the behaviour change is not.** "Prevented" here means exactly one
@@ -253,8 +258,9 @@ dispatch code, not guessed:
 ## Evidence
 
 `python3 eval/replay.py` from the repository root replays recorded sessions through the real
-dispatcher: 23 derailments[^m-derailments] — **one for every clause that is not parked by a live
-waiver** — each denied at or before the event where the session went wrong, and each required to
+dispatcher: 23 derailments[^m-derailments] — **every clause has a session that drives it**; the
+twenty-fourth, `C08`, is driven by the recovery shape — each denied at or before the event where
+the session went wrong, and each required to
 name the clause it declares rather than merely to deny, so a session is evidence about its own
 row and not about the table. Plus a recovery session where the same denied call passes after its
 guard, and a benign control that stays silent — 26/26,[^m-replay] standard library only, and
@@ -264,6 +270,25 @@ Two of those 23 needed the shape the A03 session already used: a clause declared
 another in `OVERLAPS.tsv` speaks first, so `U02` and `U13` are reached by discharging `U01` and
 `U12` in the session before the narrower question is asked. Written the naive way they read as
 unreachable, which is what the "first fire must name the declared clause" rule is for.
+
+## The proof, applied to the table
+
+`proofs/Coverings.v` proves, relative to a scanner with two stated properties and with zero
+axioms, what each class of covering can be: a covering over the raw command text is never
+mention-immune (Theorem 1); one over a segment's leading program is, provided its vocabulary
+excludes the quoting program (Theorem 2), and is monotone in that vocabulary (Theorem 5); a
+covering over the pipe topology is name-agnostic (Theorem 4); a positive obligation that compares
+the run's own datum has an empty evasion set (Theorem 7); an ordering enforced backward rejects
+every trace the inductive `violates` describes (Theorem 8a).
+
+The theory is not cited over the table; it is applied to it. `keel/clauses.py` reads the class of
+every side from its shape (`classify_side`) and refuses what the class forbids — a textual side,
+a side with no class, a row carrying `why_no_program`, `guard_vocabulary` or `waiver`.
+`tools/render_coverings.py` instantiates the licensed theorems on all 51 sides of the 24 clauses
+in the generated `proofs/Clauses.v`; `tools/check_coq.py` compiles both files and grades every
+result for axioms, refuses a result proved by the identity, and refuses an instance that covers
+fewer sides than the table has. Deleting the proof, letting the instance drift, or adding a row
+the theory cannot classify is a red build.
 
 ## Why this is not a deny list
 

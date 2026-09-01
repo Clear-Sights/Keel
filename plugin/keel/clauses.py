@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -97,13 +96,6 @@ class Clause:
     # fixtures found it.
     fixtures_discharge: list[Any] = field(default_factory=list)
     fixtures_no_discharge: list[Any] = field(default_factory=list)
-    # Optional. Parks enforcement of THIS clause until `until`, because research established the
-    # guard is not evaluable against the host. The clause stays in the table -- still loaded,
-    # still admitted, still fixture-checked -- so a waiver hides no drift in the row itself.
-    # {"until": "YYYY-MM-DD", "because": "...", "renewed": <int>}. The WAIVER is what is
-    # default-dead, never the clause: on the day it lapses the clause enforces again and the
-    # lapse is announced, so doing nothing restores the check rather than retiring it.
-    waiver: dict[str, Any] | None = None
     # The clause's positive half: an anchor into the constructions page shipped beside this
     # table ("POINTS.md#a01"), naming what to build so this guard is never needed again.
     # "Every negative followed by its true positive" is a property this loader checks, not a
@@ -116,52 +108,13 @@ class Clause:
     # loader checks SHAPE only; resolution against the page's actual headings, and that no
     # section is left unclaimed, is the test fence's half -- it owns the page, this owns the row.
     construction: str = ""
-    # Required when a covering matches the raw command as TEXT rather than as an invocation.
-    # Text cannot tell an invocation from a mention, so a row that needs it must name what was
-    # tried -- the loader refuses the row otherwise, the way it refuses a missing `construction`.
-    why_no_program: str = ""
-    # A guard that names programs is monotone in vocabulary (Coverings.v, Thm 5): it is
-    # discharged by the names it lists and defeated by doing the same act under any other name.
-    # That is sometimes fine and sometimes the whole hole, and the difference cannot be read off
-    # the name list -- so each such guard states which it is, and the loader refuses one that
-    # says nothing. Two dispositions are closed: `shipped`, the program is this bundle's own and
-    # there is no other name for the act; `composed`, the guard also matches a CLOSED host enum,
-    # which retires a vocabulary rather than widening one. `open` is the honest third: the act
-    # has many names, no host surface performs it, and the argument says what was tried. An open
-    # guard is a STATED LIMIT, not a defect to be quietly closed by lengthening the list --
-    # lengthening it leaves the covering exactly as monotone as it was.
-    guard_vocabulary: dict[str, Any] | None = None
-
-
-def waiver_status(clause: Clause, today: date | None = None) -> str:
-    """`none`, `live`, or `expired` -- and anything unreadable is `expired`.
-
-    A waiver parks ONE clause whose guard research has shown is not evaluable against the host,
-    so a permanently undischargeable row stops blocking every ending. C08 is the case that forced
-    it: its guard asks for a nonzero PostToolUse result, and the host sends no exit status in any
-    form -- measured over 71 recorded Bash PostToolUse payloads, whose tool_response is always a
-    dict keyed (stdout, stderr, interrupted, isImage, noOutputExpected). A clause that can be
-    demanded and never discharged blocks forever, and the natural end of that is the whole gate
-    being switched off, which costs all 24 clauses at once.
-
-    The WAIVER is the thing that is default-dead, never the clause. `until` is a plain ISO date
-    compared in UTC; on the day it lapses the clause enforces again with no edit and no renewal,
-    so inaction restores the check rather than retiring it. A missing, non-string or unparseable
-    `until` reads as `expired` for the same reason: a waiver nobody can read is not a waiver, and
-    the safe fate is the clause doing its job. Renewal means arguing the research again and
-    writing a new date; twice renewed is the signal to change the baseline, not the waiver.
-    """
-    waiver = getattr(clause, "waiver", None)
-    if not isinstance(waiver, dict):
-        return "none"
-    raw = waiver.get("until")
-    if not isinstance(raw, str):
-        return "expired"
-    try:
-        until = date.fromisoformat(raw)
-    except ValueError:
-        return "expired"
-    return "live" if (today or datetime.now(timezone.utc).date()) <= until else "expired"
+    # There is no field for an excuse. A covering's class -- textual, nominal, composed over a
+    # host enum, topological, positive -- is DERIVED from its shape by `classify_side`, and what
+    # each class can and cannot be is a theorem in `proofs/Coverings.v`, instantiated on this
+    # very row by the generated `proofs/Clauses.v`. A row that carried `why_no_program` or
+    # `guard_vocabulary` was stating in prose what the proof decides; the loader now refuses
+    # both (`CLAUSE-CARRIES-AN-EXCUSE`), and refuses a textual covering outright (Theorem 1:
+    # no pattern edit can make it mention-immune), with no exemption to write.
 
 
 def _resolve(event: dict[str, Any], dotted: str) -> Any:
@@ -874,6 +827,90 @@ def _matches_a_tool_enum(predicate: Any) -> bool:
                for sub in (predicate.get("any_of") or []) + (predicate.get("all_of") or []))
 
 
+# Fields a row may not carry: each was a place to write, in English, what `classify_side` and
+# the generated proof now decide. A requirement outside the math does not get an excuse.
+EXCUSE_FIELDS = frozenset({"why_no_program", "guard_vocabulary", "waiver"})
+
+# The programs this bundle ships under its own names. A vocabulary drawn wholly from these is
+# CLOSED by construction: there is no other spelling of "run Keel's own probe".
+SHIPPED_PROGRAMS = frozenset(
+    p.name for d in ("tools", "hooks")
+    for p in (Path(__file__).resolve().parent.parent / d).glob("*") if p.is_file())
+
+
+def vocabulary(predicate: Any) -> list[str]:
+    """Every leading program a side selects on, compound branches included, in table order."""
+    if not isinstance(predicate, dict):
+        return []
+    found = list(predicate.get("names") or [])
+    found += [entry[0] for entry in predicate.get("argv") or [] if entry]
+    for sub in (predicate.get("any_of") or []) + (predicate.get("all_of") or []):
+        found += vocabulary(sub)
+    return found
+
+
+def classify_side(predicate: Any) -> str:
+    """The Coverings.v class of one covering, read from its shape. ONE owner.
+
+    The loader refuses what the class forbids, and `tools/render_coverings.py` emits the
+    theorem instance the class licenses, so the two cannot disagree about what a side is:
+
+      always      fires on every event of its surface; the terminal shape (Thm 3 boundary)
+      tool-enum   reads `tool_name`, a closed host enum: covered however the shell is spelled
+      nominal     selects on a segment's leading program (Thm 2: mention-immune when the
+                  vocabulary excludes the quoting program; Thm 5: monotone in that vocabulary)
+      composed    a nominal branch joined with a tool-enum branch (Thm 5 retired, not widened)
+      topology    reads the operator edge between segments (Thm 4: name-agnostic)
+      positive    compares a datum the trace produced to one the report states (Thm 6, 7)
+      textual     reads the raw command as text (Thm 1: never mention-immune) -- refused
+    """
+    if not isinstance(predicate, dict):
+        return "absent"
+    kind = predicate.get("kind")
+    branches = (predicate.get("any_of") or []) + (predicate.get("all_of") or [])
+    if branches:
+        parts = {classify_side(dict(sub, kind=sub.get("kind", kind), on=sub.get("on", predicate.get("on"))))
+                 for sub in branches}
+        if "textual" in parts or "unclassified" in parts:
+            return "textual" if "textual" in parts else "unclassified"
+        if parts == {"nominal"}:
+            return "nominal"
+        if parts <= {"nominal", "tool-enum"}:
+            return "composed"
+        return "unclassified"
+    if kind == "always":
+        return "always"
+    if kind == "tool":
+        return "tool-enum"
+    if kind == "regex":
+        if predicate.get("on") == "tool_name":
+            return "tool-enum"
+        return "textual" if predicate.get("on") == COMMAND_FIELD else "unclassified"
+    if kind == "program":
+        return "nominal"
+    if kind == "pipeline":
+        return "topology"
+    if kind == "nonzero":
+        return "positive"
+    return "unclassified"
+
+
+def derive_closure(predicate: Any) -> str:
+    """Whether a side's vocabulary is closed, DERIVED -- never declared.
+
+    `shipped`: nominal, and every name is a program this bundle ships. `composed` / `host`:
+    a closed host enum covers the act. `open`: nominal over foreign names -- Theorem 5 says a
+    missing spelling is a miss, and that is the stated limit, with nothing to argue.
+    """
+    cls = classify_side(predicate)
+    if cls == "nominal":
+        names = vocabulary(predicate)
+        return "shipped" if names and set(names) <= SHIPPED_PROGRAMS else "open"
+    if cls in ("composed", "tool-enum"):
+        return "host"
+    return cls
+
+
 def subject_fields(spec: Any) -> list[str]:
     """The event fields a subject extractor may read, in order.
 
@@ -1041,28 +1078,19 @@ def _admit(clause: Clause) -> Clause:
     # git status'` discharged a push guard, measured, because the pattern's own separator
     # alternation matched a `;` inside quotes. `kind: program` decides on the leading argv of a
     # segment instead, and text may then only narrow WHICH VARIANT ran.
-    for predicate in (clause.fingerprint, clause.activated_by, clause.discharged_by):
+    for name in ("fingerprint", "activated_by", "discharged_by"):
+        predicate = getattr(clause, name)
         if not isinstance(predicate, dict):
             continue
-        if predicate.get("kind") == "regex" and predicate.get("on") == COMMAND_FIELD:
-            if not getattr(clause, "why_no_program", None):
-                raise ClauseError("CLAUSE-TEXT-COVERING-UNDISPOSITIONED", clause.id)
-    if _guard_names(clause.discharged_by):
-        disposition = (clause.guard_vocabulary or {}).get("closure")
-        if disposition not in ("shipped", "composed", "open"):
+        if classify_side(predicate) == "textual":
             raise ClauseError(
-                "CLAUSE-GUARD-VOCABULARY-UNDISPOSITIONED",
-                f"{clause.id}: its guard names programs, so it is monotone in vocabulary and "
-                f"must declare closure as shipped, composed or open with an argument")
-        if not (clause.guard_vocabulary or {}).get("why"):
+                "CLAUSE-TEXT-COVERING",
+                f"{clause.id}.{name}: reads the raw command as text; by Theorem 1 no pattern "
+                f"edit makes that mention-immune, so it is refused with no exemption to write")
+        if classify_side(predicate) == "unclassified":
             raise ClauseError(
-                "CLAUSE-GUARD-VOCABULARY-UNARGUED",
-                f"{clause.id}: closure {disposition!r} is asserted with no argument")
-        if disposition == "composed" and not _matches_a_tool_enum(clause.discharged_by):
-            raise ClauseError(
-                "CLAUSE-GUARD-VOCABULARY-NOT-COMPOSED",
-                f"{clause.id}: declares closure 'composed' but no branch of its guard matches "
-                f"the host tool enum, so the claim is a sentence the table can contradict")
+                "CLAUSE-SIDE-UNCLASSIFIED",
+                f"{clause.id}.{name}: no class in Coverings.v covers this shape")
     disc = _discriminator(clause)
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
@@ -1149,11 +1177,13 @@ def _load_object(data: dict[str, Any]) -> Clause:
         fixtures_activate=data.get("fixtures_activate"),
         fixtures_discharge=data.get("fixtures_discharge") or [],
         fixtures_no_discharge=data.get("fixtures_no_discharge") or [],
-        waiver=data.get("waiver"),
         construction=data.get("construction") or "",
-        why_no_program=data.get("why_no_program") or "",
-        guard_vocabulary=data.get("guard_vocabulary"),
     )
+    carried = sorted(EXCUSE_FIELDS & set(data))
+    if carried:
+        raise ClauseError(
+            "CLAUSE-CARRIES-AN-EXCUSE",
+            f"{data.get('id')}: {carried} state in prose what the proof derives; delete them")
     return _admit(clause)
 
 

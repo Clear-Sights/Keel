@@ -40,7 +40,7 @@ from pathlib import Path
 
 from tests.plant_support import PLUGIN, REPO, smoke_replace
 from keel import clauses as C
-from keel.clauses import _base_predicate, load_default, waiver_status
+from keel.clauses import _base_predicate, load_default
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 # Beside MEASURED.tsv at the repository root, NOT inside `plugin/`: `plugin/` is what the
@@ -194,27 +194,17 @@ class OccasionAlgebra(unittest.TestCase):
             if header.get("clause"):
                 declared.add(header["clause"])
 
-        # A clause parked by a LIVE waiver is the third disposition, and it is a real one: it
-        # cannot be driven, because `_applicable` skips it. It is not silence -- the waiver
-        # carries its research and an expiry. The expiry is why this stays honest: on the day it
-        # lapses the clause enforces again with no edit, and this law goes red until a session
-        # for it exists. Inaction restores the demand rather than retiring it.
-        parked = {clause.id for clause in load_default()
-                  if waiver_status(clause) == "live"}
-
         ungraded = sorted(c["id"] for c in self.records
-                          if c["id"] not in self.ext and c["id"] not in declared
-                          and c["id"] not in parked)
+                          if c["id"] not in self.ext and c["id"] not in declared)
         self.assertFalse(
             ungraded,
             f"these clauses are held by nothing: {ungraded}. `extensions()` drops them (their "
-            f"fingerprint is not a regex on {COMMAND!r}), no session in eval/corpus declares "
-            f"them, and no live waiver parks them -- so nothing in this repository has observed "
-            f"them deny. Either give one a corpus session naming it, or withdraw it. If one was "
-            f"parked, its waiver has lapsed and the clause is enforcing again.")
+            f"fingerprint is not a regex on {COMMAND!r}) and no session in eval/corpus declares "
+            f"them -- so nothing in this repository has observed them deny. Either give one a "
+            f"corpus session naming it, or withdraw it. There is no third disposition.")
 
     def test_every_clause_is_driven_through_the_real_dispatcher(self):
-        """Every clause not parked by a live waiver has a session that drives it.
+        """Every clause has a session that drives it.
 
         The totality law above accepts three dispositions, and one of them -- extension by the
         occasion algebra -- is a property of a clause's FINGERPRINT, not evidence that the
@@ -229,9 +219,7 @@ class OccasionAlgebra(unittest.TestCase):
         replay requires the first fire to name the clause the session declares, so a session
         is evidence about its own row rather than about the table.
 
-        A live waiver is still the third disposition and still a real one -- it cannot be
-        driven because `_applicable` skips it -- and it carries research and an expiry, so on
-        the day it lapses the clause enforces again and this law goes red with no edit.
+        There is no third disposition: nothing parks a clause.
         """
         corpus = REPO / "eval" / "corpus"
         declared = set()
@@ -239,17 +227,13 @@ class OccasionAlgebra(unittest.TestCase):
             header = json.loads(session.read_text().splitlines()[0])
             if header.get("clause"):
                 declared.add(header["clause"])
-        parked = {clause.id for clause in load_default()
-                  if waiver_status(clause) == "live"}
-        undriven = sorted(c["id"] for c in self.records
-                          if c["id"] not in declared and c["id"] not in parked)
+        undriven = sorted(c["id"] for c in self.records if c["id"] not in declared)
         self.assertFalse(
             undriven,
             f"these clauses have never been observed denying through the real dispatcher: "
             f"{undriven}. Being extended by the occasion algebra is not that -- it says the "
             f"fingerprint could match something, not that the clause denied. Add a session to "
-            f"eval/corpus declaring the clause, or park it with a waiver carrying research and "
-            f"an expiry.")
+            f"eval/corpus declaring the clause.")
 
     def test_every_corpus_session_declares_a_clause_that_exists(self):
         """A session naming a clause the table does not carry grades a rule nobody ships."""
