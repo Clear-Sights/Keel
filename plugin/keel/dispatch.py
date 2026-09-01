@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 from . import clauses as C
-from . import journal, wire
+from . import journal, recorder, wire
 from .ledger import Demand, Ledger, derive_id, legacy_state, state_dir
 
 # A HEADER ON THE COMMAND, and nowhere else. The exemption is the one thing that turns the whole
@@ -570,6 +570,11 @@ def _record(event: dict, out: dict) -> None:
     "did Keel catch anything this session?" stops being unanswerable.
     """
     try:
+        # The SHAPE census, off unless asked for. It runs before the decision branches because
+        # it records what the host SENT, which is independent of what Keel decided -- and the
+        # question it exists to answer (does any tool_response key carry an exit status) is
+        # about events Keel allowed just as much as ones it denied.
+        recorder.record(event)
         hook = event.get("hook_event_name")
         wire_out = out.get("hookSpecificOutput") if isinstance(out, dict) else None
         if isinstance(wire_out, dict) and wire_out.get("permissionDecision") == "deny":
