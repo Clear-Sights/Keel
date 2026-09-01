@@ -384,13 +384,34 @@ _NO_VALUE_OPTIONS = {
 }
 
 
+# Interpreter options taking a SEPARATE value token, so a `-m` scan does not halt on the value.
+# `-W error` is the shape U24 turns on; `-Werror` (joined) needs no entry, it is one token.
+_INTERPRETER_VALUE_OPTIONS = frozenset({"-W", "-X", "--check-hash-based-pycs"})
+
 _VALUE_OPTIONS = {
     "git": frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}),
 }
 
 
-def _invocation_tokens(segment: str) -> list[str]:
-    """The segment's tokens from the invoked program onward. One owner for the stripping rules."""
+def _invocation_scan(segment: str) -> tuple[dict[str, str], list[str], list[str]]:
+    """The segment's ENVIRONMENT ASSIGNMENTS and its tokens from the invoked program onward.
+
+    One owner for the stripping rules -- and it now RETURNS the env prefix instead of dropping
+    it. The drop was the same defect as the discarded pipe operator: the scanner identified the
+    `VAR=value` tokens and then threw them away one line later, so the only signal distinguishing
+    a warnings-as-errors run from an ordinary suite run was invisible to every predicate BY
+    CONSTRUCTION. U24 said exactly that in its `why_no_program`, and it was true because the fact
+    had already been deleted before any predicate could ask.
+
+    The same applies to the INTERPRETER'S OWN OPTIONS. `python -W error -m pytest` is a suite run
+    configured to promote warnings, and skipping past `-W error` to reach `pytest` discarded the
+    one token that said so -- the third instance of this identical shape, after the pipe operator
+    and the env prefix. They are returned as `opts`.
+
+    `leading_argv`, `leading_env` and `leading_opts` are thin readers over this, so they cannot
+    drift apart."""
+    env: dict[str, str] = {}
+    opts: list[str] = []
     tokens = segment.split()
     index = 0
     while index < len(tokens):
@@ -403,7 +424,9 @@ def _invocation_tokens(segment: str) -> list[str]:
             index += 1
             continue
         if "=" in token and not token.startswith("-") and token.split("=", 1)[0].isidentifier():
-            index += 1          # VAR=value prefix
+            name_part, value_part = token.split("=", 1)
+            env[name_part] = value_part.strip("\"'")
+            index += 1          # VAR=value prefix: recorded, no longer discarded
             continue
         # The BASENAME decides, because an interpreter is just as much an interpreter when it is
         # reached by path: `"$VENV/bin/python" -m pytest` is a pytest run, and testing the whole
@@ -413,10 +436,24 @@ def _invocation_tokens(segment: str) -> list[str]:
             index += 1
             continue
         if _INTERPRETERS.match(name):
-            if index + 2 < len(tokens) and tokens[index + 1] == "-m":
-                module = tokens[index + 2].strip("\"'").rsplit(".", 1)[-1]
-                return [module, *tokens[index + 3:]]
-            index += 1
+            # Skip the INTERPRETER's own options before looking for `-m`. Measured:
+            # `python -W error -m pytest` read argv[0] as `-W`, so a warnings-as-errors suite run
+            # -- the exact command U24's guard exists to recognise -- was not seen as a pytest run
+            # at all. `-m` is not at a fixed offset the moment any interpreter flag precedes it.
+            probe = index + 1
+            while probe < len(tokens) and tokens[probe].startswith("-") and tokens[probe] != "-m":
+                if tokens[probe] in _INTERPRETER_VALUE_OPTIONS and probe + 1 < len(tokens):
+                    opts.append(f"{tokens[probe]} {tokens[probe + 1].strip(chr(34) + chr(39))}")
+                    probe += 2
+                else:
+                    opts.append(tokens[probe])
+                    probe += 1
+            if probe + 1 < len(tokens) and tokens[probe] == "-m":
+                module = tokens[probe + 1].strip("\"'").rsplit(".", 1)[-1]
+                return env, opts, [module, *tokens[probe + 2:]]
+            # No `-m`: the interpreter runs a SCRIPT, and the same option skip applies -- landing
+            # on `-W` would report the flag as the program. `probe` already sits past the options.
+            index = probe
             continue
         # A shell's `-c` argument IS the command. Re-parse it and answer about what it runs.
         if name in _SHELLS:
@@ -425,14 +462,53 @@ def _invocation_tokens(segment: str) -> list[str]:
                 inner = " ".join(rest[rest.index("-c") + 1:]).strip("\"'")
                 # Guarded against a self-referential `sh -c "sh -c ..."` chain: one unwrap per
                 # level, and an empty argument answers nothing rather than answering about `sh`.
-                return _invocation_tokens(inner) if inner.strip() else []
+                if not inner.strip():
+                    return env, opts, []
+                inner_env, inner_opts, inner_tokens = _invocation_scan(inner)
+                return {**env, **inner_env}, opts + inner_opts, inner_tokens
         # `uv run pytest` and `python3 -m pytest` are one invocation reached two ways.
         if name in _RUN_LAUNCHERS and index + 2 < len(tokens) and tokens[index + 1] == "run":
-            return _invocation_tokens(" ".join(tokens[index + 2:]))
+            inner_env, inner_opts, inner_tokens = _invocation_scan(" ".join(tokens[index + 2:]))
+            return {**env, **inner_env}, opts + inner_opts, inner_tokens
         if name in _DIRECT_LAUNCHERS and index + 1 < len(tokens):
-            return _invocation_tokens(" ".join(tokens[index + 1:]))
-        return [name, *tokens[index + 1:]]
-    return []
+            inner_env, inner_opts, inner_tokens = _invocation_scan(" ".join(tokens[index + 1:]))
+            return {**env, **inner_env}, opts + inner_opts, inner_tokens
+        return env, opts, [name, *tokens[index + 1:]]
+    return env, opts, []
+
+
+def _invocation_tokens(segment: str) -> list[str]:
+    """The tokens reader over `_invocation_scan`. Every existing caller reads exactly this."""
+    return _invocation_scan(segment)[2]
+
+
+def leading_env(segment: str) -> dict[str, str]:
+    """The environment assignments a segment sets for the program it runs.
+
+    The primitive U24's exemption named as missing. It is a fact about the ACT -- the run was
+    configured to promote warnings -- not a word in the command, so a covering over it is
+    name-agnostic and cannot be spent by a mention: a quoted `echo '...'` sets no variables."""
+    return _invocation_scan(segment)[0]
+
+
+def leading_opts(segment: str) -> list[str]:
+    """The interpreter options a segment ran under -- `-W error`, `-X dev`.
+
+    A fact about how the act was CONFIGURED, not a word in it: `echo '...'` runs no interpreter,
+    so this is empty for a mention without any pattern being consulted."""
+    return _invocation_scan(segment)[1]
+
+
+def leading_operands(segment: str) -> list[str]:
+    """Every token the invoked program received -- flags, values and paths alike.
+
+    `leading_argv` deliberately stops at the subcommand, because its job is to say WHICH program
+    ran. That truncation is right for it and wrong for a covering that turns on what the program
+    was POINTED AT: `go test ./scanner -run Acceptance` reduces to `['go', 'test']` there, and
+    the target disappears. Same shape as the discarded pipe operator, the discarded env prefix
+    and the discarded interpreter options -- computed by the scanner, then dropped before any
+    predicate could ask. Read from the scan, so the mention still yields nothing."""
+    return _invocation_scan(segment)[2][1:]
 
 
 def leading_argv(segment: str) -> list[str]:
@@ -652,6 +728,30 @@ def _segment_matches_program(predicate: dict[str, Any], segment: str) -> bool:
     then = predicate.get("then_matches")
     if then is not None and not re.search(then, segment):
         return False
+    # HOW the act was configured, not what it is called. `env` and `opts` are facts about the
+    # invocation -- a mention sets no variables and runs no interpreter -- so a covering over
+    # them is name-agnostic and cannot be spent by quoting the command. They CONSTRAIN a match
+    # rather than granting one: the argv test below still has to succeed.
+    wanted_env = predicate.get("env")
+    if wanted_env is not None:
+        actual = leading_env(segment)
+        if not any(name in actual and re.search(want, actual[name])
+                   for name, want in wanted_env.items()):
+            return False
+    wanted_opts = predicate.get("opts")
+    if wanted_opts is not None:
+        actual_opts = leading_opts(segment)
+        if not any(re.search(want, opt) for want in wanted_opts for opt in actual_opts):
+            return False
+    # WHAT the program was pointed at. The arguments are already in `argv`; nothing could read
+    # them, so U25 -- whose two sides are the same runner with different targets -- had to fall
+    # back to matching the raw command text. This reads the parsed operands instead, so the
+    # quoted forms that defeat a text pattern never reach it.
+    wanted_args = predicate.get("args")
+    if wanted_args is not None:
+        operands = leading_operands(segment)
+        if not any(re.search(want, operand) for want in wanted_args for operand in operands):
+            return False
     names, pattern = predicate.get("names"), predicate.get("pattern")
     if names is not None and argv[0] in names:
         return True

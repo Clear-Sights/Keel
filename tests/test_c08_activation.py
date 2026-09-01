@@ -116,7 +116,20 @@ class OccasionIsAnInvocation(unittest.TestCase):
         a character class and is exactly why the old seam no longer exists to plant.
 
         So the plant is now the tokenizer rule itself: stop recognising an assignment prefix, and
-        the assignment is read as the program it is not, and the TEETH cell above must go red.
+        the assignment is read as the program it is not.
+
+        RE-AIMED AGAIN, and the reason is worth keeping. The tokenizer no longer DISCARDS the
+        assignment prefix -- it returns it, because a covering needed to read how an act was
+        configured. That made U24's guard depend on the same rule, and U24's guard fixtures are
+        checked by the LOADER. So disarming the rule now stops the whole table from loading,
+        one clause before this cell gets to speak, and the failure names the assignment directly:
+
+            CLAUSE-GUARD-FIXTURE-MISS: U24: 'PYTHONWARNINGS=error pytest'
+
+        That is a stronger outcome than this cell going red on its own -- with the rule disarmed
+        NO clause ships, rather than one clause misbehaving -- so the plant is kept and its
+        expectation moved to what the production loader actually says. The narrower C08 cells
+        above still assert the C08-specific property on an intact tree.
         """
         smoke_replace(
             self, PLUGIN / "keel" / "clauses.py",
@@ -126,7 +139,7 @@ class OccasionIsAnInvocation(unittest.TestCase):
             b'and token.split("=", 1)[0].isidentifier():',
             "tests.test_c08_activation.OccasionIsAnInvocation."
             "test_TEETH_a_variable_assignment_is_not_an_invocation",
-            "an assignment keyed an obligation nothing can discharge",
+            "CLAUSE-GUARD-FIXTURE-MISS: U24",
         )
 
 

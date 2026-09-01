@@ -70,9 +70,26 @@ class EveryCommandCoveringIsAnInvocationOrSaysWhyNot(unittest.TestCase):
                                               f"why_no_program: {undispositioned}")
 
     def test_why_no_program_is_an_argument_not_a_word(self):
-        """An exemption with no reasoning is the suppression that ages silently."""
+        """An exemption with no reasoning is the suppression that ages silently.
+
+        RE-AIMED because the population it graded went to ZERO, and it went to zero by design
+        rather than by drift. This cell used to require that exemptions exist, so that it could
+        not pass over an empty list. Both remaining exemptions have since been SUPERSEDED --
+        U24's guard reads the environment the act sets, U25's reads what the runner was pointed
+        at, and both facts were being computed by the scanner and discarded before any predicate
+        could ask for them. Neither was deleted as though it had been wrong; each was true, and
+        true because the information was gone.
+
+        Requiring a non-empty exemption list would now be a law demanding the debt stay. So the
+        assertion is the END STATE -- no covering reads the raw command as text -- with the
+        argument-quality rule still applied to any exemption that exists. Non-vacuity is carried
+        by the sibling cell, which asserts the structural population is non-empty."""
         exempt = [c for c in _raw() if c.get("why_no_program")]
-        self.assertTrue(exempt, "no exemptions to grade -- this cell would pass over nothing")
+        structural = [c for c in _raw()
+                      for name in ("fingerprint", "activated_by", "discharged_by")
+                      if isinstance(c.get(name), dict)
+                      and c[name].get("kind") in ("program", "pipeline")]
+        self.assertTrue(structural, "no structural coverings -- this cell would grade nothing")
         for clause in exempt:
             why = clause["why_no_program"]
             self.assertGreater(len(why), 120, f"{clause['id']}: too short to be an argument")
