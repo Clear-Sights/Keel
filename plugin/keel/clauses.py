@@ -1098,6 +1098,16 @@ def _admit(clause: Clause) -> Clause:
             raise ClauseError(
                 "CLAUSE-SIDE-UNCLASSIFIED",
                 f"{clause.id}.{name}: no class in Coverings.v covers this shape")
+        # AN OCCASION MUST BE NAME-AGNOSTIC. Theorem 3 says a nominal covering with a name in
+        # and a name out is never name-agnostic; Theorem 5 says an unlisted spelling is a miss.
+        # On the occasion side a miss is the costly act proceeding with its guard removed. So a
+        # nominal occasion is refused outright: not carried as `open` with a theorem instance
+        # documenting the gap, which is what this table did for sixteen sides, but refused.
+        if name in ("fingerprint", "activated_by") and classify_side(predicate) == "nominal":
+            raise ClauseError(
+                "CLAUSE-OCCASION-NOMINAL",
+                f"{clause.id}.{name}: selects the act by the program's name; an act spelled "
+                f"under another name proceeds unguarded (Theorem 3, Theorem 5)")
     disc = _discriminator(clause)
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
