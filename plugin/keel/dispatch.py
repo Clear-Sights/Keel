@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 from . import clauses as C
-from . import journal, recorder, wire
+from . import journal, wire
 from .ledger import Demand, Ledger, derive_id, legacy_state, state_dir
 
 # A HEADER ON THE COMMAND, and nowhere else. The exemption is the one thing that turns the whole
@@ -286,11 +286,6 @@ def _applicable(table, event: dict):
             continue
         if cl.tools and cl.tools != ["*"] and tool not in cl.tools:
             continue
-        # A live waiver parks enforcement of this one clause; see clauses.waiver_status. Silent
-        # here on purpose -- announcing it per tool call would be the recurring noise the waiver
-        # exists to stop. Stop announces it once per ending instead, where decisions are read.
-        if C.waiver_status(cl) == "live":
-            continue
         yield cl
 
 
@@ -380,8 +375,6 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
     for cl in table:
         if cl.event not in ("Stop", "SubagentStop"):
             continue
-        if C.waiver_status(cl) == "live":
-            continue
         try:
             # Activation is observed on ordinary events, exactly as a standing guard is, and is
             # recorded through the same demand/discharge pair under a distinct subject -- so the
@@ -395,11 +388,32 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                     did = derive_id(session, agent, cl.id, subject)
                     ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
                                          subject=subject, reason=cl.deny_reason))
-                    continue
-                aid = derive_id(session, agent, cl.id, "activated")
-                ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
-                                     subject="activated", reason="occasion observed"))
-                ledger.discharge(session, agent, aid, "occasion observed")
+                    # NO `continue` HERE, and the reason is the whole shape of a keyed standing
+                    # clause: ONE ACT CAN BE BOTH THE OCCASION AND THE GUARD. C08 is the case --
+                    # running a checker's own can-fail plant both produces a PASS that could be
+                    # cited AND observes that checker failing. Skipping the discharge branch
+                    # after demanding made such an act raise an obligation it had already
+                    # satisfied, so proving a checker can fail left the ending blocked by the
+                    # very clause the proof answers. Both sides key on `standing:{key}`, so the
+                    # discharge below lands on the row just raised and the pair nets clean.
+                    #
+                    # This is NOT the self-licence `pre_tool_use` refuses. That one is two
+                    # SEGMENTS in one string with the act before the guard -- `git push && git
+                    # status` -- where the guard arrives too late to have licensed anything.
+                    # Here there are not two acts: the plant IS the observation, so there is no
+                    # order for it to be in. An ordinary run of the same checker still demands
+                    # and does not discharge, because the guard requires the fault-proving form.
+                else:
+                    # The UNKEYED shape only. Dropping the `continue` above to let one act both
+                    # raise and satisfy a keyed obligation also dropped the keyed branch into
+                    # this pair, so every keyed activation wrote a demand and its immediate
+                    # discharge under the subject "activated" -- rows that net to zero and mean
+                    # nothing, in the journal whose whole job is saying what was owed. Benign to
+                    # the verdict, junk to a reader, and two shapes wearing one code path.
+                    aid = derive_id(session, agent, cl.id, "activated")
+                    ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
+                                         subject="activated", reason="occasion observed"))
+                    ledger.discharge(session, agent, aid, "occasion observed")
             if C.discharges(cl, event):
                 key = C.event_key(cl.discharged_by, event)
                 if cl.discharged_by.get("key_from") is not None and not key:
@@ -437,19 +451,6 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
         # off, and a switched-off gate has zero coverage.
         if cl.event != event_name:
             continue
-        # Stop is where decisions are read, so it is where a waiver is announced -- once per
-        # ending, never per tool call. A parked clause the operator cannot see is the silent
-        # coverage loss a waiver is supposed to prevent, and an EXPIRED one enforces again here
-        # rather than lapsing quietly into permanent absence.
-        status = C.waiver_status(cl)
-        if status == "live":
-            waiver = cl.waiver or {}
-            print(f"keel: [{cl.id}] PARKED by waiver until {waiver.get('until')} -- "
-                  f"{waiver.get('because', '')}", file=sys.stderr)
-            continue
-        if status == "expired":
-            print(f"keel: [{cl.id}] waiver EXPIRED -- enforcing again. Re-argue the "
-                  "research and write a new date, or fix the guard.", file=sys.stderr)
         # Keyed activations materialize their own per-key demand rows as the occasions arrive.
         # They need no synthetic session-wide standing row; open_demands above reconciles them.
         if cl.activated_by is not None and cl.activated_by.get("key_from") is not None:
@@ -570,11 +571,6 @@ def _record(event: dict, out: dict) -> None:
     "did Keel catch anything this session?" stops being unanswerable.
     """
     try:
-        # The SHAPE census, off unless asked for. It runs before the decision branches because
-        # it records what the host SENT, which is independent of what Keel decided -- and the
-        # question it exists to answer (does any tool_response key carry an exit status) is
-        # about events Keel allowed just as much as ones it denied.
-        recorder.record(event)
         hook = event.get("hook_event_name")
         wire_out = out.get("hookSpecificOutput") if isinstance(out, dict) else None
         if isinstance(wire_out, dict) and wire_out.get("permissionDecision") == "deny":
