@@ -106,10 +106,18 @@ class OneObligationTwoSurfaces(unittest.TestCase):
             "tests.test_surface_composition.OneObligationTwoSurfaces."
             "test_the_host_search_tool_discharges_the_search_obligation",
             # The plant produces a STRONGER outcome than this cell going red on its own:
-            # U12/U19 now declare tool-event guard fixtures, and those are loader-checked,
-            # so with the primitive disarmed NO clause ships at all rather than one
-            # misbehaving. Expect what the production loader actually says.
-            "CLAUSE-GUARD-FIXTURE-MISS: U12",
+            # every clause with a composed guard declares tool-event fixtures, those are
+            # loader-checked, so with the primitive disarmed NO clause ships at all rather
+            # than one misbehaving.
+            #
+            # The expectation names the ERROR CLASS and not a clause id, and the reason is a
+            # false red this cell already produced: it read `CLAUSE-GUARD-FIXTURE-MISS: U12`,
+            # and when U10 composed its guard over the host `Read`, U10 became the first row
+            # the loader refuses -- so the plant reported failure while the property it tests
+            # held perfectly. An assertion pinned to whichever clause sorts first is a
+            # denominator of one masquerading as the property, and it goes red on every future
+            # composition. What is being tested is that the table does not ship.
+            "CLAUSE-GUARD-FIXTURE-MISS",
         )
 
 

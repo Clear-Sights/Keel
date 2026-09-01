@@ -838,6 +838,25 @@ def discharges(clause: Clause, event: dict) -> bool | None:
     return result
 
 
+def subject_fields(spec: Any) -> list[str]:
+    """The event fields a subject extractor may read, in order.
+
+    ONE reading of `on`, called by everything that needs it. A subject may name several
+    surfaces because an act and its guard do not always arrive through the same one -- a jq
+    traversal carries its file in the command, the host `Read` that inspects the same file
+    carries it in `tool_input.file_path`. Three call sites were about to spell this rule three
+    times; the writer and the checker have to be the same line of code or they are not the
+    same rule.
+    """
+    if isinstance(spec, dict):
+        on = spec.get("on") or "tool_input.command"
+    else:
+        on = spec or ""
+    if isinstance(on, str):
+        return [on] if on else []
+    return [f for f in on if isinstance(f, str) and f]
+
+
 def _fixture_event(predicate: dict[str, Any], fixture: Any) -> dict[str, Any]:
     if isinstance(fixture, dict):
         return fixture
@@ -848,7 +867,10 @@ def _fixture_event(predicate: dict[str, Any], fixture: Any) -> dict[str, Any]:
     if tools and tools != ["*"]:
         event["tool_name"] = tools[0]
     cursor = event
-    parts = predicate.get("on", "").split(".")
+    # A string fixture is a command, so it is placed in the FIRST surface named. Fixtures for
+    # the other surfaces ship as explicit dicts, which never reach this function.
+    fields = subject_fields(predicate)
+    parts = (fields[0] if fields else "").split(".")
     for part in parts[:-1]:
         child: dict[str, Any] = {}
         cursor[part] = child
@@ -1009,7 +1031,8 @@ def _admit(clause: Clause) -> Clause:
         # clause written to stop it, with the fixture list asserting the opposite.
         if isinstance(clause.subject, dict):
             keyed = _fixture_event(clause.subject, fixture)
-            value = _resolve(keyed, clause.subject.get("on", ""))
+            fields = subject_fields(clause.subject)
+            value = _resolve(keyed, fields[0] if fields else "")
             found = (re.search(clause.subject["pattern"], value)
                      if isinstance(value, str) and clause.subject.get("pattern") else None)
             if not (found and found.group(clause.subject.get("group", 0))):

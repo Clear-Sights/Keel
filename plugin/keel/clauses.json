@@ -941,14 +941,18 @@
     "id": "U10",
     "event": "PreToolUse",
     "tools": [
-      "Bash"
+      "Bash",
+      "Read"
     ],
     "occasion": "the trace is about to traverse structured JSON data",
     "costly": "traverse structured JSON data",
     "guard": "look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file",
     "subject": {
-      "on": "tool_input.command",
-      "pattern": "\\s([\\w./-]+\\.json)\\s*$",
+      "on": [
+        "tool_input.command",
+        "tool_input.file_path"
+      ],
+      "pattern": "(?:^|\\s)([\\w./-]+\\.json)\\s*$",
       "group": 1
     },
     "fingerprint": {
@@ -963,12 +967,21 @@
       ]
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "jq"
-      ],
-      "then_matches": "(\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+      "any_of": [
+        {
+          "kind": "program",
+          "on": "tool_input.command",
+          "names": [
+            "jq"
+          ],
+          "then_matches": "(\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+        },
+        {
+          "kind": "regex",
+          "on": "tool_name",
+          "pattern": "^Read$"
+        }
+      ]
     },
     "window": "session",
     "deny_reason": "traverse structured JSON whose structure was never once looked at; run `jq 'keys'`, `jq 'type'`, or a `jq -e` type/key assertion on the file first",
@@ -981,16 +994,31 @@
       "jq -e 'type == \"object\" and has(\"items\")' response.json",
       "python3 -m json.tool response.json"
     ],
-    "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges.",
+    "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges. COMPOSED over the host surface, the same move U12 and U19 took to Grep: reading the file IS looking at its structure, and `Read` is a CLOSED host enum, so naming it retires a vocabulary instead of widening one -- a `jq`-only guard is monotone in vocabulary (Coverings.v Thm 5) and is defeated by inspecting the file any other way. The subject had to move with it: a Read carries its file in `tool_input.file_path`, not in a command, so with a single-field subject the composed guard would key to \"\" and discharge nothing.",
     "fixtures_discharge": [
       "jq -e . f.json",
       "jq 'keys' f.json",
       "jq 'type' f.json",
-      "jq 'has(\"k\")' f.json"
+      "jq 'has(\"k\")' f.json",
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "f.json"
+        }
+      }
     ],
     "fixtures_no_discharge": [
       "echo 'jq -e . f.json'",
-      "jq . f.json"
+      "jq . f.json",
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "f.json",
+          "content": "{}"
+        }
+      }
     ]
   },
   {
