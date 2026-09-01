@@ -802,16 +802,6 @@ def discharges(clause: Clause, event: dict) -> bool | None:
     return result
 
 
-def _guard_names(predicate: Any) -> list[str]:
-    """Every program name a guard names, compound branches included."""
-    if not isinstance(predicate, dict):
-        return []
-    found = list(predicate.get("names") or [])
-    for sub in (predicate.get("any_of") or []) + (predicate.get("all_of") or []):
-        found += _guard_names(sub)
-    return found
-
-
 def _matches_a_tool_enum(predicate: Any) -> bool:
     """True when some branch of the guard reads `tool_name`.
 
@@ -833,9 +823,12 @@ EXCUSE_FIELDS = frozenset({"why_no_program", "guard_vocabulary", "waiver"})
 
 # The programs this bundle ships under its own names. A vocabulary drawn wholly from these is
 # CLOSED by construction: there is no other spelling of "run Keel's own probe".
+_BUNDLE = Path(__file__).resolve().parent.parent
 SHIPPED_PROGRAMS = frozenset(
-    p.name for d in ("tools", "hooks")
-    for p in (Path(__file__).resolve().parent.parent / d).glob("*") if p.is_file())
+    p.name for d in ("tools", "hooks") for p in (_BUNDLE / d).glob("*") if p.is_file())
+
+# The spelling a deny_reason or guard uses to tell the operator what to run.
+_PLUGIN_ROOT_RX = re.compile(r"\$CLAUDE_PLUGIN_ROOT/([\w./-]+)")
 
 
 def vocabulary(predicate: Any) -> list[str]:
@@ -1048,6 +1041,20 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EVENT-UNKNOWN", f"{clause.id}: {clause.event}")
     if not clause.fixtures_pos or not clause.fixtures_neg:
         raise ClauseError("CLAUSE-NO-FIXTURES", clause.id)
+    # A program this bundle is supposed to ship must be in the bundle, on every side and in the
+    # sentence shown to the operator. Otherwise the clause denies with a remedy nobody can run --
+    # an obligation nothing discharges, which is how a gate gets switched off. The loader refuses
+    # it, so the plugin cannot load with the file gone; a test that noticed was a property of the
+    # tree, not of the product.
+    for side in (clause.fingerprint, clause.activated_by, clause.discharged_by):
+        for name in vocabulary(side):
+            if name.endswith((".py", ".sh")) and name not in SHIPPED_PROGRAMS:
+                raise ClauseError("CLAUSE-NAMED-PROGRAM-MISSING", f"{clause.id}: {name}")
+    for text in (clause.guard, clause.deny_reason):
+        for rel in _PLUGIN_ROOT_RX.findall(text or ""):
+            if not (_BUNDLE / rel).is_file():
+                raise ClauseError("CLAUSE-NAMED-PROGRAM-MISSING",
+                                  f"{clause.id}: $CLAUDE_PLUGIN_ROOT/{rel}")
     # THE PAIRING RULE IS NOT CHECKED HERE, and that placement is the fix. Every row names its
     # positive half, and this function used to raise when one did not -- at DISPATCH time, inside
     # the load that every hook invocation performs. `_admit` failing anywhere makes the whole

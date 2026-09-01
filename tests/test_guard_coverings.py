@@ -39,7 +39,6 @@ segment with no following operator, so there is no edge to match.
 
 from __future__ import annotations
 
-import json
 import unittest
 
 from tests.plant_support import PLUGIN, smoke_replace
@@ -49,8 +48,6 @@ from keel import clauses as C
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 
 
-def _raw() -> list[dict]:
-    return json.loads(CLAUSES.read_text(encoding="utf-8"))
 
 
 def _event(predicate: dict, command: str) -> dict:
@@ -59,14 +56,6 @@ def _event(predicate: dict, command: str) -> dict:
 
 
 class EveryGuardIsWitnessedInBothDirections(unittest.TestCase):
-    def test_every_clause_declares_guard_fixtures(self) -> None:
-        """The population, stated. 0 of 24 declared these before this law existed."""
-        rows = _raw()
-        self.assertEqual(len(rows), 24, "the population moved; re-measure rather than edit")
-        missing = [c["id"] for c in rows
-                   if not c.get("fixtures_discharge") or not c.get("fixtures_no_discharge")]
-        self.assertEqual(missing, [], f"clauses whose guard nothing witnesses: {missing}")
-
     def test_the_loader_enforces_it_rather_than_this_test(self) -> None:
         """A bar living only in a test is a property of the table, not of the plugin.
 

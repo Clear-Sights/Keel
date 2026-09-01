@@ -283,7 +283,8 @@ every trace the inductive `violates` describes (Theorem 8a).
 
 The theory is not cited over the table; it is applied to it. `keel/clauses.py` reads the class of
 every side from its shape (`classify_side`) and refuses what the class forbids — a textual side,
-a side with no class, a row carrying `why_no_program`, `guard_vocabulary` or `waiver`.
+a side with no class, a row carrying `why_no_program`, `guard_vocabulary` or `waiver`, and a
+named program or remedy path the bundle does not ship.
 `tools/render_coverings.py` instantiates the licensed theorems on all 51 sides of the 24 clauses
 in the generated `proofs/Clauses.v`; `tools/check_coq.py` compiles both files and grades every
 result for axioms, refuses a result proved by the identity, and refuses an instance that covers
