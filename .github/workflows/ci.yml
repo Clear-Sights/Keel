@@ -148,17 +148,34 @@ jobs:
           # those layers care about. The first attempt reached the file and changed nothing, which
           # the harness caught and reported -- the failure mode a plant is supposed to have, but
           # not one worth re-earning on every edit. It asserts its own seam, so a plant that has
-          # gone stale says so instead of quietly narrowing what it tests.
+          # gone stale says so instead of quietly narrowing what it tests -- AND IT DID. Migrating
+          # the command coverings to invocations retired the `(^|&&|;|\||\n)` spelling entirely,
+          # so this plant began failing on main with "plant seam changed", which is exactly the
+          # report it was built to make. The seam is gone because the DEFECT is gone: a clause
+          # matching a leading argv cannot re-implement the splitter's job in a pattern.
+          #
+          # So the requirement is now stated as the property rather than as a fixed list: EVERY
+          # spelling still present in the table must be narrowable and caught, and AT LEAST ONE
+          # must be present. A retired spelling is no longer an error; a table with none of them
+          # left, or one whose narrowing goes unnoticed, still is. Deleting the plant instead
+          # would have been the quiet narrowing this comment warns against.
           cat > /tmp/narrow-separators.py <<'PLANT'
           import pathlib, sys
           path = pathlib.Path(sys.argv[1])
           text = path.read_text()
           # Both spellings of "where a command starts", because it was the SECOND that kept the
-          # bypass open after the first was fixed.
+          # bypass open after the first was fixed. A spelling absent from the table is one no
+          # clause uses any more, not a plant that failed to land.
           pairs = ((r"[;&|\\n]", "[;&|]"), (r"(^|&&|;|\\||\\n)", r"(^|&&|;|\\|)"))
+          applied = 0
           for wide, narrow in pairs:
-              assert wide in text, f"plant seam changed: {wide!r} is no longer in the table"
+              if wide not in text:
+                  continue
               text = text.replace(wide, narrow)
+              applied += 1
+          assert applied, ("plant seam changed: NO separator spelling is left in the table, so "
+                           "this plant now tests nothing -- re-aim it at the rule that decides "
+                           "where a command starts, or retire it with its reason")
           path.write_text(text)
           PLANT
           sed -i 's/^          //' /tmp/narrow-separators.py

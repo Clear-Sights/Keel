@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 import json
 import os
@@ -90,6 +90,13 @@ class Clause:
     # Commands that constitute the occasion. Required when activated_by is present:
     # a precondition nothing exercises is a precondition nobody can show works.
     fixtures_activate: list[Any] | None = None
+    # The GUARD side's own fixtures. `fixtures_pos`/`fixtures_neg` discriminate the OCCASION and
+    # say nothing about what discharges a clause, which left the guard half of all 24 points
+    # un-witnessed by construction -- the loader had nothing to validate there, so a guard that
+    # could be spent by a document loaded clean. C09 was exactly that, and the first run of these
+    # fixtures found it.
+    fixtures_discharge: list[Any] = field(default_factory=list)
+    fixtures_no_discharge: list[Any] = field(default_factory=list)
     # Optional. Parks enforcement of THIS clause until `until`, because research established the
     # guard is not evaluable against the host. The clause stays in the table -- still loaded,
     # still admitted, still fixture-checked -- so a waiver hides no drift in the row itself.
@@ -282,6 +289,47 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
                 for alt in alternatives
             )
         return any(_segment_matches_program(predicate, segment) for segment in segments(value))
+    if kind == "pipeline":
+        if not isinstance(value, str):
+            return False
+        return _pipeline_predicate(predicate, value)
+    return False
+
+
+def _pipeline_predicate(predicate: dict[str, Any], value: str) -> bool:
+    """An invocation FEEDING another -- the relation `kind: program` cannot state.
+
+    A program predicate asks what one segment ran. C09's occasion is not one invocation but the
+    join between two: a process listing whose output is consumed by a matcher excluding the
+    checker's own pid. Both halves are ordinary segment questions; only the EDGE between them
+    was unexpressible, because the operator was discarded by the splitter.
+
+    `upstream` is a full program predicate, so the leading-argv machinery (wrappers, `sh -c`,
+    delegated runners) is reused rather than restated -- one owner for "what ran".
+
+    Downstream is searched THROUGH a chain of pipes: `ps aux | grep foo | grep -v $$` feeds the
+    listing to the exclusion just as directly as the two-stage form, and stopping at the first
+    stage would let one extra filter walk the guard. The walk stops at the first operator that
+    is not the pipe, because `;` and `||` do not feed anything.
+
+    This is also what closes the mention hole that `kind: regex` left open on this clause: a
+    quoted `echo 'ps aux | grep -v $$'` is ONE segment with no following operator, so there is
+    no edge to match and the guard is not spent by a document.
+    """
+    operator = predicate.get("operator", "|")
+    downstream = predicate.get("downstream_matches")
+    if downstream is None:
+        return False
+    upstream = dict(predicate.get("upstream") or {}, kind="program")
+    pipeline = segment_pipeline(value)
+    for index, (text, joins) in enumerate(pipeline):
+        if joins != operator or not _segment_matches_program(upstream, text):
+            continue
+        following = index
+        while following < len(pipeline) and pipeline[following][1] == operator:
+            following += 1
+            if re.search(downstream, pipeline[following][0]):
+                return True
     return False
 
 
@@ -463,8 +511,22 @@ def leading_program(segment: str) -> str:
     return tokens[0] if tokens else ""
 
 
-def segments(command: str) -> list[str]:
-    """Split shell control segments while preserving quoted operators.
+def _scan(command: str) -> list[tuple[str, str]]:
+    """Split shell control segments, KEEPING the operator that joined them.
+
+    Each entry is `(segment text, the operator that FOLLOWS it)` -- `""` for the last.
+
+    The operator used to be computed here and dropped one line later, and that discard was
+    itself a defect. A `|` means the next command EATS this one's output; a `;` means only
+    that it runs after. C09's whole subject is the difference -- `ps ... | grep -v $$`, a
+    process listing that excludes the checker itself -- and with the operator gone no
+    predicate could see it. Its `why_no_program` says argv on `ps` "fires on every process
+    listing whether or not it is piped into a matcher", which was true precisely because the
+    pipe fact had already been deleted before any predicate ran.
+
+    `||` and `&&` are recorded whole and are NOT pipes: `a || b` runs b when a FAILS, which is
+    the opposite of feeding it. Reading `||` as `|` would license the guard on a command whose
+    matcher may never have run at all.
 
     Two rules a naive scanner gets wrong, both measured before the fix:
 
@@ -517,7 +579,7 @@ def segments(command: str) -> list[str]:
                 continue
         if not quote and ch == "\n" and pending_heredocs:
             # Close the line, then swallow every pending body without scanning it.
-            out.append("".join(buf))
+            out.append(("".join(buf), "\n"))
             buf = []
             i += 1
             for word, strip_tabs in pending_heredocs:
@@ -554,15 +616,27 @@ def segments(command: str) -> list[str]:
                 buf.append(ch)
                 i += 1
                 continue
+            operator = ch
             if ch != "\n" and i + 1 < len(command) and command[i + 1] == ch:
+                operator = ch * 2
                 i += 1
-            out.append("".join(buf))
+            out.append(("".join(buf), operator))
             buf = []
         else:
             buf.append(ch)
         i += 1
-    out.append("".join(buf))
-    return [segment.strip() for segment in out if segment.strip()]
+    out.append(("".join(buf), ""))
+    return [(text.strip(), operator) for text, operator in out if text.strip()]
+
+
+def segments(command: str) -> list[str]:
+    """The segment texts alone -- the shape every caller but the pipeline predicate reads."""
+    return [text for text, _ in _scan(command)]
+
+
+def segment_pipeline(command: str) -> list[tuple[str, str]]:
+    """Segments paired with the operator that follows each. See `_scan`."""
+    return _scan(command)
 
 
 def _segment_matches_program(predicate: dict[str, Any], segment: str) -> bool:
@@ -829,6 +903,37 @@ def _admit(clause: Clause) -> Clause:
     for fixture in clause.fixtures_neg:
         if _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-NEG-HIT", f"{clause.id}: {fixture!r}")
+    # THE GUARD SIDE, WITNESSED IN BOTH DIRECTIONS -- and enforced HERE rather than in a test.
+    #
+    # Everything above discriminates the OCCASION. Nothing declared what DISCHARGES a clause, so
+    # the guard half of every point was un-witnessed by construction: the loader had nothing to
+    # check, and a guard that a document could spend loaded clean. That is the asymmetric
+    # direction -- a false discharge removes the guard while the costly act proceeds.
+    #
+    # The event is built by `_fixture_event` from the guard's OWN declaration, so a guard reading
+    # `tool_name` takes tool names and C08's `nonzero` guard on `tool_response.exit_code` at
+    # PostToolUse takes exit codes, without this law knowing anything special about either.
+    #
+    # Every command-string `fixtures_no_discharge` set carries the ECHO-MENTION of one of its own
+    # positives. That single case is what found C09: `echo 'ps aux | grep -v $$'` discharged the
+    # guard, so an agent that never listed a process could claim it had.
+    # A clause with NO discharge predicate has no guard side to witness -- `clauses/fixtures/E3`
+    # is guarded by a PROBE on its fingerprint, and demanding discharge fixtures of it would be
+    # demanding evidence about a predicate that does not exist. The exemption is exactly that
+    # narrow: it keys on the predicate's absence, not on any declared opt-out, so a clause cannot
+    # buy its way out of this law by claiming one.
+    if clause.discharged_by is None:
+        return clause
+    if not clause.fixtures_discharge or not clause.fixtures_no_discharge:
+        raise ClauseError("CLAUSE-NO-GUARD-FIXTURES", clause.id)
+    for fixture in clause.fixtures_discharge:
+        if not _base_predicate(clause.discharged_by,
+                               _fixture_event(clause.discharged_by, fixture)):
+            raise ClauseError("CLAUSE-GUARD-FIXTURE-MISS", f"{clause.id}: {fixture!r}")
+    for fixture in clause.fixtures_no_discharge:
+        if _base_predicate(clause.discharged_by,
+                           _fixture_event(clause.discharged_by, fixture)):
+            raise ClauseError("CLAUSE-GUARD-FIXTURE-HIT", f"{clause.id}: {fixture!r}")
     return clause
 
 
@@ -849,6 +954,8 @@ def _load_object(data: dict[str, Any]) -> Clause:
         fixtures_neg=data["fixtures_neg"],
         activated_by=data.get("activated_by"),
         fixtures_activate=data.get("fixtures_activate"),
+        fixtures_discharge=data.get("fixtures_discharge") or [],
+        fixtures_no_discharge=data.get("fixtures_no_discharge") or [],
         waiver=data.get("waiver"),
         construction=data.get("construction") or "",
         why_no_program=data.get("why_no_program") or "",
