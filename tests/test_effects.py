@@ -278,10 +278,15 @@ class TheDispatcherEnforcesAnEffect(Repo):
                                          tool_input={"command": "echo next"}))
         for owed in ("U12", "U13", "U19"):
             self.assertIn(owed, refused)
-        # The guard passes, and pays.
+        # The guard passes, and pays. What may still be refused afterwards is whatever the HOST
+        # did around this test -- on a CI runner the network counters move on their own, and a
+        # connection nobody in this test opened is still an observed effect (U06, U24). The
+        # claim here is about the rewrite: after the diff, none of its three clauses is owed.
         self.assertEqual({}, self._act("git diff")[0])
-        self.assertEqual({}, self._hook(hook_event_name="PreToolUse", tool_name="Bash",
-                                        tool_input={"command": "echo next"}))
+        after = self.denied(self._hook(hook_event_name="PreToolUse", tool_name="Bash",
+                                       tool_input={"command": "echo next"}))
+        for paid in ("U12", "U13", "U19"):
+            self.assertNotIn(paid, after, f"{paid} was not paid by the diff: {after}")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Stop attaching the delta after the act: no effect is ever observed, no demand is
