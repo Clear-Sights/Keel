@@ -917,6 +917,13 @@ def _admit(clause: Clause) -> Clause:
     # Every command-string `fixtures_no_discharge` set carries the ECHO-MENTION of one of its own
     # positives. That single case is what found C09: `echo 'ps aux | grep -v $$'` discharged the
     # guard, so an agent that never listed a process could claim it had.
+    # A clause with NO discharge predicate has no guard side to witness -- `clauses/fixtures/E3`
+    # is guarded by a PROBE on its fingerprint, and demanding discharge fixtures of it would be
+    # demanding evidence about a predicate that does not exist. The exemption is exactly that
+    # narrow: it keys on the predicate's absence, not on any declared opt-out, so a clause cannot
+    # buy its way out of this law by claiming one.
+    if clause.discharged_by is None:
+        return clause
     if not clause.fixtures_discharge or not clause.fixtures_no_discharge:
         raise ClauseError("CLAUSE-NO-GUARD-FIXTURES", clause.id)
     for fixture in clause.fixtures_discharge:
