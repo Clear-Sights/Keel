@@ -1,6 +1,7 @@
 """The Theorem 1 class stays empty, and the gate that says so can fail.
 
-`tools/covering_algebra.py` grades the shipped table against Theorem 1 of proofs/Coverings.v:
+`tools/covering_algebra.py` grades the shipped table against Theorem 1 of
+the Coverings development in the gyroscope-dev tree (proofs/Coverings.v there, compiled by its own gate -- it is a derivation, not a shipped artifact, so it lives with the research rather than in this package):
 a covering reading the RAW COMMAND as text, with a shell metacharacter admitted as left-context,
 cannot be mention-immune. Not "is defeated by the three strings we tried" -- defeated for every
 command it accepts, because `echo '<c>'` preserves c verbatim and the metacharacter comes along

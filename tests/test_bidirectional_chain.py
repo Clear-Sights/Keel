@@ -12,7 +12,8 @@ table exists to provide is not "A01's guard matches `git status`" -- it is:
 CHAINING IS NOT A MECHANISM HERE, and that is the design rather than a shortfall. There is no
 chain object, no ordering table, no transitive closure computed anywhere. Obligations accumulate
 in ONE ledger and every one of them must clear, so a chain of any length is what you get from
-composing pairwise links without limiting them (Coverings.v, Theorem 9 `chain_composes`).
+composing pairwise links without limiting them -- Theorem 9 `chain_composes` in
+the Coverings development in the gyroscope-dev tree (proofs/Coverings.v there, compiled by its own gate -- it is a derivation, not a shipped artifact, so it lives with the research rather than in this package).
 
 A STATIC READING OF THE TABLE CANNOT SEE THIS, and one such reading reported the opposite. A graph
 built by asking "does clause X's guard signature equal clause Y's occasion signature" found ZERO

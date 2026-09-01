@@ -1,6 +1,7 @@
 """Break every covering in the shipped table down to primitives, and grade the algebra.
 
-The check this tool exists to make is Theorem 1 from proofs/Coverings.v, applied to the shipped
+The check this tool exists to make is Theorem 1 from
+the Coverings development in the gyroscope-dev tree (proofs/Coverings.v there, compiled by its own gate -- it is a derivation, not a shipped artifact, so it lives with the research rather than in this package), applied to the shipped
 table: a covering that reads the RAW COMMAND as text, with a shell metacharacter admitted as
 left-context, cannot be mention-immune -- for every command it accepts, not merely for the
 strings someone thought to try. Quoting the command inside `echo '...'` preserves it verbatim,
@@ -71,7 +72,7 @@ for ref, k in other:
 
 if unsound:
     print(f"\nFAIL: {len(unsound)} covering(s) read the raw command as text with a shell "
-          f"metacharacter as left-context. By Theorem 1 (proofs/Coverings.v) these cannot be "
+          f"metacharacter as left-context. By Theorem 1 (Coverings, in the dev tree) these cannot be "
           f"made mention-immune by any pattern edit; give the side a structural kind, or record "
           f"a why_no_program naming what was tried.")
     for ref, _pat, _m in unsound:
