@@ -22,6 +22,8 @@ What each class gets, and what it does not:
   topology    Theorem 4: the class is name-agnostic by construction.
   always      the terminal shape; Theorem 3 says a covering that fires before the act must
               name something, so this one is the boundary, stated as such.
+  effect      Theorem 8: reads what the act did, never a segment; name-agnostic, and it
+              separates byte-identical commands by their effects.
   positive    Theorems 6 and 7.
   textual     the loader refuses the row; this script never sees one.
 A `pattern` selects programs by regex, so its vocabulary is not a finite list: its Theorem 2
@@ -110,6 +112,17 @@ def side_block(clause_id: str, side: str, predicate: dict) -> list[str]:
         ]
     if cls == "always":
         return head + ["  (* terminal: fires on every event of its surface; the Theorem 3 boundary *)"]
+    if cls == "effect":
+        effects = sorted({leaf["effect"] for leaf in _leaves(predicate) if leaf.get("kind") == "effect"})
+        return head + [
+            f"  (* effects: {', '.join(effects)} -- what the act did, read from the world, not the command *)",
+            f"  Theorem {name}_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),",
+            f"    name_agnostic string (effect string E d).",
+            f"  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.",
+            f"  Theorem {name}_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->",
+            f"    forall segs, effect string E d segs /\ ~ effect string E d' segs.",
+            f"  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.",
+        ]
     if cls == "positive":
         return head + [
             f"  Theorem {name}_rejects_false_claims : forall (D : Type) (cl ob : Text -> option D) c d d',",

@@ -159,11 +159,27 @@ Limits before capability claims — read these before the clause table below.
   predicates match the guard's invocation at `PreToolUse`/`PostToolUse` — a guard command that
   fails, or names a tool this repository does not have, still discharges. `C08-check-can-fail`
   is discharged by running the checker under a plant, not by observing the plant fail.
-- **A covering that names programs is monotone in its vocabulary** (`proofs/Coverings.v`,
-  Theorem 5): the act spelled under an unlisted name is a miss on the occasion side and an
-  undischarged demand on the guard side. Which sides are nominal, and which are closed by a host
-  enum, is derived from the table and instantiated per side in the generated `proofs/Clauses.v`
-  — there is no field in which to argue an exception, and no waiver.
+- **No occasion reads a program's name.** Before the act, the name is the only thing that
+  distinguishes one command from another (`proofs/Coverings.v`, Theorem 3), so an occasion that
+  read it would miss the same act spelled differently, with its guard removed. Every occasion is
+  therefore one of: `always` (three clauses fire on the first act of a session and are paid by
+  `git status` and `git fetch`), a host tool enum, a pipe topology, or an **effect** — what the
+  act did to the worktree, the refs, the process table, the network or its own output, observed
+  by the hook before and after the call (`keel/effects.py`, Theorem 8). An effect occasion is
+  enforced after the act: the demand it raises refuses the *next* call until the guard is seen,
+  and the snapshot retains the pre-image of anything the act changed or removed. The loader
+  refuses a nominal occasion (`CLAUSE-OCCASION-NOMINAL`).
+- **Guards still name programs, and that direction fails closed** (Theorem 5): a guard spelled
+  under an unlisted name is an undischarged demand, never a missed act. Which guard sides are
+  nominal is derived from the table and instantiated in the generated `proofs/Clauses.v` — there
+  is no field in which to argue an exception, and no waiver.
+- **The observer's rate on benign input is stated, not hidden.** A network effect is any
+  outbound connection, so the first `git fetch` of a session raises `U06` and `U24` once; a
+  process effect is any pre-existing process ending during a call; a report effect is a closed
+  set of PASS/FAIL/clean datum shapes read off stdout. Each costs at most one interruption per
+  session, because a licence is session-scoped. An effect the observer could not measure — no
+  snapshot, no repository, `git` timing out — is NOT-EVALUABLE and the occasion is treated as
+  live.
 - **It does not judge prose.** Every fingerprint is an exact predicate over command, tool, or
   path identity; a clause that would need to infer intent from a command string is not admitted.
 - **The denial is verified; the behaviour change is not.** "Prevented" here means exactly one
@@ -224,7 +240,7 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 | `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | [POINTS.md#p01](plugin/POINTS.md#p01) |
 | `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | [POINTS.md#p01](plugin/POINTS.md#p01) |
 | `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](plugin/POINTS.md#t01) |
-| `T02` | end the run treating a push report as a landing | fetch or `git ls-remote` the ref after pushing | [POINTS.md#t02](plugin/POINTS.md#t02) |
+| `T02` | end the run treating a push report as a landing | let the ending measure the remote: every remote head that moved this session must equal a local ref (a push that landed); Keel lists the remote itself at Stop | [POINTS.md#t02](plugin/POINTS.md#t02) |
 | `U01` | launch a nested worker | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --writable-home --response-transport --result-write` | [POINTS.md#u01](plugin/POINTS.md#u01) |
 | `U02` | re-launch a nested-worker target | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --target TARGET --after-failure --require-change` | [POINTS.md#u02](plugin/POINTS.md#u02) |
 | `U03` | use a PID in a signal operation | run `ps`, `pgrep`, or an equivalent observer-namespace process listing | [POINTS.md#u03](plugin/POINTS.md#u03) |
@@ -241,35 +257,32 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
 <!-- END GENERATED: clause-routes -->
 
-Three clauses[^m-local-tooling-clauses] (`U01`, `U02`, `U25`) name repository-local tooling in their guards or
-fingerprints. What happens when that tooling does not exist in the current repository — read from the
-dispatch code, not guessed:
-
-- **The demand is raised anyway.** `pre_tool_use` demands whenever a clause's fingerprint matches,
-  with no check that the guard is runnable here; an open demand then blocks at Stop.
-- **In practice `U01`/`U02` are scoped out by their own fingerprints**, which match a
-  `dispatch.sh` invocation — a repository without that launcher never triggers them.
-- **`U25` is demanded anyway.** Its fingerprint is generic (any `python3 …scan….py`, or a
-  `npm/go/cargo test … scanner` invocation), so a new adopter running any scanner script is denied
-  and, undischarged, Stop-blocked — dischargeable only by a test invocation whose command text
-  contains `prefix` or `distractor`. Per the discharge limit above, the ledger records that such a
-  command was *invoked*, not that the named regression test exists or passed.
+Two clauses[^m-local-tooling-clauses] (`U01`, `U02`) name Keel's own probe in their guards; the
+loader refuses the table if that file is not in the bundle. Their occasions are effects — a
+process that survives the call that launched it — so a repository with no launcher of its own
+never triggers them, and one that launches workers under any name does. `U25`'s occasion is a
+clean scan report in the call's output, whatever printed it; it is discharged only by a test
+invocation whose command text contains `prefix` or `distractor`, and per the discharge limit above
+the ledger records that such a command was *invoked*, not that the regression test exists or
+passed.
 
 ## Evidence
 
 `python3 eval/replay.py` from the repository root replays recorded sessions through the real
-dispatcher: 23 derailments[^m-derailments] — **every clause has a session that drives it**; the
-twenty-fourth, `C08`, is driven by the recovery shape — each denied at or before the event where
-the session went wrong, and each required to
-name the clause it declares rather than merely to deny, so a session is evidence about its own
-row and not about the table. Plus a recovery session where the same denied call passes after its
-guard, and a benign control that stays silent — 26/26,[^m-replay] standard library only, and
-succeeds iff every session meets its expectation.
+dispatcher — **every clause has a session that drives it**, each denied at or before the event
+where the session went wrong, and each required to name the clause it declares rather than
+merely to deny, so a session is evidence about its own row and not about the table. 10
+sessions[^m-derailments] end at the refusal; 15 continue through the guard and require the same
+call to pass afterward; one benign control stays silent — 26/26,[^m-replay] standard library
+only, and succeeds iff every session meets its expectation.
 
-Two of those 23 needed the shape the A03 session already used: a clause declared SUPERSET of
-another in `OVERLAPS.tsv` speaks first, so `U02` and `U13` are reached by discharging `U01` and
-`U12` in the session before the narrower question is asked. Written the naive way they read as
-unreachable, which is what the "first fire must name the declared clause" rule is for.
+The sessions are generated from `eval/generate_corpus.py` (`--check` is a gate), so every
+recorded effect is explicit: a `PostToolUse` event carries the full observation record, and an
+absent effect is NOT-EVALUABLE rather than "did not happen". Every session that runs a command
+opens with the guards the table owes before any act — `git status`, `git fetch`, and because the
+fetch opened a connection, the authenticated read canary and a warnings-as-errors run — which is
+the cost of three `always` occasions and one network effect, shown in the corpus rather than
+hidden by it.
 
 ## The proof, applied to the table
 
@@ -278,13 +291,16 @@ axioms, what each class of covering can be: a covering over the raw command text
 mention-immune (Theorem 1); one over a segment's leading program is, provided its vocabulary
 excludes the quoting program (Theorem 2), and is monotone in that vocabulary (Theorem 5); a
 covering over the pipe topology is name-agnostic (Theorem 4); a positive obligation that compares
-the run's own datum has an empty evasion set (Theorem 7); an ordering enforced backward rejects
-every trace the inductive `violates` describes (Theorem 8a).
+the run's own datum has an empty evasion set (Theorem 7); a covering over what the act did reads
+no segment, so it is name-agnostic and separates byte-identical commands by their effects
+(Theorem 8); an ordering enforced backward rejects every trace the inductive `violates`
+describes (Theorem 8a).
 
 The theory is not cited over the table; it is applied to it. `keel/clauses.py` reads the class of
 every side from its shape (`classify_side`) and refuses what the class forbids — a textual side,
-a side with no class, a row carrying `why_no_program`, `guard_vocabulary` or `waiver`, and a
-named program or remedy path the bundle does not ship.
+a side with no class, an occasion that selects by program name, an effect the observer does not
+measure, a row carrying `why_no_program`, `guard_vocabulary` or `waiver`, and a named program or
+remedy path the bundle does not ship.
 `tools/render_coverings.py` instantiates the licensed theorems on all 51 sides of the 24 clauses
 in the generated `proofs/Clauses.v`; `tools/check_coq.py` compiles both files and grades every
 result for axioms, refuses a result proved by the identity, and refuses an instance that covers

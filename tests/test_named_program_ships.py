@@ -41,9 +41,9 @@ class ANamedScriptShips(unittest.TestCase):
         smoke_replace(
             self, PLUGIN / "keel" / "clauses.json",
             b'run `python3 \\"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\\" '
-            b'--target TARGET --after-failure --require-change`",\n    "construction"',
+            b'--target TARGET --after-failure --require-change` before the next act",\n    "construction"',
             b'run `python3 \\"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capabilities.py\\" '
-            b'--target TARGET --after-failure --require-change`",\n    "construction"',
+            b'--target TARGET --after-failure --require-change` before the next act",\n    "construction"',
             "tests.test_named_program_ships.ANamedScriptShips."
             "test_NON_VACUITY_some_guard_names_a_script",
             "CLAUSE-NAMED-PROGRAM-MISSING",

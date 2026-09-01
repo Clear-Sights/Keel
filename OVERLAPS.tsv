@@ -3,23 +3,28 @@
 # relation that is NOT declared here, on a declared relation that no longer holds, and on a live
 # clause whose fingerprint matches nothing.
 #
-# Overlap is DECLARED, never condemned. Two of the four rows below are a general clause layered
-# with a specific one -- A01 guards a push nobody checked, A03 a force-push nobody fetched -- and a
-# check that condemned subsumption outright would fire on those for no defect. A gate firing on
+# Overlap is DECLARED, never condemned. Most rows below are several clauses reading ONE effect --
+# a rewrite is a patch is an in-place edit, on the worktree -- and a check that condemned
+# subsumption outright would fire on those for no defect. A gate firing on
 # lookalikes is itself Asymmetric: the noise does not heal, the gate gets disabled, and its real
 # catches go with it.
 #
-# WHICH PAIRS ACTUALLY DOUBLE-DENY IS MEASURED, NOT READ OFF THIS TABLE. Every row here once
-# reasoned from `_quarantine_reason`, a field the dispatcher never read, so "quarantined, so no
-# live double-denial" was false wherever it appeared. The field is gone; the pairs are now driven
-# through keel.dispatch by tests/test_occasion_algebra.py, which pins which of them answer one
-# command with two unrelated remedies.
 #
-# RELATION is read left-to-right: A SUPERSET B means every command matching B also matches A.
-# WITNESS is a command in the shared extension and must still be matched by BOTH, so a fingerprint
-# edit breaks the row rather than silently re-pointing it.
+# RELATION is read left-to-right: A SUPERSET B means every element matching B also matches A.
+# WITNESS is an element of the shared extension -- a command for a command fingerprint, the
+# canonical JSON of an observation record for an effect fingerprint -- and must still be matched
+# by BOTH, so a fingerprint edit breaks the row rather than silently re-pointing it.
+#
+# ONE REFUSAL NAMES EVERY CLAUSE REFUSING. Since occasions became effects, a shared occasion is
+# not a double denial: the next call after the effect is refused once, naming each clause owed,
+# and each guard pays its own. tests/test_occasion_algebra.py measures exactly that per row.
 #
 # A	RELATION	B	WITNESS	WHY
-A01	SUPERSET	A03	git push --force origin main	layering in intent, DOUBLE DENIAL in fact. A01 denies a push whose landing nobody checked (discharge: git status), A03 a force-push whose remote tip was never fetched (discharge: git fetch). This row used to end "A03 is quarantined, so no live double-denial" -- untrue: the dispatcher never read that field. Driven through keel.dispatch, the witness denies A01, and obeying the quoted remedy then denies A03.
-U12	SUPERSET	U13	git apply fix.patch	the general/specific pair: U12 takes session_id as subject, U13 extracts the patch file as its own. The witness here used to be `git apply --check generated.patch`, which U13 never matched -- its fingerprint carries an `unless` excluding the --check form, and the algebra could not see `unless` until it started using the dispatcher's own matcher. Driven on the corrected witness: U12 denies, and obeying its remedy then denies U13.
-U01	SUPERSET	U02	/tmp/sect/run/dispatch.sh unit-a luna brief-a.txt	layering, and now shown to be: this row read IDENTICAL only because no fixture told the two apart. `dispatch.sh` with no target is a U01 occasion -- a nested worker is starting -- and not a U02 one, since nothing is being re-launched; it is now a fixture, and the extension is strictly smaller. The ledger's own open question, whether these are one clause written twice, is answered: they are two. They still deny in sequence on a command matching both, because U02 cannot tell a first launch from a re-launch -- `activated_by` would say exactly that, and the dispatcher only honours it on Stop clauses, so declaring it here would do nothing.
+U01	SUPERSET	U02	{"commit_signed": false, "files_changed": [], "files_removed": [], "head_moved": false, "head_reset": false, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [9002], "pids_spawned_again": true, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	layering, and now an effect: U01 is a worker surviving its launch, U02 the same when this session had already launched one (pids_spawned_again), so every U02 observation is a U01 observation and not the reverse. One refusal names both on a re-launch; the probe form each guard names is different, and each pays its own.
+U06	IDENTICAL	U24	{"commit_signed": false, "files_changed": [], "files_removed": [], "head_moved": false, "head_reset": false, "head_switched": false, "net_out": true, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	the same observation, deliberately: a mutating request and a publish both reach the world through an outbound connection, and nothing local separates a POST from a GET or a registry upload from a fetch. Before the act the name would have separated them, and the name is exactly what no occasion may read (Theorem 3). So both fire on net_out, once per session, and the refusal names both guards -- the authenticated read canary and the warnings-as-errors run.
+U12	IDENTICAL	U13	{"commit_signed": false, "files_changed": ["a"], "files_removed": [], "head_moved": false, "head_reset": false, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	the same observation: content changed by a Bash call. A patch, a generated patch and an in-place rewrite are one effect on the worktree; their guards differ (search or read the target; `git apply --check`; compare before and after) and a `git diff` against the retained pre-image pays every one. One refusal names all three.
+U12	IDENTICAL	U19	{"commit_signed": false, "files_changed": ["a"], "files_removed": [], "head_moved": false, "head_reset": false, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	as U12/U13: one effect, three guards, one refusal naming all three.
+U12	OVERLAP	U20	{"commit_signed": false, "files_changed": ["a"], "files_removed": [], "head_moved": true, "head_reset": true, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	a hard reset to an ancestor changes tracked content (files_changed, U12/U13/U19) AND is a reset (head_reset, U20): the shared element is that observation, and the two are not identical because a plain rewrite is not a reset and a removal is not a rewrite.
+U13	IDENTICAL	U19	{"commit_signed": false, "files_changed": ["a"], "files_removed": [], "head_moved": false, "head_reset": false, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	as U12/U13: one effect, three guards, one refusal naming all three.
+U13	OVERLAP	U20	{"commit_signed": false, "files_changed": ["a"], "files_removed": [], "head_moved": true, "head_reset": true, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	as U12/U20.
+U19	OVERLAP	U20	{"commit_signed": false, "files_changed": ["a"], "files_removed": [], "head_moved": true, "head_reset": true, "head_switched": false, "net_out": false, "pids_gone": [], "pids_spawned": [], "pids_spawned_again": false, "remote_landed": null, "remote_ref_moved": [], "report_clean": false, "report_fail": false, "report_null": false, "report_pass": false}	as U12/U20.

@@ -24,12 +24,12 @@ reading that can be right about a runtime property.
 
 Measured by this sequence, which is exactly what the cells below assert:
 
-    git push, nothing on record  -> deny            (backward)
-    Stop                          -> block, 3 owed  (forward)
-    git status                    -> allowed; discharges A01 AND T01 with one act
-    Stop                          -> 1 remaining: T02
+    git push, nothing on record  -> deny, naming A01, A02 and A03 at once   (backward)
+    Stop                          -> block, the refusal's demands still owed  (forward)
+    git status                    -> allowed; discharges A01, A02 AND T01 with one act
+    Stop                          -> still blocked: A03 remains
+    git fetch origin              -> allowed (a guard passes the `always` occasions); pays A03
     git push                      -> ALLOWED
-    git fetch origin              -> discharges T02
     Stop                          -> {} clean
 """
 
@@ -66,36 +66,47 @@ class TheChainComposesThroughTheRealHook(unittest.TestCase):
         return json.loads(out) if out else {}
 
     def _bash(self, event: str, command: str) -> dict:
-        return self._hook(hook_event_name=event, tool_name="Bash",
-                          tool_input={"command": command})
+        payload = dict(hook_event_name=event, tool_name="Bash", tool_input={"command": command})
+        if event == "PostToolUse":
+            # The recorded observation, explicit and empty: this test is about the ledger's two
+            # directions, not about what the host around it happens to be doing to the process
+            # table or the network while it runs.
+            from keel import effects
+            record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
+                                     "pids_gone", "pids_spawned") else False
+                      for n in effects.EFFECTS}
+            record["remote_landed"] = None
+            payload["keel_effect"] = record
+        return self._hook(**payload)
 
     def test_the_whole_chain_end_to_end(self) -> None:
         deny = self._bash("PreToolUse", "git push")
+        reason = deny.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         self.assertEqual(
             deny.get("hookSpecificOutput", {}).get("permissionDecision"), "deny",
             "BACKWARD: a push with no predecessor on record was not refused")
-
+        for owed in ("A01", "A02", "A03"):
+            self.assertIn(owed, reason, "one refusal must name every clause refusing")
         blocked = self._hook(hook_event_name="Stop")
         self.assertEqual(blocked.get("decision"), "block",
                          "FORWARD: the obligation the refusal incurred did not reach the ending")
         self.assertIn("A01", blocked.get("reason", ""),
                       "the PreToolUse clause's demand never reached Stop -- the two directions "
                       "are not sharing one ledger")
-
-        self._bash("PreToolUse", "git status")
+        self.assertEqual(self._bash("PreToolUse", "git status"), {},
+                         "a guard call was refused by the occasions it does not pay")
         self._bash("PostToolUse", "git status")
-
         after = self._hook(hook_event_name="Stop")
         self.assertEqual(after.get("decision"), "block",
                          "one act cleared every obligation -- the remaining link vanished")
         self.assertNotIn("A01", after.get("reason", ""), "A01 did not discharge")
-        self.assertIn("T02", after.get("reason", ""),
+        self.assertIn("A03", after.get("reason", ""),
                       "COMPOSING: the next link did not surface once its predecessors cleared")
-
-        self.assertEqual(self._bash("PreToolUse", "git push"), {},
-                         "the act stayed refused after its predecessor was satisfied")
-
+        self.assertEqual(self._bash("PreToolUse", "git fetch origin"), {})
         self._bash("PostToolUse", "git fetch origin")
+        self.assertEqual(self._bash("PreToolUse", "git push"), {},
+                         "the act stayed refused after its predecessors were satisfied")
+        self._bash("PostToolUse", "git push")
         self.assertEqual(self._hook(hook_event_name="Stop"), {},
                          "the ending is still refused with every obligation discharged")
 
@@ -104,7 +115,7 @@ class TheChainComposesThroughTheRealHook(unittest.TestCase):
         self.assertEqual(self._hook(hook_event_name="Stop").get("decision"), "block",
                          "a fresh session with standing obligations ended clean")
 
-    def test_the_check_can_fail(self) -> None:
+    def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Disarm the ONE line that carries keyed demands into the terminal decision.
 
         `open_rows` holds the demands recorded by PreToolUse clauses; `undischarged` holds the

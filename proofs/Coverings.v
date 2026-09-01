@@ -149,6 +149,26 @@ Section Coverings.
   Qed.
 
 
+  (** THEOREM 8 (the occasion form). A covering over what the act DID reads no segment at all,
+      so renaming every program changes nothing it sees: it is name-agnostic by construction,
+      the same way topology is. That alone would be a tautology, so it is stated together with
+      its content, which is the exact dual of Theorem 3: where no covering over the segments
+      can separate two acts with different names and the same shape, an effect covering
+      SEPARATES two acts with the SAME segments -- byte-identical commands -- whenever what they
+      did differs. The command string is not the input; the world is. *)
+  Definition effect {Delta : Type} (E : Delta -> Prop) (d : Delta) : list Segment -> Prop :=
+    fun _ => E d.
+
+  Theorem effect_is_name_agnostic :
+    forall (Delta : Type) (E : Delta -> Prop) (d : Delta), name_agnostic (effect E d).
+  Proof. intros Delta E d r segs. unfold effect. apply iff_refl. Qed.
+
+  Theorem effect_separates_same_segments :
+    forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect E d segs /\ ~ effect E d' segs.
+  Proof. intros Delta E d d' Hd Hd' segs. unfold effect. exact (conj Hd Hd'). Qed.
+
+
   (** ** The vocabulary obligation, and which half of a clause it is expensive on.
 
       A NOMINAL covering carries a list of program names. That list is never provably complete
@@ -336,6 +356,8 @@ Print Assumptions structural_immune.
 Print Assumptions textual_and_structural_incompatible.
 Print Assumptions name_agnostic_cannot_separate_by_name.
 Print Assumptions topology_is_name_agnostic.
+Print Assumptions effect_is_name_agnostic.
+Print Assumptions effect_separates_same_segments.
 Print Assumptions nominal_monotone.
 Print Assumptions false_claim_always_rejected.
 Print Assumptions no_claim_is_not_a_pass.

@@ -7,9 +7,12 @@ clause in `proofs/Clauses.v`, which `tools/check_coq.py` compiles and grades for
 
 What this retires: `guard_vocabulary`, `why_no_program` and `waiver` -- three places a row could
 state in English what the proof decides. Theorem 5 says a nominal covering is monotone in its
-vocabulary, so an unlisted spelling is a miss; that IS the disposition of an open vocabulary, on
-the occasion side and the guard side alike, and it is now a theorem instance per side rather than
-an argument per clause. A row carrying any of the three is refused (`CLAUSE-CARRIES-AN-EXCUSE`).
+vocabulary, so an unlisted spelling is a miss. On the GUARD side that miss is an undischarged
+demand (fail-closed) and is carried as a theorem instance per side. On the OCCASION side it would
+be the costly act proceeding unguarded, so the loader refuses a nominal occasion outright
+(`CLAUSE-OCCASION-NOMINAL`): every occasion is `always`, a host tool enum, a topology, or an
+EFFECT read from the world (Theorem 8). A row carrying any of the three fields is refused
+(`CLAUSE-CARRIES-AN-EXCUSE`).
 """
 from __future__ import annotations
 
@@ -39,11 +42,15 @@ class EverySideHasAClassAndAnInstance(unittest.TestCase):
         self.assertEqual(51, len(sides), "side count moved; re-measure rather than edit")
         census = collections.Counter(C.classify_side(p) for _, _, p in sides)
         # Re-MEASURE if this moves. It is here so a side quietly changing class faces a test.
-        self.assertEqual(dict(census), {"nominal": 34, "tool-enum": 8, "always": 4,
-                                        "composed": 3, "topology": 2})
+        self.assertEqual(dict(census), {"effect": 16, "nominal": 13, "tool-enum": 8, "always": 7,
+                                        "composed": 5, "topology": 2})
         closure = collections.Counter(C.derive_closure(p) for _, _, p in sides)
-        self.assertEqual(closure["shipped"], 4, "U01/U02 name only programs this bundle ships")
-        self.assertEqual(closure["open"], 30)
+        self.assertEqual(closure["shipped"], 2, "U01/U02's guards name only Keel's own probe")
+        # Every open vocabulary is on a GUARD side, where a missing spelling fails closed (an
+        # undischarged demand). No occasion is open: the loader refuses one at load.
+        self.assertEqual(closure["open"], 11)
+        self.assertEqual([], [f"{cid}.{n}" for cid, n, p in sides
+                              if n != "discharged_by" and C.derive_closure(p) == "open"])
 
     def test_TEETH_shipped_means_every_name_is_ours(self) -> None:
         for cid, name, predicate in _sides():

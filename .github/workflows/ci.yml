@@ -73,8 +73,12 @@ jobs:
       # The replay is this repository's own stated release evidence (see release.yml, which runs
       # it before cutting a bundle). Running it on every push means a regression is found when it
       # lands rather than at release time.
+      # The sessions are generated from one spec per session, so every recorded effect is
+      # explicit; a corpus edited by hand is a red build.
       - name: Corpus replay
-        run: python3 eval/replay.py
+        run: |
+          python3 eval/generate_corpus.py --check
+          python3 eval/replay.py
 
       # Stdlib unittest only, no runner installed: the suite is written for `unittest` discovery,
       # and a pytest-style module here would be a COLLECTION error that takes the whole run down

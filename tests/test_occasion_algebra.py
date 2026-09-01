@@ -55,6 +55,19 @@ def clauses():
     return loaded["clauses"] if isinstance(loaded, dict) else loaded
 
 
+def observations(records):
+    """Every effect RECORD any clause offers as a fixture, positive or negative -- the corpus the
+    effect occasions range over, beside the command corpus below. Canonical JSON, so two clauses
+    offering the same observation index the same element."""
+    seen = {}
+    for c in records:
+        for key in ("fixtures_pos", "fixtures_neg"):
+            for f in (c.get(key) or []):
+                if isinstance(f, dict) and isinstance(f.get("keel_effect"), dict):
+                    seen.setdefault(json.dumps(f["keel_effect"], sort_keys=True), f)
+    return [seen[k] for k in sorted(seen)]
+
+
 def corpus(records):
     """Every command string any clause offers as a fixture, positive or negative.
 
@@ -65,8 +78,13 @@ def corpus(records):
                    for f in (c.get(key) or []) if isinstance(f, str)})
 
 
-def extensions(records, commands):
-    """{clause id: frozenset of corpus indices its fingerprint matches}.
+def extensions(records, commands, records_seen=()):
+    """{clause id: frozenset of corpus elements its fingerprint matches}.
+
+    Two corpora, one index space: a COMMAND fingerprint ranges over the command strings and an
+    EFFECT fingerprint over the observation records, and an element is tagged with which. An
+    `always` fingerprint matches every element of both by construction and is left out; the
+    totality law below says it is graded by its corpus session instead.
 
     THE DISPATCHER'S OWN MATCHER, imported rather than rebuilt. This function used to compile
     `fp["pattern"]` and search with it, which is most of what a fingerprint means and not all of
@@ -83,22 +101,19 @@ def extensions(records, commands):
     out = {}
     for c in records:
         fp = c.get("fingerprint")
-        if not (isinstance(fp, dict) and fp.get("on") == COMMAND):
+        if not isinstance(fp, dict):
             continue
-        # NO KIND BRANCH. Selecting on `kind == "regex"` here was a SILENT EXCLUSION: a clause
-        # whose fingerprint used any other kind simply never entered `out`, so both laws below
-        # passed over it while still reporting a denominator. It was known to drop four clauses;
-        # migrating the table to invocation matching would have taken that to twenty-one, and
-        # the module would have graded two rows of twenty-four while reading exactly as green as
-        # a full pass. A law that quietly stops evaluating its population is the defect this
-        # module exists to find, one level up. Asking the dispatcher's own entry point instead
-        # means a kind added later is covered on the day it is added, with no edit here.
         event = {"hook_event_name": c.get("event"),
                  "tool_name": (c.get("tools") or ["Bash"])[0],
                  "session_id": "occasion-algebra"}
-        out[c["id"]] = frozenset(
-            n for n, s in enumerate(commands)
-            if _base_predicate(fp, {**event, "tool_input": {"command": s}}))
+        if fp.get("on") == COMMAND:
+            out[c["id"]] = frozenset(
+                ("cmd", n) for n, s in enumerate(commands)
+                if _base_predicate(fp, {**event, "tool_input": {"command": s}}))
+        elif C.classify_side(fp) == "effect":
+            out[c["id"]] = frozenset(
+                ("rec", n) for n, r in enumerate(records_seen)
+                if _base_predicate(fp, {**event, **r}))
     return out
 
 
@@ -114,12 +129,6 @@ def relation(a, b):
         return "SUBSET"
     return "OVERLAP"
 
-
-
-def rendered(sequences):
-    """The measured sequences, in the shortest form that still identifies each pair."""
-    return ", ".join(f"{a}/{b}={kind}" + (f"->{who}" if who else "")
-                     for (a, b), (kind, who) in sorted(sequences.items()))
 
 
 def ledger_rows():
@@ -142,7 +151,8 @@ class OccasionAlgebra(unittest.TestCase):
     def setUp(self):
         self.records = clauses()
         self.commands = corpus(self.records)
-        self.ext = extensions(self.records, self.commands)
+        self.seen = observations(self.records)
+        self.ext = extensions(self.records, self.commands, self.seen)
         self.byid = {c["id"]: c for c in self.records}
         # Absence is a failure, never a skip: no corpus means nothing was compared, and reporting
         # that as a pass is the exact shape this file exists to refuse.
@@ -165,7 +175,8 @@ class OccasionAlgebra(unittest.TestCase):
                 continue
             self.fail(
                 f"{clause_id} is live and its fingerprint matches none of the "
-                f"{len(self.commands)} fixture commands: it can never fire. Either give it a "
+                f"{len(self.commands)} fixture commands or {len(self.seen)} observations: it can "
+                f"never fire. Either give it a "
                 f"fixture that exercises its occasion, or withdraw it. It cannot be parked: this "
                 f"table has no field that stops a clause firing.")
 
@@ -337,7 +348,9 @@ class OccasionAlgebra(unittest.TestCase):
 
         planted = 0
         for record in with_extractor:
-            positives = [f for f in (record.get("fixtures_pos") or []) if isinstance(f, str)]
+            # String or record fixtures alike: the loader resolves the extractor's field from
+            # either, so an effect clause keyed on an operand is held to this law too.
+            positives = list(record.get("fixtures_pos") or [])
             if not positives:
                 continue
             copy = [dict(r) for r in bundle]
@@ -358,21 +371,20 @@ class OccasionAlgebra(unittest.TestCase):
         print(f"DENOMINATOR subject=unkeyable-fixture extractors={len(with_extractor)} "
               f"plants={planted}")
 
-    def test_A02_denies_every_occasion_it_declares(self):
-        """The behaviour behind the law above, driven through the real dispatcher.
+    def test_A02_denies_the_first_act_whatever_it_is(self):
+        """The behaviour behind the `always` occasion, driven through the real dispatcher.
 
-        Two of A02's three declared occasions were allowed by the shipped plugin. This drives all
-        of them and requires A02 to answer each, so the fix is pinned by observation and not only
-        by the load-time refusal."""
-        rows = {r["id"]: r for r in json.loads((PLUGIN / "keel" / "clauses.json").read_text())}
-        fixtures = [f for f in rows["A02"]["fixtures_pos"] if isinstance(f, str)]
-        self.assertGreaterEqual(len(fixtures), 3, "A02's fixture list shrank; subject changed")
+        A02 used to name `rm`, `find`, `truncate` and `git clean`, and two of its three declared
+        occasions were allowed by the shipped plugin. It now fires on the first act of a session
+        that has listed nothing, because before the act nothing but the name told a bulk delete
+        from `ls`; so every first act is denied, naming A02, and its guard is not."""
         with tempfile.TemporaryDirectory(prefix="keel-a02-") as state:
-            for command in fixtures:
+            for command in ("rm -rf build/", "git clean -fd", "echo hello", "python3 x.py"):
                 denied, _ = self._drive(command, f"a02-{abs(hash(command))}", state)
-                self.assertEqual("A02", denied,
-                                 f"{command!r} is A02's own declared occasion and the dispatcher "
-                                 f"answered {denied!r}")
+                self.assertIn("A02", denied,
+                              f"{command!r} is a first act and the dispatcher answered {denied!r}")
+            allowed, _ = self._drive("ls -la build/", "a02-guard", state)
+            self.assertNotIn("A02", allowed, "A02's own guard was refused by A02")
 
     def test_every_relation_is_declared(self):
         declared = {(a, b) for a, _, b, _, _ in ledger_rows()}
@@ -393,7 +405,15 @@ class OccasionAlgebra(unittest.TestCase):
                 rel, found.get((a, b)),
                 f"OVERLAPS.tsv declares {a} {rel} {b}; the fixture corpus now shows "
                 f"{found.get((a, b)) or 'no shared command'}. The declaration went stale.")
-            index = self.commands.index(witness) if witness in self.commands else None
+            index = None
+            if witness in self.commands:
+                index = ("cmd", self.commands.index(witness))
+            else:
+                keys = [json.dumps(r["keel_effect"], sort_keys=True) for r in self.seen]
+                try:
+                    index = ("rec", keys.index(json.dumps(json.loads(witness), sort_keys=True)))
+                except (ValueError, TypeError):
+                    index = None
             self.assertIsNotNone(
                 index, f"OVERLAPS.tsv witness for {a}/{b} is no longer a fixture: {witness!r}")
             for clause_id in (a, b):
@@ -413,72 +433,49 @@ class OccasionAlgebra(unittest.TestCase):
                  "PYTHONPATH": str(PLUGIN)})
         body = json.loads(done.stdout or "{}")
         reason = (body.get("hookSpecificOutput") or {}).get("permissionDecisionReason") or ""
-        denied = re.search(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason)
+        denied = re.findall(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason)
         remedy = re.search(r"`([^`]+)`", reason)
-        return (denied.group(1) if denied else None), (remedy.group(1) if remedy else None)
+        return denied, (remedy.group(1) if remedy else None)
+
+    def _post(self, keel_effect: dict, session, state):
+        event = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                            "session_id": session, "cwd": "/tmp",
+                            "tool_input": {"command": "<observed>"}, "keel_effect": keel_effect})
+        subprocess.run(
+            [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
+            env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
+                 "PYTHONPATH": str(PLUGIN)})
 
     def _sequences(self):
-        """Per declared pair: obey the deny, retry the same command, and record what happens.
+        """Per declared pair: put the shared observation to the dispatcher, then ask the next
+        call, and record which of the pair the ONE refusal names.
 
-        THE DISPATCHER, NOT A READING OF THE TABLE. Two plausible readings both got this wrong:
-
-          * "both clauses are un-quarantined, so both fire" -- said all four pairs double-deny.
-            `_quarantine_reason` was never read by the dispatcher, so it never suppressed
-            anything; but U12/U13 still does not double-deny.
-          * "no single command satisfies both discharges" -- said all four again, over 120
-            candidate commands. Also wrong, and not repairable by adding candidates: the absence
-            of a shared discharge cannot be proved from a sample.
-
-        A third reading, held here briefly and also wrong, said U12/U13 was not a double denial at
-        all. It is. That reading came from the ledger's own witness, `git apply --check
-        generated.patch`, which U13 has never matched: U13's fingerprint carries an `unless`
-        excluding the --check form, and nothing could see it while this module compiled
-        `pattern` by hand. Correct the witness to a command U13 actually matches and the pair
-        denies twice like the others. A wrong witness is a wrong measurement, not a safe one.
+        THE DISPATCHER, NOT A READING OF THE TABLE. A shared occasion is not a double denial any
+        more: a refusal names every clause refusing, at once, so two clauses on one effect cost
+        one interruption listing two guards. What is measured is that both are named -- neither
+        is silently shadowed by the other -- and each guard pays its own.
         """
         results = {}
         for a, _rel, b, witness, _why in ledger_rows():
             with tempfile.TemporaryDirectory() as state:
                 session = f"algebra-{a}-{b}"
-                first, remedy = self._drive(witness, session, state)
-                if first is None:
-                    results[(a, b)] = ("no-denial", None)
-                elif not remedy:
-                    results[(a, b)] = ("no-quoted-remedy", first)
-                else:
-                    self._drive(remedy, session, state)
-                    second, _ = self._drive(witness, session, state)
-                    results[(a, b)] = (("double" if second else "single"), second)
+                for opening in ("git status", "git fetch origin"):
+                    self._drive(opening, session, state)
+                self._post(json.loads(witness), session, state)
+                named, _ = self._drive("echo next", session, state)
+                results[(a, b)] = ("both" if a in named and b in named
+                                   else ("one" if a in named or b in named else "none"), named)
         return results
 
-    def test_the_declared_pairs_that_double_deny(self):
-        """Pinned to what the dispatcher does, so a fix shrinks this and a regression grows it.
-
-        A double denial is one command answered twice with unrelated remedies. That is Asymmetric
-        by GROUND's own test: the noise does not heal, the gate gets switched off, and the real
-        catches leave with it.
-        """
+    def test_every_declared_pair_is_named_together_by_one_refusal(self):
+        """Pinned to what the dispatcher does: a pair sharing an occasion is refused ONCE, naming
+        both, so neither clause is shadowed and the session learns both guards in one message."""
         sequences = self._sequences()
         self.assertTrue(sequences, "no declared pairs were driven; nothing was measured")
-        double = sorted(pair for pair, (kind, _) in sequences.items() if kind == "double")
         self.assertEqual(
-            [("A01", "A03"), ("U01", "U02"), ("U12", "U13")], double,
-            "the set of declared overlaps answering one command with two unrelated remedies has "
-            f"changed: {rendered(sequences)}")
-
-    def test_every_pair_is_measurable_by_following_the_instruction(self):
-        """A deny whose remedy is not a command cannot be obeyed mechanically, or measured here.
-
-        Reported rather than skipped: a pair that drops out of the measurement above looks
-        identical to one that passed it, and that is the shape this module refuses.
-        """
-        unmeasurable = sorted(f"{a}/{b} (denied by {who}, which quotes no command)"
-                              for (a, b), (kind, who) in self._sequences().items()
-                              if kind == "no-quoted-remedy")
-        self.assertEqual(
-            [], unmeasurable,
-            "the set of declared pairs whose denial names no runnable remedy has changed; each "
-            "is a pair this module cannot measure and a user cannot mechanically obey")
+            [], sorted(f"{a}/{b}={kind}:{who}" for (a, b), (kind, who) in sequences.items()
+                       if kind != "both"),
+            "a declared pair no longer answers the shared occasion with one refusal naming both")
 
     def test_the_check_can_fail(self):
         """Widen one fingerprint so it swallows another, and this module must go red naming both.
@@ -488,26 +485,16 @@ class OccasionAlgebra(unittest.TestCase):
         """
         smoke_replace(
             self, CLAUSES,
-            # RE-AIMED for the invocation representation. The fault is unchanged: widen one
+            # RE-AIMED for the effect representation. The fault is unchanged: widen one
             # fingerprint until it swallows occasions another clause owns, and this module must
-            # go red naming the pair. Under `kind: program` the widening is an added argv entry
-            # plus the removal of the `then_matches` gate, because BOTH bound the extension.
-            #
-            # Two earlier aims failed and are recorded rather than dropped. Adding `["rm"]` alone
-            # left the target GREEN: `then_matches` still demanded a `.patch`/`.diff` argument,
-            # so the added program matched nothing. Relaxing `then_matches` alone also left it
-            # green: U12 and U13 already carry a declared row, so a relation that merely CHANGES
-            # between two declared clauses is not an undeclared one. Only reaching a clause with
-            # no declared row -- A02 and U20, which own the deletes -- makes the red carry
-            # information. The `expected` string below was read off that run, not predicted.
-            b'"argv": [\n        [\n          "git",\n          "apply"\n        ],\n'
-            b'        [\n          "patch"\n        ]\n      ],\n'
-            b'      "then_matches": "[\\\\w./-]+\\\\.(?:patch|diff)"',
-            b'"argv": [\n        [\n          "git",\n          "apply"\n        ],\n'
-            b'        [\n          "patch"\n        ],\n        [\n          "rm"\n        ]\n      ],\n'
-            b'      "then_matches": "."',
+            # go red naming the pair. U09 reads `head_switched` -- HEAD moved to a commit that
+            # already existed. Widened to `head_moved` it also claims every commit U08 owns and
+            # every reset U20 owns, and the algebra reports the undeclared pairs. The `expected`
+            # string below was read off that run, not predicted.
+            b'"effect": "head_switched"',
+            b'"effect": "head_moved"',
             "tests.test_occasion_algebra.OccasionAlgebra.test_every_relation_is_declared",
-            "U13 OVERLAP U20",
+            "U08 SUBSET U09",
         )
 
 

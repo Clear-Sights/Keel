@@ -11,6 +11,8 @@ import subprocess
 import sys
 from typing import Any
 
+from . import effects as _effects
+
 
 # A construction anchor names a section of the page shipped beside this table. Shape only: the
 # fence resolves it, so anything stricter here would be a second opinion about a fact the fence
@@ -240,6 +242,12 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     kind = predicate.get("kind")
     if kind == "always":
         return True
+    if kind == "effect":
+        # What the act DID, attached to the event by the dispatcher (or recorded in a fixture).
+        # An unmeasured effect is None: not False, and `_predicate` reports it as NOT-EVALUABLE
+        # rather than letting a composition read "could not see" as "did not happen".
+        value = _resolve(event, "keel_effect." + str(predicate.get("effect", "")))
+        return value is not _MISSING and value is not None and bool(value)
     value = _resolve(event, predicate.get("on", ""))
     if value is _MISSING:
         return False
@@ -765,12 +773,33 @@ def matching_segment(predicate: dict[str, Any], event: dict[str, Any]) -> str | 
 
 
 def _predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool | None:
+    if predicate.get("kind") == "effect" and _unmeasured(predicate, event):
+        return None
     # The cheap event fingerprint is the mandatory first gate. In particular, a missing field or
     # mismatch must not pay the process cost and must not let a failing probe affect this event.
     if not _base_predicate(predicate, event):
         return False
     probe = predicate.get("probe")
     return _run_probe(probe) if probe is not None else True
+
+
+def _unmeasured(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
+    """True when the event carries an effect record in which this effect is None.
+
+    An event with NO record at all (a PreToolUse, a Stop that measured nothing) is simply not
+    the surface this predicate reads, and that is False, not unmeasured. A record that says
+    None for this effect is the observer saying it could not see -- the snapshot was missing,
+    /proc was absent, git timed out -- and that is the case the fail-closed rule is for.
+    """
+    record = event.get("keel_effect")
+    if not isinstance(record, dict):
+        return False
+    if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
+        return False
+    tools = predicate.get("tools")
+    if tools and tools != ["*"] and event.get("tool_name") not in tools:
+        return False
+    return record.get(str(predicate.get("effect", ""))) is None
 
 
 def match(clause: Clause, event: dict) -> bool:
@@ -855,6 +884,8 @@ def classify_side(predicate: Any) -> str:
       composed    a nominal branch joined with a tool-enum branch (Thm 5 retired, not widened)
       topology    reads the operator edge between segments (Thm 4: name-agnostic)
       positive    compares a datum the trace produced to one the report states (Thm 6, 7)
+      effect      reads what the act DID -- a worktree, ref, process, network or output delta
+                  named in `keel.effects.EFFECTS` (Thm 8: name-agnostic, the occasion form)
       textual     reads the raw command as text (Thm 1: never mention-immune) -- refused
     """
     if not isinstance(predicate, dict):
@@ -868,11 +899,15 @@ def classify_side(predicate: Any) -> str:
             return "textual" if "textual" in parts else "unclassified"
         if parts == {"nominal"}:
             return "nominal"
-        if parts <= {"nominal", "tool-enum"}:
+        if parts == {"effect"}:
+            return "effect"
+        if parts <= {"nominal", "tool-enum", "effect"}:
             return "composed"
         return "unclassified"
     if kind == "always":
         return "always"
+    if kind == "effect":
+        return "effect"
     if kind == "tool":
         return "tool-enum"
     if kind == "regex":
@@ -901,6 +936,8 @@ def derive_closure(predicate: Any) -> str:
         return "shipped" if names and set(names) <= SHIPPED_PROGRAMS else "open"
     if cls in ("composed", "tool-enum"):
         return "host"
+    if cls == "effect":
+        return "world"
     return cls
 
 
@@ -962,6 +999,10 @@ PROBE_TIMEOUT_CEILING_MS = 5000
 def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
     if predicate is None:
         return
+    for leaf in _leaves(predicate):
+        if leaf.get("kind") == "effect" and leaf.get("effect") not in _effects.EFFECTS:
+            raise ClauseError("CLAUSE-EFFECT-UNKNOWN",
+                              f"{clause_id}: {leaf.get('effect')!r} is not an effect the observer measures")
     if predicate.get("kind") == "regex":
         if predicate.get("scope", "field") not in ("field", "segment"):
             raise ClauseError("CLAUSE-SCOPE-INVALID", clause_id)
@@ -1013,6 +1054,20 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
             re.compile(expect["regex"])
         except re.error as exc:
             raise ClauseError("CLAUSE-PROBE-INVALID", f"{clause_id}: {exc}") from exc
+
+
+def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
+    branches = (predicate.get("any_of") or []) + (predicate.get("all_of") or [])
+    if not branches:
+        return [predicate]
+    return [leaf for sub in branches for leaf in _leaves(sub)]
+
+
+# The classes an OCCASION may have. Each is name-agnostic or is the Theorem 3 boundary itself:
+# `always` fires on every act; `tool-enum` reads the host's closed tool name; `effect` reads
+# what the act did; `topology` reads operator edges; `positive` compares data. `nominal` and
+# anything composed over it selects by program name and is refused.
+AGNOSTIC_OCCASIONS = frozenset({"always", "tool-enum", "effect", "topology", "positive"})
 
 
 def _discriminator(clause: "Clause") -> dict:
@@ -1103,11 +1158,16 @@ def _admit(clause: Clause) -> Clause:
         # On the occasion side a miss is the costly act proceeding with its guard removed. So a
         # nominal occasion is refused outright: not carried as `open` with a theorem instance
         # documenting the gap, which is what this table did for sixteen sides, but refused.
-        if name in ("fingerprint", "activated_by") and classify_side(predicate) == "nominal":
+        if name in ("fingerprint", "activated_by") and classify_side(predicate) not in AGNOSTIC_OCCASIONS:
             raise ClauseError(
                 "CLAUSE-OCCASION-NOMINAL",
                 f"{clause.id}.{name}: selects the act by the program's name; an act spelled "
                 f"under another name proceeds unguarded (Theorem 3, Theorem 5)")
+    # An effect is observed AFTER the act, so a clause whose occasion is an effect is enforced at
+    # PostToolUse: the demand is raised there, the next call is denied until the guard is seen.
+    if classify_side(clause.fingerprint) == "effect" and clause.event != "PostToolUse":
+        raise ClauseError("CLAUSE-EFFECT-EVENT",
+                          f"{clause.id}: an effect occasion is observed after the act; declare PostToolUse")
     disc = _discriminator(clause)
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):

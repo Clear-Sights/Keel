@@ -12,8 +12,8 @@ fix, driven through the production predicate:
 Those are DISCHARGES. An agent that never ran `git status` but echoed the phrase was licensed to
 push. A false discharge spends the guard; a false activation only interrupts -- so this is the
 asymmetric direction. A MISSED activation belongs to the same expensive class, because the costly
-act then proceeds with its guard removed: `bash -c 'git push origin main'` did not fire A01 while
-the identical plain push did.
+act then proceeds with its guard removed -- which is why no OCCASION reads the command by program
+name at all any more (`CLAUSE-OCCASION-NOMINAL`); the guard side below still does, fail-closed.
 
 The cause was not a missing splitter. `segments()` was already quote-aware. The patterns carried
 their own `(^|&&|;|\\|)` separator alternation -- a second spelling of the splitter's own job --
@@ -63,22 +63,9 @@ class EveryCommandCoveringIsAnInvocation(unittest.TestCase):
         """Refusing everything would satisfy the cell above and destroy the table."""
         by = {c["id"]: c for c in _raw()}
         for cid, command in (("A01", "git status --short"), ("A03", "git fetch origin"),
-                             ("T02", "git ls-remote origin"),
                              ("U13", "git apply --check p.diff")):
             got = C._predicate(by[cid].get("discharged_by") or {}, _event(command))
             self.assertIs(got, True, f"{cid} refused a REAL guard: {command!r}")
-
-    def test_a_missed_activation_is_the_expensive_direction_too(self):
-        """Seven characters of prefix walked any command past the whole table."""
-        by = {c["id"]: c for c in _raw()}
-        self.assertIs(C._predicate(by["A01"]["fingerprint"],
-                                   _event("bash -c 'git push origin main'")), True,
-                      "a push through a shell escaped the fence")
-        self.assertIs(C._predicate(by["A01"]["fingerprint"],
-                                   _event("git push origin main")), True)
-        self.assertIsNot(C._predicate(by["A01"]["fingerprint"],
-                                      _event("echo 'git push'")), True,
-                         "a MENTION fired: the shell branch must need a shell INVOKED with -c")
 
     def test_an_unclassifiable_option_refuses_rather_than_forging_a_subcommand(self):
         """`npm --prefix test install` read as ['npm', 'test'] -- a run that ran no tests."""

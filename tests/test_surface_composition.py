@@ -114,10 +114,11 @@ class OneObligationTwoSurfaces(unittest.TestCase):
             # false red this cell already produced: it read `CLAUSE-GUARD-FIXTURE-MISS: U12`,
             # and when U10 composed its guard over the host `Read`, U10 became the first row
             # the loader refuses -- so the plant reported failure while the property it tests
-            # held perfectly. An assertion pinned to whichever clause sorts first is a
-            # denominator of one masquerading as the property, and it goes red on every future
-            # composition. What is being tested is that the table does not ship.
-            "CLAUSE-GUARD-FIXTURE-MISS",
+            # held perfectly. It moved once more when C08's discharge composed a printed
+            # failure with the plant form: C08 is TERMINAL, so its fixtures test the GUARD and
+            # the loader reports the miss as a positive-fixture miss. Same primitive, same
+            # refusal, one clause earlier; the string below is the class that refusal carries.
+            "CLAUSE-FIXTURE-POS-MISS",
         )
 
 
