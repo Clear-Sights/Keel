@@ -87,7 +87,7 @@ jobs:
           # `hooks/hooks.json` joined this set because three dead pointers lived in it through a
           # whole rename -- a directory, a module and a digest of the two, none of which existed --
           # and nothing read any of them, which is exactly why nothing noticed.
-          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json keel/compaction.json hooks/hooks.json
+          PAGES: SKILL.md POINTS.md ACTS.md vocabulary.json keel/clauses.json keel/clauses.py keel/compaction.json hooks/hooks.json
         run: |
           set -eu
           BAK=$(mktemp -d)
@@ -159,28 +159,37 @@ jobs:
           # must be present. A retired spelling is no longer an error; a table with none of them
           # left, or one whose narrowing goes unnoticed, still is. Deleting the plant instead
           # would have been the quiet narrowing this comment warns against.
+          # RE-AIMED, and this plant's own assert is what demanded it. It used to widen a
+          # separator alternation inside clauses.json, because that is where "where does a
+          # command start" was decided. It is not decided there any more: every textual
+          # covering was retired, and the surviving `[;&|\n]` spellings live only in `unless`
+          # exclusions and `key_from` extractors, where narrowing changes no verdict. So the
+          # plant reached the file and left the suite green -- exactly the VACUOUS CHECK this
+          # harness exists to catch. It caught mine, rather than my noticing it.
+          #
+          # The rule now lives in ONE place, `_scan`'s separator class, so the plant follows it
+          # there and `keel/clauses.py` joins PAGES: backed up, digested, and held to the same
+          # byte-exact restore as every other plant. Added to THIS job only -- the missing-input
+          # job below asserts an absent INPUT is loud, and clauses.py is code, not an input.
+          #
+          # Witnessed before being trusted, not after: planted, `unittest discover -s tests`
+          # reports `FAILED (failures=8)` exit 1, against a clean baseline of `Ran 227 tests OK`.
           cat > /tmp/narrow-separators.py <<'PLANT'
-          import pathlib, sys
+          import pathlib
+          import sys
           path = pathlib.Path(sys.argv[1])
           text = path.read_text()
-          # Both spellings of "where a command starts", because it was the SECOND that kept the
-          # bypass open after the first was fixed. A spelling absent from the table is one no
-          # clause uses any more, not a plant that failed to land.
-          pairs = ((r"[;&|\\n]", "[;&|]"), (r"(^|&&|;|\\||\\n)", r"(^|&&|;|\\|)"))
-          applied = 0
-          for wide, narrow in pairs:
-              if wide not in text:
-                  continue
-              text = text.replace(wide, narrow)
-              applied += 1
-          assert applied, ("plant seam changed: NO separator spelling is left in the table, so "
-                           "this plant now tests nothing -- re-aim it at the rule that decides "
-                           "where a command starts, or retire it with its reason")
-          path.write_text(text)
+          old = '        elif ch in ";|&\\n":'
+          new = '        elif ch in ";|&":'
+          assert text.count(old) == 1, (
+              "plant seam changed: the separator class is no longer spelled this way, so this "
+              "plant now tests nothing -- re-aim it at the rule that decides where a command "
+              "starts, or retire it with its reason")
+          path.write_text(text.replace(old, new))
           PLANT
           sed -i 's/^          //' /tmp/narrow-separators.py
 
-          plant "a separator stops seeing newlines" "python3 /tmp/narrow-separators.py $D/keel/clauses.json"
+          plant "a separator stops seeing newlines" "python3 /tmp/narrow-separators.py $D/keel/clauses.py"
           plant "a hook file names the old package" "jq '. + {_provenance: {recompute_with: \"python3 -m gyroscope.generate\"}}' $D/hooks/hooks.json > /tmp/hj.json && mv /tmp/hj.json $D/hooks/hooks.json"
           # No `${CLAUDE_PLUGIN_ROOT}` in the planted value: under `set -u` the eval would expand
           # it and abort on an unbound variable before reaching the file. A bare relative path

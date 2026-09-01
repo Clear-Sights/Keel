@@ -1017,11 +1017,20 @@
       ]
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "rg",
-        "grep"
+      "any_of": [
+        {
+          "kind": "program",
+          "on": "tool_input.command",
+          "names": [
+            "rg",
+            "grep"
+          ]
+        },
+        {
+          "kind": "regex",
+          "on": "tool_name",
+          "pattern": "^Grep$"
+        }
       ]
     },
     "window": "session",
@@ -1036,12 +1045,51 @@
       "sed -n '40,80p' src/app.py"
     ],
     "fixtures_discharge": [
-      "rg pattern src/",
-      "grep -rn pattern src/"
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "rg pattern src/"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "grep -rn pattern src/"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Grep",
+        "tool_input": {
+          "pattern": "x",
+          "path": "."
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'rg pattern src/'",
-      "rgb"
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'rg pattern src/'"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "rgb"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      }
     ]
   },
   {
@@ -1127,15 +1175,24 @@
       "then_matches": "(\\s-i\\b|\\s-pi\\b)"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "cmp",
-        "sha256sum",
-        "shasum",
-        "rg",
-        "grep",
-        "diff"
+      "any_of": [
+        {
+          "kind": "program",
+          "on": "tool_input.command",
+          "names": [
+            "cmp",
+            "sha256sum",
+            "shasum",
+            "rg",
+            "grep",
+            "diff"
+          ]
+        },
+        {
+          "kind": "regex",
+          "on": "tool_name",
+          "pattern": "^Grep$"
+        }
       ]
     },
     "window": "session",
@@ -1151,16 +1208,79 @@
     ],
     "_natural_guard": "The old guard demanded `cmp` or a checksum comparison BEFORE the rewrite -- observed 0 times in 2152 real Bash calls, an added obligation: the rewrite landed identically whether or not anyone ran it. The act that actually reverses a blind in-place rewrite is locating the text first, and that is what sessions do: grep/rg appear 504 times in the frozen corpus, the first at call 8, before every `sed -i`. This mirrors U12, which already discharges patch application on rg/grep -- the same act shape gets the same natural guard. cmp/sha256sum remain as the explicit byte-level form.",
     "fixtures_discharge": [
-      "cmp a b",
-      "sha256sum f",
-      "shasum -a 256 f",
-      "rg x f",
-      "grep x f",
-      "diff a b"
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "cmp a b"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "sha256sum f"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "shasum -a 256 f"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "rg x f"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "grep x f"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "diff a b"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Grep",
+        "tool_input": {
+          "pattern": "x",
+          "path": "."
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'cmp a b'",
-      "cmpxchg"
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'cmp a b'"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "cmpxchg"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      }
     ]
   },
   {
@@ -1276,9 +1396,41 @@
       ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:python\\s+-W\\s*error\\b|PYTHONWARNINGS=error\\b|RUSTFLAGS=[\"']?-Dwarnings|NODE_OPTIONS=[\"']?--throw-deprecation)"
+      "any_of": [
+        {
+          "names": [
+            "pytest",
+            "tox",
+            "nox",
+            "unittest",
+            "cargo",
+            "npm",
+            "pnpm",
+            "yarn",
+            "go",
+            "node"
+          ],
+          "env": {
+            "PYTHONWARNINGS": "error",
+            "RUSTFLAGS": "-Dwarnings",
+            "NODE_OPTIONS": "--throw-deprecation"
+          }
+        },
+        {
+          "names": [
+            "pytest",
+            "unittest",
+            "nox",
+            "tox"
+          ],
+          "opts": [
+            "^-W\\s*error",
+            "^-Werror"
+          ]
+        }
+      ]
     },
     "window": "session",
     "deny_reason": "publish or release an artifact after runtime testing without its guard; run the suite with warnings promoted to errors on a supported runtime",
@@ -1292,14 +1444,17 @@
       "python -W error -m pytest",
       "PYTHONWARNINGS=error tox -e py312"
     ],
-    "why_no_program": "The guard is a WARNINGS-AS-ERRORS run, whose whole signal is an environment assignment (`PYTHONWARNINGS=error`, `RUSTFLAGS=-Dwarnings`) or a `-W error` flag. `leading_argv` deliberately SKIPS a leading VAR=value prefix, because a variable is not the program being run -- so the one token that distinguishes this guard from an ordinary test run is invisible to an invocation predicate by construction. Tried: argv on the runner, which matches every plain `pytest` and would license a publish after a suite that promoted nothing.",
     "fixtures_discharge": [
       "python -W error -m pytest",
-      "PYTHONWARNINGS=error pytest"
+      "PYTHONWARNINGS=error pytest",
+      "RUSTFLAGS=\"-Dwarnings\" cargo test"
     ],
     "fixtures_no_discharge": [
       "echo 'python -W error -m pytest'",
-      "python -m pytest"
+      "python -m pytest",
+      "echo 'note; PYTHONWARNINGS=error pytest'",
+      "grep -rn 'x; PYTHONWARNINGS=error' notes.md",
+      "pytest -q"
     ]
   },
   {
@@ -1313,14 +1468,68 @@
     "guard": "run its prefix-distractor regression test first",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:python3?\\b[^\\n]*(?:scan|scanner)\\w*\\.py\\b|(?:npm|go|cargo)\\s+test\\b[^\\n]*scanner)"
+      "any_of": [
+        {
+          "pattern": "(?i).*scan(?:ner)?\\w*\\.py"
+        },
+        {
+          "argv": [
+            [
+              "go",
+              "test"
+            ],
+            [
+              "cargo",
+              "test"
+            ],
+            [
+              "npm",
+              "test"
+            ]
+          ],
+          "args": [
+            "scanner"
+          ]
+        }
+      ]
     },
     "discharged_by": {
-      "kind": "regex",
+      "kind": "program",
       "on": "tool_input.command",
-      "pattern": "(?:^|[;&|\\n]\\s*)\\s*(?:pytest|python3?\\s+-m\\s+pytest|go\\s+test|cargo\\s+test|npm\\s+test)\\b[^\\n]*(?:prefix|distractor)"
+      "any_of": [
+        {
+          "names": [
+            "pytest",
+            "unittest"
+          ],
+          "args": [
+            "prefix",
+            "distractor"
+          ]
+        },
+        {
+          "argv": [
+            [
+              "go",
+              "test"
+            ],
+            [
+              "cargo",
+              "test"
+            ],
+            [
+              "npm",
+              "test"
+            ]
+          ],
+          "args": [
+            "prefix",
+            "distractor"
+          ]
+        }
+      ]
     },
     "window": "session",
     "deny_reason": "run a scanner as an acceptance check without its guard; run its prefix-distractor regression test first",
@@ -1333,14 +1542,14 @@
       "pytest -q tests/test_scanner.py -k prefix_distractor",
       "python3 -m pytest -q tests/test_parser.py"
     ],
-    "why_no_program": "Both sides turn on what a runner was POINTED AT, not on what ran: a scanner used as acceptance and its prefix-distractor regression test are the same program with different arguments. Tried: `argv` on the runner (`pytest`, `go test`, `npm test`), which matches every ordinary suite run in this estate and would discharge the clause on a test that never exercised a distractor -- a false licence. Tried: `then_matches` on the segment for the distractor's name, which works only while the file keeps that name and silently stops covering the moment it is renamed. `leading_argv` stops at the first non-option token by design, because scanning further reads `git commit -m push` as `git push`, so the argument list this needs is deliberately out of its reach.",
     "fixtures_discharge": [
       "pytest -k prefix",
       "go test -run distractor"
     ],
     "fixtures_no_discharge": [
       "echo 'pytest -k prefix'",
-      "pytest -q"
+      "pytest -q",
+      "grep -rn 'pytest -k prefix' notes.md"
     ]
   }
 ]
