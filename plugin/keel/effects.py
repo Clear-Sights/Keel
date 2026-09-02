@@ -56,8 +56,8 @@ EFFECTS: dict[str, str] = {
     "report_fail": "the act printed a report datum with failures or findings",
     # The guard side. A guard is discharged by what the guard act DID -- a datum the trace can
     # check, or a report shape where no trace exists -- never by what it was called.
-    "report_ref": "a quiet act printed a ref name or commit id the ref snapshot holds",
-    "report_paths": "a quiet act printed a path the worktree snapshot holds",
+    "report_ref": "an act that changed no file, ref or process printed a ref name or commit id the ref snapshot holds",
+    "report_paths": "an act that changed no file, ref or process printed a path the worktree snapshot holds",
     "report_pids": "the act printed at least two pids that were alive at the snapshot",
     "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself",
     "report_structured": "the act printed a JSON datum that is not null",
@@ -720,10 +720,13 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     memory["net_after"] = net_now  # the next idle gap starts here
     # THE GUARD SIDE, read from the same trace. A quiet act changed nothing and left nothing.
     spawned = out.get("pids_spawned") or []
+    # A LOOK IS AN ACT THAT CHANGED NOTHING IT COULD HAVE PRINTED: no file, no ref, no
+    # surviving process. The network is not in that set -- a connection changes nothing the
+    # worktree or the refs hold, and the host's counter is the one channel that moves on its
+    # own (measured: a runner's `git diff` beside a runner connection is still a look).
     still = changed == [] and removed == [] and not out.get("head_moved") and not spawned
-    quiet = still and out["net_out"] is not True
     out.update(trace_effects(response.get("stdout") if isinstance(response.get("stdout"), str) else "",
-                             dict(before, command=tool_input.get("command")), root, quiet))
+                             dict(before, command=tool_input.get("command")), root, still))
     if root:
         out["fetch_head_written"] = (before.get("fetch_head") is not None
                                      and _fetch_head(root) != before.get("fetch_head")
