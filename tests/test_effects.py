@@ -63,11 +63,12 @@ class Repo(unittest.TestCase):
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-qm", "base")
 
-    def observe(self, command: str, stdout: str = "") -> dict:
+    def observe(self, command: str, stdout: str | None = None) -> dict:
+        """The act observed live; its output is the real output unless a shape is planted."""
         effects.snapshot(self.state, "s", "", self.repo)
-        subprocess.run(command, shell=True, cwd=self.repo, capture_output=True)
+        done = subprocess.run(command, shell=True, cwd=self.repo, capture_output=True, text=True)
         return effects.delta(self.state, "s", "", {"tool_input": {"command": command},
-                                                    "tool_response": {"stdout": stdout}})
+                                                    "tool_response": {"stdout": done.stdout if stdout is None else stdout}})
 
 
 class TheLoaderRefusesANominalOccasion(unittest.TestCase):
@@ -86,7 +87,7 @@ class TheLoaderRefusesANominalOccasion(unittest.TestCase):
                    for side in ("fingerprint", "activated_by") if isinstance(getattr(c, side), dict)}
         self.assertEqual(27, len(classes), "occasion sides moved; re-measure rather than edit")
         self.assertEqual([], [k for k, v in classes.items() if v not in C.AGNOSTIC_OCCASIONS])
-        self.assertEqual(15, sum(v == "effect" for v in classes.values()))
+        self.assertEqual(16, sum(v == "effect" for v in classes.values()))
 
     def test_a_program_name_on_the_occasion_side_is_refused(self) -> None:
         def plant(by):
@@ -216,7 +217,8 @@ class TheObserverSeesTheWorld(Repo):
         slot.mkdir(parents=True, exist_ok=True)
         now = effects.net_active_opens()
         self.assertIsNotNone(now, "no counter on this host: the channel is NOT-EVALUABLE")
-        (slot / "session.json").write_text(json.dumps({"net_after": now - (1 if moved else 0)}),
+        (slot / "session.json").write_text(json.dumps({"net_after": now - (1 if moved else 0),
+                                                       "remote_measured": True}),
                                            encoding="utf-8")
 
     def test_a_connection_is_assigned_by_the_idle_gap(self) -> None:
@@ -260,6 +262,85 @@ class TheObserverSeesTheWorld(Repo):
         self.assertTrue(born, "the foreign session left nothing alive to judge")
         self.assertFalse(set(born) & set(d["pids_spawned"]), f"assigned a foreign lineage: {born}")
 
+    # ---- the guard side: what the guard act DID, and its mention doing nothing ----------------
+
+    def test_a_printed_ref_is_the_one_the_snapshot_holds(self) -> None:
+        self.assertTrue(self.observe("git status")["report_ref"], "`On branch main` names the branch")
+        self.assertTrue(self.observe("git rev-parse HEAD")["report_ref"])
+        self.assertFalse(self.observe("echo 'git rev-parse HEAD'")["report_ref"], "a mention prints no ref")
+        self.assertFalse(self.observe("echo 0123456789abcdef")["report_ref"], "hex the snapshot does not hold")
+
+    def test_a_printed_path_is_one_the_snapshot_holds(self) -> None:
+        self.assertTrue(self.observe("ls")["report_paths"])
+        pathlib.Path(self.repo, "a.txt").write_text("two\n", encoding="utf-8")
+        self.assertTrue(self.observe("git diff")["report_paths"], "`a/a.txt` names a.txt")
+        self.assertFalse(self.observe("echo 'ls -la'")["report_paths"])
+        # A loud act is not a look: it changed the file it printed.
+        self.assertFalse(self.observe("printf three > a.txt && ls")["report_paths"])
+
+    def test_a_listing_claims_live_pids_and_a_mention_claims_none(self) -> None:
+        self.assertTrue(self.observe("ps -eo pid,comm")["report_pids"])
+        self.assertFalse(self.observe("echo 'ps -eo pid,comm'")["report_pids"])
+
+    def test_a_listing_that_lists_itself_is_seen_and_one_that_does_not_is_the_guard(self) -> None:
+        listed = self.observe("ps -eo pid,args | grep 'pid,args'")
+        self.assertTrue(listed["report_self"], "the grep printed its own line")
+        self.assertFalse(listed["report_listing"])
+        clean = self.observe("ps -eo pid,comm")
+        self.assertFalse(clean["report_self"])
+        self.assertTrue(clean["report_listing"])
+
+    def test_a_structured_datum_and_a_null_are_told_apart(self) -> None:
+        self.assertTrue(self.observe("python3 -c 'import json; print(json.dumps({\"a\": 1}))'")["report_structured"])
+        self.assertFalse(self.observe("echo null")["report_structured"])
+        self.assertFalse(self.observe("echo '{\"a\": 1}' > /dev/null")["report_structured"])
+
+    def test_a_fetch_is_seen_by_the_ref_store_not_by_its_name(self) -> None:
+        bare = os.path.join(self.tmp, "remote.git")
+        git(self.repo, "init", "-q", "--bare", bare)
+        git(self.repo, "remote", "add", "origin", bare)
+        git(self.repo, "push", "-q", "origin", "main")
+        self.assertTrue(self.observe("git fetch origin")["fetch_head_written"])
+        self.assertFalse(self.observe("echo 'git fetch origin'")["fetch_head_written"])
+        self.assertFalse(self.observe("git status")["fetch_head_written"])
+
+    def test_a_connection_that_changed_nothing_is_a_read(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        self.addCleanup(listener.close)
+        port = listener.getsockname()[1]
+        self._gap(moved=False)
+        read = self.observe(f"python3 -c \"import socket; socket.create_connection(('127.0.0.1', {port}))\"")
+        self.assertTrue(read["net_out"])
+        self.assertTrue(read["net_read"])
+        self._gap(moved=False)
+        loud = self.observe(f"python3 -c \"import socket; socket.create_connection(('127.0.0.1', {port}))\" && printf x > a.txt")
+        self.assertTrue(loud["net_out"])
+        self.assertFalse(loud["net_read"], "a connection beside a rewrite is not a read")
+
+    def test_the_operator_reads_keels_own_measurement(self) -> None:
+        effects.observe(self.state, "s", "", self.repo)
+        observed = self.state / "observed.json"
+        remote = self.state / "remote.json"
+        self.assertTrue(observed.is_file() and remote.is_file())
+        doc = json.loads(observed.read_text(encoding="utf-8"))
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD").strip(), doc["head"])
+        self.assertEqual("main", doc["branch"])
+        def read(path):
+            return effects.read_delta(self.state, {"tool_name": "Read", "tool_input": {"file_path": str(path)}})
+        self.assertTrue(read(observed)["observed_read"])
+        self.assertTrue(read(remote)["remote_read"])
+        self.assertFalse(read(observed)["remote_read"])
+        self.assertFalse(read(self.state / "other.json")["observed_read"])
+        # A Read through a Bash `cat` is an act, not a host read: the record is the act's.
+        self.assertFalse(self.observe(f"cat {observed}")["observed_read"])
+
+    def test_the_remote_is_not_written_when_it_cannot_be_listed(self) -> None:
+        git(self.repo, "remote", "add", "origin", os.path.join(self.tmp, "absent.git"))
+        self.assertIsNone(effects.observe_remote(self.state, self.repo))
+        self.assertFalse((self.state / "remote.json").exists(), "an unlisted remote leaves no artifact to Read")
+
     def test_report_shapes(self) -> None:
         self.assertTrue(self.observe("true", "== 40 passed in 1.2s ==")["report_pass"])
         self.assertTrue(self.observe("true", "Ran 3 tests\n\nOK\n")["report_pass"])
@@ -297,14 +378,25 @@ class TheDispatcherEnforcesAnEffect(Repo):
         return json.loads(done.stdout.strip() or "{}")
 
     def _act(self, command: str, run: bool = True) -> tuple[dict, dict]:
-        """A Bash call through the hook, the world observed live around it."""
+        """A Bash call through the hook, the world observed live around it, its output real."""
         before = self._hook(hook_event_name="PreToolUse", tool_name="Bash",
                             tool_input={"command": command})
+        stdout = ""
         if run and not before:
-            subprocess.run(command, shell=True, cwd=self.repo, capture_output=True)
+            done = subprocess.run(command, shell=True, cwd=self.repo, capture_output=True, text=True)
+            stdout = done.stdout
         after = self._hook(hook_event_name="PostToolUse", tool_name="Bash",
-                           tool_input={"command": command}, tool_response={"stdout": ""})
+                           tool_input={"command": command}, tool_response={"stdout": stdout})
         return before, after
+
+    def _read(self, name: str) -> dict:
+        """A host Read of one of Keel's own artifacts, its record measured live."""
+        path = str(self.state / name)
+        before = self._hook(hook_event_name="PreToolUse", tool_name="Read",
+                            tool_input={"file_path": path})
+        self._hook(hook_event_name="PostToolUse", tool_name="Read", tool_input={"file_path": path},
+                   tool_response={"file": {"filePath": path}})
+        return before
 
     @staticmethod
     def denied(out: dict) -> set[str]:
@@ -336,35 +428,48 @@ class TheDispatcherEnforcesAnEffect(Repo):
                      {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                       "tool_input": {"command": fixture}})
             self.assertEqual({}, self._hook(**event), f"the guard for {sorted(owed)[0]} was refused")
-            self._hook(hook_event_name="PostToolUse", tool_name=event["tool_name"],
-                       tool_input=event["tool_input"], tool_response={"stdout": ""})
+            # A recorded fixture is complete in itself; only a live PreToolUse Bash call has
+            # a PostToolUse still to come, and its record is then measured live.
+            if event.get("hook_event_name") == "PreToolUse" and event["tool_name"] == "Bash":
+                self._hook(hook_event_name="PostToolUse", tool_name="Bash",
+                           tool_input=event["tool_input"], tool_response={"stdout": ""})
         self.fail(f"still owed after paying every clause once: {self.owed()}")
 
     def test_a_rewrite_nobody_looked_at_refuses_the_next_call_until_the_diff_is_seen(self) -> None:
-        # The session's opening debt, paid the way any session pays it -- and whatever else
-        # this host's world charged around those calls, paid by the table.
-        self.assertEqual({}, self._act("git status")[0])
-        self.assertEqual({}, self._act("git fetch origin", run=False)[0])
+        # The session's opening debt, paid the way any session pays it: the artifacts exist
+        # from the session start, and the operator Reads them -- measured live, nothing recorded.
+        opened = self._hook(hook_event_name="SessionStart")
+        self.assertNotIn("permissionDecision", json.dumps(opened), "the session start denied")
+        self.assertTrue((self.state / "observed.json").is_file())
+        self.assertTrue((self.state / "remote.json").is_file())
+        self.assertEqual({}, self._read("observed.json"))
+        self.assertEqual({}, self._read("remote.json"))
+        self.assertFalse({"A01", "A02", "A03"} & self.owed(), "the reads paid the opening debt")
         self.pay()
         # The act itself is not refused: nothing before it could tell it from `cat`.
         before, _ = self._act("printf changed > a.txt")
-        self.assertEqual({}, before)
+        self.assertEqual({}, before, before)
         self.assertEqual("changed", pathlib.Path(self.repo, "a.txt").read_text())
         # The NEXT call is: the refusal equals the ledger, and the ledger holds the rewrite.
         owed = self.refusal_matches_the_ledger()
         self.assertLessEqual({"U12", "U13", "U19"}, owed)
-        # The guard passes and pays the rewrite; the refusal still equals the ledger.
-        self.assertEqual({}, self._act("git diff")[0])
+        # The guard is a Bash act, so it passes on its commitment and pays by its effect: the
+        # diff printed a path the snapshot holds. The refusal still equals the ledger.
+        self.assertEqual({}, self._act("# keel-guard: U12 U13 U19\ngit diff")[0])
         owed = self.refusal_matches_the_ledger()
         self.assertFalse({"U12", "U13", "U19"} & owed, f"not paid by the diff: {owed}")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
-        """Stop attaching the delta after the act: no effect is ever observed, no demand is
-        raised, and the next call after a rewrite passes -- the cell above goes red."""
+        """Stop attaching the delta after a Bash act: no effect of the rewrite is observed, no
+        demand is raised, and the next call after it passes -- the cell above goes red. The
+        Read record is left armed, so the opening debt is still paid and the red is the
+        rewrite's, not the session's."""
         smoke_replace(
             self, PLUGIN / "keel" / "dispatch.py",
-            b'        elif moment == "after":',
-            b'        elif moment == "after-disarmed":',
+            b'            if event.get("tool_name") == "Bash":\n'
+            b'                event["keel_effect"] = effects.delta(',
+            b'            if event.get("tool_name") == "Bash-disarmed":\n'
+            b'                event["keel_effect"] = effects.delta(',
             "tests.test_effects.TheDispatcherEnforcesAnEffect."
             "test_a_rewrite_nobody_looked_at_refuses_the_next_call_until_the_diff_is_seen",
             "U12",

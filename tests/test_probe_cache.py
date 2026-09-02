@@ -50,12 +50,11 @@ class ProbeRunsOncePerEvent(unittest.TestCase):
         event = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                  "tool_input": {"command": command}, "session_id": "p"}
         self.calls = 0
-        dispatch._first_index(clause, event, C.match, command)
-        dispatch._first_index(clause, event, C.discharges, command)
+        C.match(clause, event)
+        C.discharges(clause, event)
         return self.calls
 
     def test_TEETH_eight_segments_two_directions_measure_once(self) -> None:
-        self.assertEqual(8, len(C.segments(" && ".join(f"deploy {i}" for i in range(8)))))
         self.assertEqual(1, self._scan(), "the same probe was measured more than once per event")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty

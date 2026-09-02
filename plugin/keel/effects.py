@@ -54,7 +54,38 @@ EFFECTS: dict[str, str] = {
     "report_pass": "the act printed a test-report datum with no failures",
     "report_clean": "the act printed a scanner-report datum with no findings",
     "report_fail": "the act printed a report datum with failures or findings",
+    # The guard side. A guard is discharged by what the guard act DID -- a datum the trace can
+    # check, or a report shape where no trace exists -- never by what it was called.
+    "report_ref": "a quiet act printed a ref name or commit id the ref snapshot holds",
+    "report_paths": "a quiet act printed a path the worktree snapshot holds",
+    "report_pids": "the act printed at least two pids that were alive at the snapshot",
+    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself",
+    "report_structured": "the act printed a JSON datum that is not null",
+    "report_signature": "the act printed a signature block or a verified-signature datum",
+    "report_nowarn": "report_pass, and the report carries no warning line",
+    "fetch_head_written": "the repository's FETCH_HEAD changed, or a remote-tracking ref moved: a fetch, by whatever program",
+    "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network",
+    "report_after_change": "report_pass on an act that ran after a file changed since the last spawn",
+    "report_listing": "report_pids, and the output holds no segment of the act's own command: a listing that excluded the observer",
+    "observed_read": "the host Read tool returned Keel's own worktree measurement (observed.json), as written",
+    "remote_read": "the host Read tool returned Keel's own remote measurement (remote.json), with tips present",
 }
+
+# Guard-side report shapes: a signature datum, and the line a warning leaves in a report.
+REPORT_SIGNATURE = re.compile(
+    r"-----BEGIN (?:PGP|SSH) SIGNATURE-----|\bGood signature\b|\bgpgsig\b")
+WARNING_LINE = re.compile(r"(?mi)^[^\n]*\bwarning[s]?\b")
+# Fewest distinct live pids a listing must claim: one number that happens to be a live pid is
+# any number; two are a listing.
+LISTING_FLOOR = 2
+# Shortest hex prefix accepted as a commit id, git's own abbreviation floor.
+ABBREV_FLOOR = 7
+# Seconds between attempts to list a remote that could not be listed: each attempt costs up to
+# GIT_TIMEOUT inside a hook, so an offline host is asked once a minute, not once per act.
+REMOTE_RETRY_S = 60.0
+# The artifacts Keel writes for the operator to observe through the host enum.
+OBSERVED = "observed.json"
+REMOTE = "remote.json"
 
 # The report shapes. A closed set of DATUM shapes read off the act's own output, not of program
 # names: `pytest`, `go test`, `cargo test` and a hand-written runner all print one of these, and
@@ -104,6 +135,17 @@ def _git(cwd: str, *args: str, env: dict | None = None) -> str | None:
 
 
 # ---- the world, in pieces ---------------------------------------------------------------------
+
+def _fetch_head(root: str) -> str | None:
+    located = _git(root, "rev-parse", "--git-path", "FETCH_HEAD")
+    if not located:
+        return None
+    path = pathlib.Path(root, located.strip())
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return ""  # no FETCH_HEAD yet: a fetch will create it
+
 
 def _repo_root(cwd: str) -> str | None:
     out = _git(cwd, "rev-parse", "--show-toplevel")
@@ -329,6 +371,15 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
     own_fields = _stat_fields(os.getpid()) or []
     memory = _memory(slot)
+    if root and not memory.get("remote_measured") and (
+            time.time() - float(memory.get("remote_tried", 0)) >= REMOTE_RETRY_S):
+        # Measured BEFORE this act's counter is read, and the idle-gap mark moved past it, so
+        # the hook's own connection is neither the act's nor ambient noise. A remote that
+        # could not be listed is tried again later, never more often than REMOTE_RETRY_S.
+        memory["remote_measured"] = observe_remote(state, root) is not None
+        memory["remote_tried"] = time.time()
+        memory["net_after"] = net_active_opens()
+        _remember(slot, memory)
     net_now = net_active_opens()
     net_after = memory.get("net_after")
     snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root,
@@ -340,6 +391,7 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
     if root:
         snap["tree"] = worktree_tree(root, slot / "index.before")
         snap["refs"] = refs(root)
+        snap["fetch_head"] = _fetch_head(root)
     elif os.path.isdir(cwd):
         snap["walk"] = walk_tree(cwd)
     table = pids(snap["session_root"])
@@ -357,7 +409,31 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
         snap["sids"] = sorted(s for s in sids if s is not None)
         snap["alive"] = sorted(everyone) if everyone is not None else None
     (slot / "before.json").write_text(json.dumps(snap), encoding="utf-8")
+    write_observed(state, root, snap)
     return snap
+
+
+def observe(state: pathlib.Path, session: str, agent: str, cwd: str) -> None:
+    """Write the artifacts without opening an act: the session start, before anything runs."""
+    slot = _slot(state, session, agent)
+    slot.mkdir(parents=True, exist_ok=True)
+    root = _repo_root(cwd) if os.path.isdir(cwd) else None
+    snap: dict[str, Any] = {"t": time.time(), "tree": None, "refs": None, "walk": None, "pids": None}
+    if root:
+        snap["tree"] = worktree_tree(root, slot / "index.before")
+        snap["refs"] = refs(root)
+        memory = _memory(slot)
+        if not memory.get("remote_measured"):
+            memory["remote_measured"] = observe_remote(state, root) is not None
+            memory["remote_tried"] = time.time()
+            memory["net_after"] = net_active_opens()
+            _remember(slot, memory)
+    elif os.path.isdir(cwd):
+        snap["walk"] = walk_tree(cwd)
+    table = pids(session_root())
+    if table is not None:
+        snap["pids"] = {str(p): s for p, s in table.items() if p not in _own_chain()}
+    write_observed(state, root, snap)
 
 
 def _memory(slot: pathlib.Path) -> dict[str, Any]:
@@ -406,12 +482,164 @@ def report_effects(stdout: Any, command: Any) -> dict[str, bool]:
     stripped = text.strip()
     operands = command.split() if isinstance(command, str) else []
     reads_structured = any(op.endswith((".json", ".yaml", ".yml", ".toml")) for op in operands)
+    passed = bool(REPORT_PASS.search(text)) and not REPORT_FAIL.search(text)
     return {
         "report_null": stripped == "null" or (stripped == "" and reads_structured),
-        "report_pass": bool(REPORT_PASS.search(text)) and not REPORT_FAIL.search(text),
+        "report_pass": passed,
         "report_clean": bool(REPORT_CLEAN.search(text)) and not REPORT_FAIL.search(text),
         "report_fail": bool(REPORT_FAIL.search(text)),
+        "report_nowarn": passed and not WARNING_LINE.search(text),
+        "report_signature": bool(REPORT_SIGNATURE.search(text)),
+        "report_structured": _is_structured(stripped),
+        "report_self": _lists_itself(text, command),
     }
+
+
+def _is_structured(stripped: str) -> bool:
+    if not stripped or stripped[0] not in "[{\"0123456789-tf":
+        return False
+    try:
+        return json.loads(stripped) is not None
+    except ValueError:
+        return False
+
+
+_SEGMENT_SPLIT = re.compile(r"\|\||&&|[|;\n]")
+
+
+def _lists_itself(text: str, command: Any) -> bool:
+    """A whole segment of the act's own command appears in its output.
+
+    `ps aux | grep worker` prints its own `grep worker` line: the checker counted itself.
+    `pgrep -f worker` prints pids only. `echo hi` prints `hi`, not `echo hi`. Compared as
+    text the shell already expanded: `grep -v $$` prints `grep -v 4242`, which this misses --
+    the stated limit, and it is the direction the old topology guard accepted too.
+    """
+    if not isinstance(command, str) or not text:
+        return False
+    for segment in _SEGMENT_SPLIT.split(command):
+        segment = segment.strip()
+        if len(segment) >= 3 and segment in text:
+            return True
+    return False
+
+
+_TOKEN = re.compile(r"[A-Za-z0-9_./-]+")
+
+
+def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bool) -> dict[str, Any]:
+    """The guard effects a trace can check: a datum the report states equals one the world holds."""
+    tokens = set(_TOKEN.findall(text or ""))
+    out: dict[str, Any] = {"report_ref": None, "report_paths": None, "report_pids": None}
+    refs_then = before.get("refs")
+    if refs_then is not None:
+        names = {n.split("/", 2)[-1] for n in refs_then if n.startswith(("refs/heads/", "refs/remotes/"))}
+        shas = [v for v in refs_then.values() if v]
+        out["report_ref"] = quiet and any(
+            t in names or (len(t) >= ABBREV_FLOOR and all(c in "0123456789abcdef" for c in t)
+                           and any(sha.startswith(t) for sha in shas))
+            for t in tokens)
+    paths = None
+    if root and before.get("tree"):
+        listing = _git(root, "ls-tree", "-r", "--name-only", before["tree"])
+        paths = listing.split("\n") if listing is not None else None
+    elif before.get("walk") is not None:
+        paths = list(before["walk"])
+    if paths is not None:
+        held = set()
+        for path in paths:
+            if not path:
+                continue
+            held.add(path)
+            held.add(path.rsplit("/", 1)[-1])
+            parts = path.split("/")
+            for i in range(1, len(parts)):
+                held.add("/".join(parts[:i]))
+        out["report_paths"] = quiet and any(
+            t.removeprefix("./").rstrip("/") in held or t.rsplit("/", 1)[-1] in held for t in tokens)
+    alive = before.get("alive")
+    if alive is not None:
+        live = set(alive)
+        claimed = {int(t) for t in tokens if t.isdigit() and int(t) in live}
+        out["report_pids"] = len(claimed) >= LISTING_FLOOR
+        out["report_listing"] = out["report_pids"] and not _lists_itself(text, before.get("command"))
+    return out
+
+
+def observe_remote(state: pathlib.Path, root: str) -> dict[str, Any] | None:
+    """Measure the remote tips once and write them for the operator to Read (A03's datum).
+
+    Returns the tips, or None when the remote could not be listed -- then no artifact is
+    written, so a Read of it cannot happen and the demand stays owed: fails closed.
+    """
+    remotes = _git(root, "remote")
+    if remotes is None:
+        return None
+    tips: dict[str, str] = {}
+    if remotes.strip():
+        listing = _git(root, "ls-remote", "--heads", "origin")
+        if listing is None:
+            return None
+        for line in listing.splitlines():
+            sha, _, name = line.partition("\t")
+            if sha and name:
+                tips[name] = sha
+    try:
+        (state / REMOTE).write_text(json.dumps({"root": root, "t": time.time(), "tips": tips},
+                                               indent=1), encoding="utf-8")
+    except OSError:
+        return None
+    return tips
+
+
+def write_observed(state: pathlib.Path, root: str | None, snap: dict[str, Any]) -> None:
+    """Keel's own worktree measurement, written for the operator to Read (A01/A02/T01's datum)."""
+    doc: dict[str, Any] = {"root": root, "t": snap.get("t"), "head": None, "branch": None,
+                           "tree": snap.get("tree"), "dirty": None, "paths": None,
+                           "refs": snap.get("refs"),
+                           "pids": sorted(int(p) for p in (snap.get("pids") or {}))}
+    if root and snap.get("refs") is not None:
+        doc["head"] = snap["refs"].get("HEAD")
+        branch = _git(root, "symbolic-ref", "-q", "--short", "HEAD")
+        doc["branch"] = branch.strip() if branch else None
+        if doc["head"] and snap.get("tree"):
+            diff = _git(root, "diff-tree", "-r", "--name-status", "--no-renames",
+                        doc["head"], snap["tree"])
+            doc["dirty"] = sorted(line.partition("\t")[2] for line in diff.splitlines()
+                                  if line) if diff is not None else None
+    elif snap.get("walk") is not None:
+        doc["paths"] = sorted(snap["walk"])
+    try:
+        (state / OBSERVED).write_text(json.dumps(doc, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> bool:
+    tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    path = tool_input.get("file_path")
+    if not isinstance(path, str) or not path:
+        return False
+    target = state / name
+    try:
+        if pathlib.Path(path).resolve() != target.resolve() or not target.is_file():
+            return False
+        doc = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if name == REMOTE:
+        return isinstance(doc.get("tips"), dict)
+    return isinstance(doc, dict) and "head" in doc
+
+
+def read_delta(state: pathlib.Path, event: dict[str, Any]) -> dict[str, Any]:
+    """The record for a host Read: it did nothing to the world, and it may have observed Keel's own datum."""
+    out: dict[str, Any] = {name: False for name in EFFECTS}
+    for name in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned"):
+        out[name] = []
+    out["observed_read"] = _artifact_read(state, event, OBSERVED)
+    out["remote_read"] = _artifact_read(state, event, REMOTE)
+    return out
 
 
 def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) -> dict[str, Any]:
@@ -490,6 +718,27 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     if out["net_out"]:
         memory["net_out"] = True
     memory["net_after"] = net_now  # the next idle gap starts here
+    # THE GUARD SIDE, read from the same trace. A quiet act changed nothing and left nothing.
+    spawned = out.get("pids_spawned") or []
+    still = changed == [] and removed == [] and not out.get("head_moved") and not spawned
+    quiet = still and out["net_out"] is not True
+    out.update(trace_effects(response.get("stdout") if isinstance(response.get("stdout"), str) else "",
+                             dict(before, command=tool_input.get("command")), root, quiet))
+    if root:
+        out["fetch_head_written"] = (before.get("fetch_head") is not None
+                                     and _fetch_head(root) != before.get("fetch_head")
+                                     ) or bool(out.get("remote_ref_moved"))
+    else:
+        out["fetch_head_written"] = False
+    out["net_read"] = (None if out["net_out"] is None else
+                       bool(out["net_out"]) and still and not out["report_fail"])
+    out["report_after_change"] = bool(out["report_pass"]) and bool(memory.get("changed_since_spawn"))
+    if changed:
+        memory["changed_since_spawn"] = True
+    if spawned:
+        memory["changed_since_spawn"] = False
+    out["observed_read"] = False
+    out["remote_read"] = False
     _remember(slot, memory)
     return out
 

@@ -2,7 +2,7 @@
 
 Re-observing the same guard in the same scope changes no ledger state, so retaining every
 observation only makes every later read scan duplicate history. Measured through the dispatcher
-before the fix: 40 identical `git status --porcelain` calls wrote 120 rows -- three per call,
+before the fix: 40 identical guard calls wrote 120 rows -- three per call,
 one per clause the guard discharges -- and each subsequent read is linear in what was written.
 
 The Rust dispatcher has always carried this guard (`if self.licensed(s,a,id){return}`), so until
@@ -50,8 +50,10 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
         # also what production loads, so the test now exercises the table users actually get.
         table = C.load_default()
         self.assertTrue(table, "an empty clause table makes the bound below vacuous")
-        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
-                 "tool_input": {"command": "git status --porcelain"},
+        # A host Read: the guard three clauses (C03, D01, P01) are paid by in advance. No guard
+        # reads a command, so a repeated Bash call would discharge nothing and prove nothing.
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Read",
+                 "tool_input": {"file_path": "/work/repo/calc.py"},
                  "session_id": "s", "agent_id": "a"}
         for _ in range(40):
             dispatch.pre_tool_use(table, Ledger(), event)

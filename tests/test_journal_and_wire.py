@@ -131,8 +131,17 @@ class TestTheRecord(StateCase):
     def test_clean_terminal_is_recorded_as_a_positive_result(self):
         """A terminal that reconciled cleanly is the one outcome a fires-only log would erase,
         and it is exactly what distinguishes 'nothing owed' from 'never got there'."""
-        run(b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"g-clean",'
-            b'"tool_input":{"command":"git status"}}', self.state)
+        # The one observation a session owes before ending: a Read of Keel's own worktree
+        # measurement, recorded complete so no effect is NOT-EVALUABLE.
+        from keel import effects
+        record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
+                                 "pids_gone", "pids_spawned") else False for n in effects.EFFECTS}
+        record["remote_landed"] = None
+        record["observed_read"] = True
+        run(json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Read",
+                        "session_id": "g-clean",
+                        "tool_input": {"file_path": "/home/operator/.claude/keel_state/observed.json"},
+                        "keel_effect": record}).encode(), self.state)
         run(b'{"hook_event_name":"Stop","session_id":"g-clean"}', self.state)
         blocks = [r for r in rows(self.state) if r["kind"] == "block"]
         self.assertTrue(blocks)

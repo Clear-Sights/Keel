@@ -226,9 +226,7 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     # U12 nor U19.
     #
     # A predicate carrying `any_of`/`all_of` and NO `kind` of its own is therefore a COMPOSITION
-    # of whole predicates, each evaluated on its own terms. `kind`-bearing predicates are
-    # untouched, so U20's and U24's existing program-level `any_of` keeps its current meaning --
-    # this branch cannot reach them, because they declare a `kind`.
+    # of whole predicates, each evaluated on its own terms.
     if predicate.get("kind") is None:
         if predicate.get("any_of"):
             return any(_base_predicate(sub, event) for sub in predicate["any_of"])
@@ -261,65 +259,7 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     if kind == "regex":
         if not isinstance(value, str):
             return False
-        if predicate.get("scope") == "segment":
-            return any(_regex_predicate(predicate, segment) for segment in segments(value))
         return _regex_predicate(predicate, value)
-    if kind == "program":
-        if not isinstance(value, str):
-            return False
-        # `any_of` composes whole program-predicates rather than widening one. U20's occasion is
-        # three unrelated invocations -- a bare `rm`, `git reset --hard`, `find ... -delete` --
-        # whose flag requirements differ per program. Folding them into one `then_matches` would
-        # either demand a flag of `rm` that it does not take, or make `--hard` optional for `git
-        # reset`, and the second is a false positive on every `git reset --soft`.
-        alternatives = predicate.get("any_of")
-        if alternatives is not None:
-            return any(
-                _base_predicate(dict(alt, kind="program", on=predicate.get("on", "")), event)
-                for alt in alternatives
-            )
-        return any(_segment_matches_program(predicate, segment) for segment in segments(value))
-    if kind == "pipeline":
-        if not isinstance(value, str):
-            return False
-        return _pipeline_predicate(predicate, value)
-    return False
-
-
-def _pipeline_predicate(predicate: dict[str, Any], value: str) -> bool:
-    """An invocation FEEDING another -- the relation `kind: program` cannot state.
-
-    A program predicate asks what one segment ran. C09's occasion is not one invocation but the
-    join between two: a process listing whose output is consumed by a matcher excluding the
-    checker's own pid. Both halves are ordinary segment questions; only the EDGE between them
-    was unexpressible, because the operator was discarded by the splitter.
-
-    `upstream` is a full program predicate, so the leading-argv machinery (wrappers, `sh -c`,
-    delegated runners) is reused rather than restated -- one owner for "what ran".
-
-    Downstream is searched THROUGH a chain of pipes: `ps aux | grep foo | grep -v $$` feeds the
-    listing to the exclusion just as directly as the two-stage form, and stopping at the first
-    stage would let one extra filter walk the guard. The walk stops at the first operator that
-    is not the pipe, because `;` and `||` do not feed anything.
-
-    This is also what closes the mention hole that `kind: regex` left open on this clause: a
-    quoted `echo 'ps aux | grep -v $$'` is ONE segment with no following operator, so there is
-    no edge to match and the guard is not spent by a document.
-    """
-    operator = predicate.get("operator", "|")
-    downstream = predicate.get("downstream_matches")
-    if downstream is None:
-        return False
-    upstream = dict(predicate.get("upstream") or {}, kind="program")
-    pipeline = segment_pipeline(value)
-    for index, (text, joins) in enumerate(pipeline):
-        if joins != operator or not _segment_matches_program(upstream, text):
-            continue
-        following = index
-        while following < len(pipeline) and pipeline[following][1] == operator:
-            following += 1
-            if re.search(downstream, pipeline[following][0]):
-                return True
     return False
 
 
@@ -330,446 +270,6 @@ def _regex_predicate(predicate: dict[str, Any], value: str) -> bool:
         re.search(entry, value) is None
         for entry in predicate.get("unless") or []
     )
-
-
-_WRAPPERS = frozenset({"sudo", "env", "time", "nice", "exec", "command", "builtin"})
-
-
-_INTERPRETERS = re.compile(r"^python[0-9.]*$")
-
-
-# A shell reached with `-c` EXECUTES its argument. Measured before this existed: `bash -c 'git
-# push origin main'` read as argv ['bash', 'git'] and A01 DID NOT FIRE, while the identical plain
-# push did -- so seven characters of prefix walked any command past the whole table. That is a
-# MISSED ACTIVATION, and a missed activation is not the cheap direction: the costly act proceeds
-# with its guard removed, which is exactly what a false discharge buys. The argument is re-parsed
-# as the command it is, which cannot reopen the mention hole -- reaching this branch requires a
-# shell to have been INVOKED with `-c`, not a string that merely looks like one.
-_SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "ash", "fish"})
-
-# Launchers whose job is to run ANOTHER program in a prepared environment. `python3 -m pytest`
-# was already normalised to `pytest`; `uv run pytest` was not, and read as ['uv', 'run'] -- the
-# same invocation, seen differently because one route was Python's and the other was not. The
-# table is what removes that privilege: the delegated program is the subject in every ecosystem,
-# not only where the interpreter happens to be CPython.
-_RUN_LAUNCHERS = frozenset({"uv", "poetry", "pipenv", "pdm", "rye", "hatch", "nix"})
-_DIRECT_LAUNCHERS = frozenset({"npx", "bunx", "pnpx", "dlx"})
-
-# Options that consume the NEXT token as their value, per program. Finite and declared rather
-# than inferred: a value we fail to consume becomes a phantom subcommand, and a subcommand we
-# invent is a clause matching something that never ran. Only git's documented pre-subcommand
-# globals are listed, because those are the ones that can appear BEFORE the subcommand at all.
-# Options that are KNOWN to take no value, so the subcommand behind them is still reachable.
-# Declared for the same reason the value-taking set is: the alternative to a declaration here is
-# a guess, and a guess in this position forges a subcommand.
-_NO_VALUE_OPTIONS = {
-    "npm": frozenset({"--silent", "--quiet", "-s", "--verbose", "--no-color"}),
-    "yarn": frozenset({"--silent", "--verbose"}),
-    "pnpm": frozenset({"--silent"}),
-    "cargo": frozenset({"--quiet", "-q", "--verbose", "-v", "--offline", "--locked", "--release"}),
-    "go": frozenset({"-v", "-x"}),
-    "deno": frozenset({"-A", "--quiet"}),
-    "docker": frozenset({"--debug"}),
-    "git": frozenset({"--no-pager", "--paginate", "--bare", "--literal-pathspecs"}),
-}
-
-
-# Interpreter options taking a SEPARATE value token, so a `-m` scan does not halt on the value.
-# `-W error` is the shape U24 turns on; `-Werror` (joined) needs no entry, it is one token.
-_INTERPRETER_VALUE_OPTIONS = frozenset({"-W", "-X", "--check-hash-based-pycs"})
-
-_VALUE_OPTIONS = {
-    "git": frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}),
-}
-
-
-def _invocation_scan(segment: str) -> tuple[dict[str, str], list[str], list[str]]:
-    """The segment's ENVIRONMENT ASSIGNMENTS and its tokens from the invoked program onward.
-
-    One owner for the stripping rules -- and it now RETURNS the env prefix instead of dropping
-    it. The drop was the same defect as the discarded pipe operator: the scanner identified the
-    `VAR=value` tokens and then threw them away one line later, so the only signal distinguishing
-    a warnings-as-errors run from an ordinary suite run was invisible to every predicate BY
-    CONSTRUCTION. U24 said exactly that in its `why_no_program`, and it was true because the fact
-    had already been deleted before any predicate could ask.
-
-    The same applies to the INTERPRETER'S OWN OPTIONS. `python -W error -m pytest` is a suite run
-    configured to promote warnings, and skipping past `-W error` to reach `pytest` discarded the
-    one token that said so -- the third instance of this identical shape, after the pipe operator
-    and the env prefix. They are returned as `opts`.
-
-    `leading_argv`, `leading_env` and `leading_opts` are thin readers over this, so they cannot
-    drift apart."""
-    env: dict[str, str] = {}
-    opts: list[str] = []
-    tokens = segment.split()
-    index = 0
-    while index < len(tokens):
-        # Quotes and a subshell's opening paren are SHELL SYNTAX, not part of the program name.
-        # Measured against this estate's own gates: `( cd "$STAGE" && "$VENV/bin/python" -m
-        # pytest ... )` yielded `python"` with the quote attached, so the interpreter was not
-        # recognised and the pytest behind it was invisible.
-        token = tokens[index].strip("\"'()")
-        if not token:
-            index += 1
-            continue
-        if "=" in token and not token.startswith("-") and token.split("=", 1)[0].isidentifier():
-            name_part, value_part = token.split("=", 1)
-            env[name_part] = value_part.strip("\"'")
-            index += 1          # VAR=value prefix: recorded, no longer discarded
-            continue
-        # The BASENAME decides, because an interpreter is just as much an interpreter when it is
-        # reached by path: `"$VENV/bin/python" -m pytest` is a pytest run, and testing the whole
-        # token against the interpreter pattern says it is not.
-        name = token.rsplit("/", 1)[-1]
-        if name in _WRAPPERS:
-            index += 1
-            continue
-        if _INTERPRETERS.match(name):
-            # Skip the INTERPRETER's own options before looking for `-m`. Measured:
-            # `python -W error -m pytest` read argv[0] as `-W`, so a warnings-as-errors suite run
-            # -- the exact command U24's guard exists to recognise -- was not seen as a pytest run
-            # at all. `-m` is not at a fixed offset the moment any interpreter flag precedes it.
-            probe = index + 1
-            while probe < len(tokens) and tokens[probe].startswith("-") and tokens[probe] != "-m":
-                if tokens[probe] in _INTERPRETER_VALUE_OPTIONS and probe + 1 < len(tokens):
-                    opts.append(f"{tokens[probe]} {tokens[probe + 1].strip(chr(34) + chr(39))}")
-                    probe += 2
-                else:
-                    opts.append(tokens[probe])
-                    probe += 1
-            if probe + 1 < len(tokens) and tokens[probe] == "-m":
-                module = tokens[probe + 1].strip("\"'").rsplit(".", 1)[-1]
-                return env, opts, [module, *tokens[probe + 2:]]
-            # No `-m`: the interpreter runs a SCRIPT, and the same option skip applies -- landing
-            # on `-W` would report the flag as the program. `probe` already sits past the options.
-            index = probe
-            continue
-        # A shell's `-c` argument IS the command. Re-parse it and answer about what it runs.
-        if name in _SHELLS:
-            rest = tokens[index + 1:]
-            if "-c" in rest:
-                inner = " ".join(rest[rest.index("-c") + 1:]).strip("\"'")
-                # Guarded against a self-referential `sh -c "sh -c ..."` chain: one unwrap per
-                # level, and an empty argument answers nothing rather than answering about `sh`.
-                if not inner.strip():
-                    return env, opts, []
-                inner_env, inner_opts, inner_tokens = _invocation_scan(inner)
-                return {**env, **inner_env}, opts + inner_opts, inner_tokens
-        # `uv run pytest` and `python3 -m pytest` are one invocation reached two ways.
-        if name in _RUN_LAUNCHERS and index + 2 < len(tokens) and tokens[index + 1] == "run":
-            inner_env, inner_opts, inner_tokens = _invocation_scan(" ".join(tokens[index + 2:]))
-            return {**env, **inner_env}, opts + inner_opts, inner_tokens
-        if name in _DIRECT_LAUNCHERS and index + 1 < len(tokens):
-            inner_env, inner_opts, inner_tokens = _invocation_scan(" ".join(tokens[index + 1:]))
-            return {**env, **inner_env}, opts + inner_opts, inner_tokens
-        return env, opts, [name, *tokens[index + 1:]]
-    return env, opts, []
-
-
-def _invocation_tokens(segment: str) -> list[str]:
-    """The tokens reader over `_invocation_scan`. Every existing caller reads exactly this."""
-    return _invocation_scan(segment)[2]
-
-
-def leading_env(segment: str) -> dict[str, str]:
-    """The environment assignments a segment sets for the program it runs.
-
-    The primitive U24's exemption named as missing. It is a fact about the ACT -- the run was
-    configured to promote warnings -- not a word in the command, so a covering over it is
-    name-agnostic and cannot be spent by a mention: a quoted `echo '...'` sets no variables."""
-    return _invocation_scan(segment)[0]
-
-
-def leading_opts(segment: str) -> list[str]:
-    """The interpreter options a segment ran under -- `-W error`, `-X dev`.
-
-    A fact about how the act was CONFIGURED, not a word in it: `echo '...'` runs no interpreter,
-    so this is empty for a mention without any pattern being consulted."""
-    return _invocation_scan(segment)[1]
-
-
-def leading_operands(segment: str) -> list[str]:
-    """Every token the invoked program received -- flags, values and paths alike.
-
-    `leading_argv` deliberately stops at the subcommand, because its job is to say WHICH program
-    ran. That truncation is right for it and wrong for a covering that turns on what the program
-    was POINTED AT: `go test ./scanner -run Acceptance` reduces to `['go', 'test']` there, and
-    the target disappears. Same shape as the discarded pipe operator, the discarded env prefix
-    and the discarded interpreter options -- computed by the scanner, then dropped before any
-    predicate could ask. Read from the scan, so the mention still yields nothing."""
-    return _invocation_scan(segment)[2][1:]
-
-
-def leading_argv(segment: str) -> list[str]:
-    """The argv a shell segment actually EXECUTES, program first, wrappers and env stripped.
-
-    `leading_program` is this function's first element and delegates to it, so the rule for what
-    counts as the invoked program is written ONCE. Two copies of that walk is precisely how a
-    predicate starts disagreeing with the discharge it is paired with.
-
-    WHY MORE THAN THE PROGRAM NAME. `leading_program` returns `git` for `git push` and for `git
-    status` alike, so it can distinguish a checker by its script name -- C08's case -- and cannot
-    distinguish the eighteen clauses of this table whose occasion and guard are BOTH `git
-    <subcommand>`. The discriminator there is the subcommand, and the subcommand is the first
-    argument that is not an option.
-    """
-    tokens = _invocation_tokens(segment)
-    if not tokens:
-        return []
-    argv = [tokens[0]]
-    takes_value = _VALUE_OPTIONS.get(tokens[0], frozenset())
-    index = 1
-    while index < len(tokens):
-        token = tokens[index].strip("\"'")
-        if token.startswith("-"):
-            # `--opt=value` carries its own value; `-C dir` consumes the next token. An option
-            # whose value we failed to consume would land in the subcommand slot: `git -C /tmp
-            # status` read as subcommand `/tmp`, and the clause would never match a real one.
-            if "=" not in token and token in takes_value:
-                index += 2
-                continue
-            if "=" in token or token in _NO_VALUE_OPTIONS.get(argv[0], frozenset()):
-                index += 1
-                continue
-            # REFUSE RATHER THAN GUESS. Whether an unlisted option consumes the next token is
-            # not knowable from the command text, and guessing "it does not" was measured to
-            # FORGE a subcommand: `npm --prefix test install` read as ['npm', 'test'], byte-
-            # identical to a real `npm test`, so a clause discharging on the test run was
-            # licensed by a command that ran no tests. Answering [program] instead loses the
-            # narrowing and costs an interruption; inventing a subcommand removes a guard. The
-            # asymmetry decides, and the fix for the loss is to DECLARE the option, not to guess.
-            return [argv[0]]
-        argv.append(token)
-        break   # STOP AT THE FIRST ONE. Everything after belongs to the subcommand, not to the
-                # invocation: scanning on would read `git commit -m push` as `git push` and
-                # match a clause about pushing on a commit -- a false LICENCE, the one direction
-                # this table cannot afford to be wrong in.
-    return argv
-
-
-def leading_program(segment: str) -> str:
-    """The program a shell segment actually EXECUTES, as a bare basename.
-
-    WHY A PROGRAM AND NOT A PATTERN. Every other predicate in this table matches text against
-    the command about to run, which is the right instrument when the guard IS a look -- `git
-    status` before a push is a look whose occurrence is its own success, and a regex sees it.
-    It is the wrong instrument when the guard is a JUDGEMENT some program renders: whether a
-    checker can fail, whether a push landed, whether a rewrite preserved behaviour. Those have
-    answers, the answers are exit codes, and matching the text of the question is not reading
-    the answer. This function is what lets a clause name the program instead.
-
-    LEADING, not anywhere. The token must be what the segment invokes, so a program named
-    inside an argument does not discharge anything: `grep meta_test.py notes.md` reads a file
-    ABOUT the guard and runs no guard. That is the same failure the sibling estate's exit-mask
-    recognizer documents ("The runner must be the LEADING command of a statement (an actual
-    invocation), NOT an argument"), and it is worth restating here because a discharge is a
-    licence -- a false one is strictly worse than a missed one, which merely blocks.
-
-    Interpreter and wrapper prefixes are stripped so one name covers the spellings a caller
-    actually types: `python3 tools/x.py`, `./tools/x.py`, `env python3 tools/x.py` and
-    `tools/x.py` all yield `x.py`. `python3 -m pytest` yields `pytest`, because the module IS
-    the program there. A leading VARIABLE ASSIGNMENT is skipped rather than returned: C08's own
-    `_note` records a live session where `F=plugin/.../writeThrashRevert.py` was taken for a
-    checker, keying 19 demand rows on a token naming nothing runnable.
-    """
-    tokens = _invocation_tokens(segment)
-    return tokens[0] if tokens else ""
-
-
-def _scan(command: str) -> list[tuple[str, str]]:
-    """Split shell control segments, KEEPING the operator that joined them.
-
-    Each entry is `(segment text, the operator that FOLLOWS it)` -- `""` for the last.
-
-    The operator used to be computed here and dropped one line later, and that discard was
-    itself a defect. A `|` means the next command EATS this one's output; a `;` means only
-    that it runs after. C09's whole subject is the difference -- `ps ... | grep -v $$`, a
-    process listing that excludes the checker itself -- and with the operator gone no
-    predicate could see it. Its `why_no_program` says argv on `ps` "fires on every process
-    listing whether or not it is piped into a matcher", which was true precisely because the
-    pipe fact had already been deleted before any predicate ran.
-
-    `||` and `&&` are recorded whole and are NOT pipes: `a || b` runs b when a FAILS, which is
-    the opposite of feeding it. Reading `||` as `|` would license the guard on a command whose
-    matcher may never have run at all.
-
-    Two rules a naive scanner gets wrong, both measured before the fix:
-
-    Backslash escapes only inside DOUBLE quotes. POSIX gives `\\` no special meaning inside
-    single quotes, so treating it as an escape there makes `'a\\'` look unterminated and the
-    rest of the line is swallowed into one segment: `'a\\' ; rm -rf /` returned a single
-    segment, and `rm -rf /` was never seen as a segment start at all.
-
-    An `&` after `<` or `>` is a REDIRECT, not a control operator. `make 2>&1 | tee log` split
-    into `['make 2>', '1', 'tee log']` -- two segments that are not commands, and a real one
-    whose text no longer resembles what ran.
-
-    A HEREDOC BODY IS DATA, NOT COMMANDS, and this is the third rule, measured the same way. The
-    scanner read `cat <<EOF\n; git rev-parse --verify main\nEOF` as two segments and handed the
-    second to the predicates as though something had run it -- so U09 DISCHARGED on a heredoc
-    that executed nothing, and the guard it protects was spent by a document. Quoting was already
-    handled and heredocs were not, which left the exact same hole one syntax over: text the shell
-    never executes, read as an invocation. The body is consumed to its delimiter and contributes
-    no segment; the `cat <<EOF` line itself still does, because that command really does run.
-    """
-    out, buf, quote, i = [], [], "", 0
-    pending_heredocs: list[tuple[str, bool]] = []
-    while i < len(command):
-        ch = command[i]
-        # `<<WORD` / `<<-WORD` / `<<"WORD"`: remember the delimiter, keep scanning this line.
-        if not quote and ch == "<" and command[i:i + 2] == "<<":
-            j = i + 2
-            strip_tabs = j < len(command) and command[j] == "-"
-            j += 1 if strip_tabs else 0
-            while j < len(command) and command[j] in " \t":
-                j += 1
-            k, delim_quote = j, ""
-            if k < len(command) and command[k] in "'\"":
-                delim_quote = command[k]
-                k += 1
-                start = k
-                while k < len(command) and command[k] != delim_quote:
-                    k += 1
-                word = command[start:k]
-                k += 1
-            else:
-                start = k
-                while k < len(command) and (command[k].isalnum() or command[k] in "_-."):
-                    k += 1
-                word = command[start:k]
-            if word:
-                pending_heredocs.append((word, strip_tabs))
-                buf.append(command[i:k])
-                i = k
-                continue
-        if not quote and ch == "\n" and pending_heredocs:
-            # Close the line, then swallow every pending body without scanning it.
-            out.append(("".join(buf), "\n"))
-            buf = []
-            i += 1
-            for word, strip_tabs in pending_heredocs:
-                while i < len(command):
-                    end = command.find("\n", i)
-                    line = command[i:] if end == -1 else command[i:end]
-                    i = len(command) if end == -1 else end + 1
-                    if (line.lstrip("\t") if strip_tabs else line).strip() == word:
-                        break
-            pending_heredocs = []
-            continue
-        if quote:
-            buf.append(ch)
-            if ch == quote:
-                quote = ""
-            elif quote == '"' and ch == "\\" and i + 1 < len(command):
-                i += 1
-                buf.append(command[i])
-        elif ch in "'\"":
-            quote = ch
-            buf.append(ch)
-        elif ch in ";|&\n":
-            # A NEWLINE IS A SEPARATOR. A shell starts a new command at a newline exactly as it
-            # does at `;`, and omitting it was a hole straight through the fence: `# note\nrm -rf
-            # build/` was ONE segment whose text begins with `#`, so prefixing any command with a
-            # comment line walked it past the table -- measured on the shipped clauses, `rm -rf
-            # build/`, `git push --force origin main` and `kill -9 1234` all went from deny to
-            # allow behind two characters and a newline. That is a MISSED ACTIVATION, which costs
-            # what a false discharge costs: the act proceeds with its guard removed. A quoted
-            # newline still cannot separate, because the quote branch above consumes it first --
-            # the same rule the other operators already follow. `\n\n` is not a `||`-style
-            # doubled operator, so the doubling skip below must not apply to it.
-            if ch == "&" and buf and buf[-1] in "<>":
-                buf.append(ch)
-                i += 1
-                continue
-            operator = ch
-            if ch != "\n" and i + 1 < len(command) and command[i + 1] == ch:
-                operator = ch * 2
-                i += 1
-            out.append(("".join(buf), operator))
-            buf = []
-        else:
-            buf.append(ch)
-        i += 1
-    out.append(("".join(buf), ""))
-    return [(text.strip(), operator) for text, operator in out if text.strip()]
-
-
-def segments(command: str) -> list[str]:
-    """The segment texts alone -- the shape every caller but the pipeline predicate reads."""
-    return [text for text, _ in _scan(command)]
-
-
-def segment_pipeline(command: str) -> list[tuple[str, str]]:
-    """Segments paired with the operator that follows each. See `_scan`."""
-    return _scan(command)
-
-
-def _segment_matches_program(predicate: dict[str, Any], segment: str) -> bool:
-    """Does THIS one segment satisfy the invocation predicate? One owner, used by both callers."""
-    alternatives = predicate.get("any_of")
-    if alternatives is not None:
-        return any(_segment_matches_program(dict(alt), segment) for alt in alternatives)
-    argv = leading_argv(segment)
-    if not argv:
-        return False
-    if any(re.search(entry, segment) for entry in predicate.get("unless") or []):
-        return False
-    then = predicate.get("then_matches")
-    if then is not None and not re.search(then, segment):
-        return False
-    # HOW the act was configured, not what it is called. `env` and `opts` are facts about the
-    # invocation -- a mention sets no variables and runs no interpreter -- so a covering over
-    # them is name-agnostic and cannot be spent by quoting the command. They CONSTRAIN a match
-    # rather than granting one: the argv test below still has to succeed.
-    wanted_env = predicate.get("env")
-    if wanted_env is not None:
-        actual = leading_env(segment)
-        if not any(name in actual and re.search(want, actual[name])
-                   for name, want in wanted_env.items()):
-            return False
-    wanted_opts = predicate.get("opts")
-    if wanted_opts is not None:
-        actual_opts = leading_opts(segment)
-        if not any(re.search(want, opt) for want in wanted_opts for opt in actual_opts):
-            return False
-    # WHAT the program was pointed at. The arguments are already in `argv`; nothing could read
-    # them, so U25 -- whose two sides are the same runner with different targets -- had to fall
-    # back to matching the raw command text. This reads the parsed operands instead, so the
-    # quoted forms that defeat a text pattern never reach it.
-    wanted_args = predicate.get("args")
-    if wanted_args is not None:
-        operands = leading_operands(segment)
-        if not any(re.search(want, operand) for want in wanted_args for operand in operands):
-            return False
-    names, pattern = predicate.get("names"), predicate.get("pattern")
-    if names is not None and argv[0] in names:
-        return True
-    if pattern is not None and re.fullmatch(pattern, argv[0]):
-        return True
-    for wanted in predicate.get("argv") or []:
-        if list(wanted) == argv[:len(wanted)]:
-            return True
-    return False
-
-
-def matching_segment(predicate: dict[str, Any], event: dict[str, Any]) -> str | None:
-    """Return the first live segment for a segment-scoped predicate."""
-    value = _resolve(event, predicate.get("on", ""))
-    if not isinstance(value, str):
-        return None
-    # The program kind is segment-scoped BY CONSTRUCTION -- it matches the leading argv of a
-    # segment -- so it belongs here whether or not the clause spells `scope`. Leaving this
-    # regex-only was measured wrong: for `git apply --check checked.patch; git apply live.diff
-    # --index`, the subject came back `checked.patch`, naming the file that was CHECKED as the
-    # subject of the apply that ran on another. The deny then cited the wrong artifact.
-    if predicate.get("kind") == "program":
-        return next((segment for segment in segments(value)
-                     if _segment_matches_program(predicate, segment)), None)
-    if predicate.get("scope") != "segment":
-        return None
-    return next((segment for segment in segments(value)
-                 if _regex_predicate(predicate, segment)), None)
 
 
 def _predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool | None:
@@ -850,27 +350,6 @@ def _matches_a_tool_enum(predicate: Any) -> bool:
 # the generated proof now decide. A requirement outside the math does not get an excuse.
 EXCUSE_FIELDS = frozenset({"why_no_program", "guard_vocabulary", "waiver"})
 
-# The programs this bundle ships under its own names. A vocabulary drawn wholly from these is
-# CLOSED by construction: there is no other spelling of "run Keel's own probe".
-_BUNDLE = Path(__file__).resolve().parent.parent
-SHIPPED_PROGRAMS = frozenset(
-    p.name for d in ("tools", "hooks") for p in (_BUNDLE / d).glob("*") if p.is_file())
-
-# The spelling a deny_reason or guard uses to tell the operator what to run.
-_PLUGIN_ROOT_RX = re.compile(r"\$CLAUDE_PLUGIN_ROOT/([\w./-]+)")
-
-
-def vocabulary(predicate: Any) -> list[str]:
-    """Every leading program a side selects on, compound branches included, in table order."""
-    if not isinstance(predicate, dict):
-        return []
-    found = list(predicate.get("names") or [])
-    found += [entry[0] for entry in predicate.get("argv") or [] if entry]
-    for sub in (predicate.get("any_of") or []) + (predicate.get("all_of") or []):
-        found += vocabulary(sub)
-    return found
-
-
 def classify_side(predicate: Any) -> str:
     """The Coverings.v class of one covering, read from its shape. ONE owner.
 
@@ -879,14 +358,13 @@ def classify_side(predicate: Any) -> str:
 
       always      fires on every event of its surface; the terminal shape (Thm 3 boundary)
       tool-enum   reads `tool_name`, a closed host enum: covered however the shell is spelled
-      nominal     selects on a segment's leading program (Thm 2: mention-immune when the
-                  vocabulary excludes the quoting program; Thm 5: monotone in that vocabulary)
-      composed    a nominal branch joined with a tool-enum branch (Thm 5 retired, not widened)
-      topology    reads the operator edge between segments (Thm 4: name-agnostic)
-      positive    compares a datum the trace produced to one the report states (Thm 6, 7)
       effect      reads what the act DID -- a worktree, ref, process, network or output delta
-                  named in `keel.effects.EFFECTS` (Thm 8: name-agnostic, the occasion form)
+                  named in `keel.effects.EFFECTS` (Thm 8: name-agnostic; on the guard side a
+                  datum the trace holds, or a report shape where no trace exists)
+      positive    compares a datum the trace produced to one the report states (Thm 6, 7)
+      composed    a composition of the classes above, every branch agnostic
       textual     reads the raw command as text (Thm 1: never mention-immune) -- refused
+      nominal     selects on a program's name -- refused on every side (Thm 3, Thm 5)
     """
     if not isinstance(predicate, dict):
         return "absent"
@@ -895,13 +373,13 @@ def classify_side(predicate: Any) -> str:
     if branches:
         parts = {classify_side(dict(sub, kind=sub.get("kind", kind), on=sub.get("on", predicate.get("on"))))
                  for sub in branches}
-        if "textual" in parts or "unclassified" in parts:
-            return "textual" if "textual" in parts else "unclassified"
-        if parts == {"nominal"}:
+        if "textual" in parts:
+            return "textual"
+        if "nominal" in parts:
             return "nominal"
-        if parts == {"effect"}:
-            return "effect"
-        if parts <= {"nominal", "tool-enum", "effect"}:
+        if len(parts) == 1:
+            return parts.pop()
+        if parts <= AGNOSTIC_CLASSES:
             return "composed"
         return "unclassified"
     if kind == "always":
@@ -914,30 +392,34 @@ def classify_side(predicate: Any) -> str:
         if predicate.get("on") == "tool_name":
             return "tool-enum"
         return "textual" if predicate.get("on") == COMMAND_FIELD else "unclassified"
-    if kind == "program":
+    if kind in ("program", "pipeline"):
         return "nominal"
-    if kind == "pipeline":
-        return "topology"
     if kind == "nonzero":
         return "positive"
     return "unclassified"
 
 
-def derive_closure(predicate: Any) -> str:
-    """Whether a side's vocabulary is closed, DERIVED -- never declared.
+# The classes a side may have, on EITHER side. Each is name-agnostic or is the Theorem 3
+# boundary itself. A guard is discharged by a host tool call or by an observed effect of the
+# discharging act, never by what the act was called: tool calls are agnostic, so nominal
+# coverage of a guard has no excuse.
+AGNOSTIC_CLASSES = frozenset({"always", "tool-enum", "effect", "positive", "composed"})
 
-    `shipped`: nominal, and every name is a program this bundle ships. `composed` / `host`:
-    a closed host enum covers the act. `open`: nominal over foreign names -- Theorem 5 says a
-    missing spelling is a miss, and that is the stated limit, with nothing to argue.
+
+def derive_closure(predicate: Any) -> str:
+    """Whether a side is closed, DERIVED from its class -- never declared.
+
+    `host`: a closed host enum covers the act. `world`: the observer measures it. `datum`: a
+    report is compared to the trace. There is no `open`: a side whose closure would be open
+    is nominal, and the loader refuses it.
     """
     cls = classify_side(predicate)
-    if cls == "nominal":
-        names = vocabulary(predicate)
-        return "shipped" if names and set(names) <= SHIPPED_PROGRAMS else "open"
     if cls in ("composed", "tool-enum"):
         return "host"
     if cls == "effect":
         return "world"
+    if cls == "positive":
+        return "datum"
     return cls
 
 
@@ -1004,8 +486,6 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
             raise ClauseError("CLAUSE-EFFECT-UNKNOWN",
                               f"{clause_id}: {leaf.get('effect')!r} is not an effect the observer measures")
     if predicate.get("kind") == "regex":
-        if predicate.get("scope", "field") not in ("field", "segment"):
-            raise ClauseError("CLAUSE-SCOPE-INVALID", clause_id)
         try:
             re.compile(predicate.get("pattern", ""))
             for entry in predicate.get("unless") or []:
@@ -1063,11 +543,7 @@ def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
     return [leaf for sub in branches for leaf in _leaves(sub)]
 
 
-# The classes an OCCASION may have. Each is name-agnostic or is the Theorem 3 boundary itself:
-# `always` fires on every act; `tool-enum` reads the host's closed tool name; `effect` reads
-# what the act did; `topology` reads operator edges; `positive` compares data. `nominal` and
-# anything composed over it selects by program name and is refused.
-AGNOSTIC_OCCASIONS = frozenset({"always", "tool-enum", "effect", "topology", "positive"})
+AGNOSTIC_OCCASIONS = AGNOSTIC_CLASSES
 
 
 def _discriminator(clause: "Clause") -> dict:
@@ -1086,6 +562,42 @@ def _discriminator(clause: "Clause") -> dict:
 
 
 def _admit(clause: Clause) -> Clause:
+    # THE CLASS OF EVERY SIDE IS CHECKED FIRST: a side the table may not carry is refused by
+    # its shape, before any fixture is graded against it.
+    for name in ("fingerprint", "activated_by", "discharged_by"):
+        predicate = getattr(clause, name)
+        if not isinstance(predicate, dict):
+            continue
+        if classify_side(predicate) == "textual":
+            raise ClauseError(
+                "CLAUSE-TEXT-COVERING",
+                f"{clause.id}.{name}: reads the raw command as text; by Theorem 1 no pattern "
+                f"edit makes that mention-immune, so it is refused with no exemption to write")
+        if classify_side(predicate) == "unclassified":
+            raise ClauseError(
+                "CLAUSE-SIDE-UNCLASSIFIED",
+                f"{clause.id}.{name}: no class in Coverings.v covers this shape")
+        # AN OCCASION MUST BE NAME-AGNOSTIC. Theorem 3 says a nominal covering with a name in
+        # and a name out is never name-agnostic; Theorem 5 says an unlisted spelling is a miss.
+        # On the occasion side a miss is the costly act proceeding with its guard removed. So a
+        # nominal occasion is refused outright: not carried as `open` with a theorem instance
+        # documenting the gap, which is what this table did for sixteen sides, but refused.
+        if name in ("fingerprint", "activated_by") and classify_side(predicate) not in AGNOSTIC_CLASSES:
+            raise ClauseError(
+                "CLAUSE-OCCASION-NOMINAL",
+                f"{clause.id}.{name}: selects the act by the program's name; an act spelled "
+                f"under another name proceeds unguarded (Theorem 3, Theorem 5)")
+        # A GUARD MUST BE NAME-AGNOSTIC TOO. Tool calls are agnostic: a guard is discharged by
+        # a host tool call (the closed `tool_name` enum) or by an observed effect of the
+        # discharging act (a datum the trace holds, a report shape where no trace exists),
+        # never by what the act was called. Nominal coverage of a guard fails closed, which is
+        # the cheap direction -- and it is still a list of spellings standing in for an
+        # observation, with no excuse. Refused, not carried as `open`.
+        if name == "discharged_by" and classify_side(predicate) not in AGNOSTIC_CLASSES:
+            raise ClauseError(
+                "CLAUSE-GUARD-NOMINAL",
+                f"{clause.id}.{name}: names the program that discharges; a guard is a host "
+                f"tool call or an observed effect of the guard act, never a spelling")
     if clause.activated_by is not None and not clause.fixtures_activate:
         raise ClauseError("CLAUSE-NO-ACTIVATION-FIXTURES", clause.id)
     for fixture in clause.fixtures_activate or []:
@@ -1096,20 +608,6 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EVENT-UNKNOWN", f"{clause.id}: {clause.event}")
     if not clause.fixtures_pos or not clause.fixtures_neg:
         raise ClauseError("CLAUSE-NO-FIXTURES", clause.id)
-    # A program this bundle is supposed to ship must be in the bundle, on every side and in the
-    # sentence shown to the operator. Otherwise the clause denies with a remedy nobody can run --
-    # an obligation nothing discharges, which is how a gate gets switched off. The loader refuses
-    # it, so the plugin cannot load with the file gone; a test that noticed was a property of the
-    # tree, not of the product.
-    for side in (clause.fingerprint, clause.activated_by, clause.discharged_by):
-        for name in vocabulary(side):
-            if name.endswith((".py", ".sh")) and name not in SHIPPED_PROGRAMS:
-                raise ClauseError("CLAUSE-NAMED-PROGRAM-MISSING", f"{clause.id}: {name}")
-    for text in (clause.guard, clause.deny_reason):
-        for rel in _PLUGIN_ROOT_RX.findall(text or ""):
-            if not (_BUNDLE / rel).is_file():
-                raise ClauseError("CLAUSE-NAMED-PROGRAM-MISSING",
-                                  f"{clause.id}: $CLAUDE_PLUGIN_ROOT/{rel}")
     # THE PAIRING RULE IS NOT CHECKED HERE, and that placement is the fix. Every row names its
     # positive half, and this function used to raise when one did not -- at DISPATCH time, inside
     # the load that every hook invocation performs. `_admit` failing anywhere makes the whole
@@ -1138,31 +636,7 @@ def _admit(clause: Clause) -> Clause:
     #
     # Matching TEXT against the command cannot tell an invocation from a mention: `echo 'first;
     # git status'` discharged a push guard, measured, because the pattern's own separator
-    # alternation matched a `;` inside quotes. `kind: program` decides on the leading argv of a
-    # segment instead, and text may then only narrow WHICH VARIANT ran.
-    for name in ("fingerprint", "activated_by", "discharged_by"):
-        predicate = getattr(clause, name)
-        if not isinstance(predicate, dict):
-            continue
-        if classify_side(predicate) == "textual":
-            raise ClauseError(
-                "CLAUSE-TEXT-COVERING",
-                f"{clause.id}.{name}: reads the raw command as text; by Theorem 1 no pattern "
-                f"edit makes that mention-immune, so it is refused with no exemption to write")
-        if classify_side(predicate) == "unclassified":
-            raise ClauseError(
-                "CLAUSE-SIDE-UNCLASSIFIED",
-                f"{clause.id}.{name}: no class in Coverings.v covers this shape")
-        # AN OCCASION MUST BE NAME-AGNOSTIC. Theorem 3 says a nominal covering with a name in
-        # and a name out is never name-agnostic; Theorem 5 says an unlisted spelling is a miss.
-        # On the occasion side a miss is the costly act proceeding with its guard removed. So a
-        # nominal occasion is refused outright: not carried as `open` with a theorem instance
-        # documenting the gap, which is what this table did for sixteen sides, but refused.
-        if name in ("fingerprint", "activated_by") and classify_side(predicate) not in AGNOSTIC_OCCASIONS:
-            raise ClauseError(
-                "CLAUSE-OCCASION-NOMINAL",
-                f"{clause.id}.{name}: selects the act by the program's name; an act spelled "
-                f"under another name proceeds unguarded (Theorem 3, Theorem 5)")
+    # alternation matched a `;` inside quotes. No side reads the command as text.
     # An effect is observed AFTER the act, so a clause whose occasion is an effect is enforced at
     # PostToolUse: the demand is raised there, the next call is denied until the guard is seen.
     if classify_side(clause.fingerprint) == "effect" and clause.event != "PostToolUse":

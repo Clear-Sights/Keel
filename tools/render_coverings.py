@@ -12,23 +12,17 @@ side is. `tools/check_coq.py` compiles the result and grades every instance for 
     python3 tools/render_coverings.py --write   # regenerate it
 
 What each class gets, and what it does not:
-  nominal     Theorem 2 (mention-immune) when its vocabulary excludes the quoting program --
-              a fact this script CHECKS over the names and states as a lemma proved by
-              `discriminate`; and Theorem 5 (monotone): a spelling not in the list is a miss.
-              That second instance IS the disposition of an open vocabulary. Nothing is argued.
-  composed    the nominal branch's two instances, plus the fact that a `tool_name` branch is a
-              closed enum, which the loader already checks (`_matches_a_tool_enum`).
   tool-enum   closed by the host; no text is read, so Theorem 1 has nothing to say.
-  topology    Theorem 4: the class is name-agnostic by construction.
   always      the terminal shape; Theorem 3 says a covering that fires before the act must
               name something, so this one is the boundary, stated as such.
   effect      Theorem 8: reads what the act did, never a segment; name-agnostic, and it
-              separates byte-identical commands by their effects.
+              separates byte-identical commands by their effects. On the guard side the
+              effect is a datum the trace holds or a report shape where no trace exists.
   positive    Theorems 6 and 7.
+  composed    a composition of the classes above: each branch gets its own instance.
+  nominal     the loader refuses the row on EVERY side (`CLAUSE-OCCASION-NOMINAL`,
+              `CLAUSE-GUARD-NOMINAL`); this script never sees one.
   textual     the loader refuses the row; this script never sees one.
-A `pattern` selects programs by regex, so its vocabulary is not a finite list: its Theorem 2
-instance is stated CONDITIONAL on the pattern excluding the quoting program, and the condition
-is checked here in Python (`re.fullmatch`) where regex semantics live.
 """
 from __future__ import annotations
 
@@ -43,7 +37,6 @@ from keel import clauses as C  # noqa: E402
 
 TABLE = REPO / "plugin" / "keel" / "clauses.json"
 OUT = REPO / "proofs" / "Clauses.v"
-QUOTING = "echo"
 SIDES = ("fingerprint", "activated_by", "discharged_by")
 
 
@@ -53,40 +46,6 @@ def coq_ident(text: str) -> str:
 
 def coq_string(text: str) -> str:
     return '"' + text.replace('"', '""') + '"'
-
-
-def nominal_block(name: str, predicate: dict) -> list[str]:
-    names = C.vocabulary(predicate)
-    patterns = [p["pattern"] for p in _leaves(predicate) if p.get("pattern")]
-    lines = []
-    if names:
-        if QUOTING in names:
-            raise SystemExit(f"{name}: names the quoting program {QUOTING!r}; Theorem 2 cannot "
-                             "apply and the side is defeated by a mention")
-        lines += [
-            f"  Definition {name}_names : list string := [{'; '.join(coq_string(n) for n in names)}].",
-            f"  Lemma {name}_clean : ~ In {coq_string(QUOTING)} {name}_names.",
-            "  Proof. simpl; intuition discriminate. Qed.",
-            f"  Theorem {name}_immune :",
-            f"    mention_immune Text mention (structural Text string scan (fun p => In p {name}_names)).",
-            f"  Proof. exact (structural_immune Text string scan mention {coq_string(QUOTING)} "
-            f"scan_mention_single _ {name}_clean). Qed.",
-            f"  Theorem {name}_monotone : forall W, (forall p, In p {name}_names -> W p) ->",
-            f"    forall c, nominal Text string scan (fun p => In p {name}_names) c -> nominal Text string scan W c.",
-            f"  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.",
-        ]
-    for i, pattern in enumerate(patterns):
-        if re.fullmatch(pattern, QUOTING):
-            raise SystemExit(f"{name}: pattern {pattern!r} admits {QUOTING!r}; Theorem 2 cannot apply")
-        lines += [
-            f"  (* pattern {i}: {pattern!r} -- a regular vocabulary, checked in Python to exclude "
-            f"{QUOTING!r}; the instance is conditional on that. *)",
-            f"  Theorem {name}_pattern{i}_immune : forall V : string -> Prop,",
-            f"    ~ V {coq_string(QUOTING)} -> mention_immune Text mention (structural Text string scan V).",
-            f"  Proof. intros V H. exact (structural_immune Text string scan mention {coq_string(QUOTING)} "
-            "scan_mention_single V H). Qed.",
-        ]
-    return lines
 
 
 def _leaves(predicate: dict) -> list[dict]:
@@ -101,8 +60,11 @@ def side_block(clause_id: str, side: str, predicate: dict) -> list[str]:
     cls = C.classify_side(predicate)
     closure = C.derive_closure(predicate)
     head = [f"  (* SIDE {clause_id}_{side} *)", f"  (* class={cls} closure={closure} *)"]
-    if cls in ("nominal", "composed"):
-        return head + nominal_block(name, predicate)
+    if cls == "composed":
+        lines = list(head)
+        for i, leaf in enumerate(_leaves(predicate)):
+            lines += side_block(clause_id, f"{side}_branch{i}", leaf)[1:]
+        return lines
     if cls == "tool-enum":
         return head + [f"  (* reads tool_name, a closed host enum: no text, no vocabulary *)"]
     if cls == "topology":
@@ -146,8 +108,6 @@ def render(rows: list[dict]) -> str:
         "  Variable Text : Type.",
         "  Variable scan : Text -> list (Segment string).",
         "  Variable mention : Text -> Text.",
-        "  Hypothesis scan_mention_single :",
-        f"    forall c, scan (mention c) = [ {{| seg_argv := [{coq_string(QUOTING)}] |}} ].",
         "",
     ]
     results: list[str] = []

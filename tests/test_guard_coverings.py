@@ -23,18 +23,12 @@ An agent that never listed a process could claim it had. C09 was alone -- U24 an
 two `why_no_program` clauses, both correctly refused the mention -- so the exemption class was
 not leaking; one clause was.
 
-THE FIX WAS TO STOP DISCARDING INFORMATION, not to add a mechanism. `segments()` identified which
-operator split each segment and then dropped it one line later, returning `list[str]`. A `|`
-means the next command EATS this one's output; a `;` means only that it runs after, and C09's
-whole subject is that difference. With the operator gone, no predicate could see it -- which is
-exactly what C09's `why_no_program` reported ("argv on `ps` fires on every process listing
-whether or not it is piped into a matcher"). It was true, and true because the pipe fact had
-already been deleted before any predicate ran. `_scan` now keeps the operator, `kind: pipeline`
-reads the edge between two segments, and that exemption is SUPERSEDED rather than merely
-tolerated -- both of C09's sides are structural now, so the field is gone.
-
-The mention hole closes as a CONSEQUENCE, not as a special case: a quoted `echo '...'` is ONE
-segment with no following operator, so there is no edge to match.
+THE FIX, TWICE. First the splitter stopped discarding the pipe operator and C09 read the edge
+between `ps` and its matcher. That still named `ps`. Now both of C09's sides are EFFECTS read
+off the listing itself: the occasion is `report_self` (the act's output contains a segment of
+its own command -- the checker appeared in its own result), the guard is `report_listing` (the
+output holds live pids and none of the act's own command text). A mention prints its own text,
+never a listing, so it cannot spend the guard; and no program is named on either side.
 """
 
 from __future__ import annotations
@@ -44,15 +38,20 @@ import unittest
 from tests.plant_support import PLUGIN, smoke_replace
 
 from keel import clauses as C
+from keel import effects
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 
 
 
 
-def _event(predicate: dict, command: str) -> dict:
-    return {"hook_event_name": "PreToolUse", "tool_name": "Bash",
-            "tool_input": {"command": command}}
+def _record(command: str, stdout: str, alive=(41, 42)) -> dict:
+    """What the observer records for a listing act, computed by the observer's own readers."""
+    record = effects.report_effects(stdout, command)
+    record.update(effects.trace_effects(stdout, {"alive": list(alive), "command": command},
+                                        None, quiet=True))
+    return {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+            "tool_input": {"command": command}, "keel_effect": record}
 
 
 class EveryGuardIsWitnessedInBothDirections(unittest.TestCase):
@@ -69,56 +68,36 @@ class EveryGuardIsWitnessedInBothDirections(unittest.TestCase):
     def test_TEETH_a_mention_never_discharges_C09(self) -> None:
         """The defect these fixtures found, driven through the production predicate."""
         guard = {c.id: c for c in C.load_default()}["C09-checker-excludes-self"].discharged_by
-        for command in ("echo 'ps aux | grep -v $$'",
-                        "grep -rn 'ps | grep -v $$' notes.md"):
+        for command, stdout in (("echo 'ps aux | grep -v $$'", "ps aux | grep -v $$\n"),
+                                ("grep -rn 'ps | grep -v $$' notes.md", "notes.md:3: ps | grep -v $$\n")):
             with self.subTest(command=command):
-                self.assertFalse(C._predicate(guard, _event(guard, command)),
+                self.assertFalse(C._predicate(guard, _record(command, stdout)),
                                  f"C09 discharged on a MENTION: {command!r}")
 
-    def test_NON_VACUITY_the_real_pipeline_still_discharges(self) -> None:
+    def test_NON_VACUITY_the_real_listing_still_discharges(self) -> None:
         """Refusing everything would satisfy the cell above and destroy the clause."""
         guard = {c.id: c for c in C.load_default()}["C09-checker-excludes-self"].discharged_by
-        for command in ("ps aux | grep -v $$",
-                        "ps aux | grep node | grep -v $$",
-                        "ps -eo pid,comm | awk -v self_pid=$$ '$1 != self_pid'"):
+        for command, stdout in (("pgrep -af worker", "41 worker --queue\n42 worker --queue\n"),
+                                ("ps -eo pid,comm | awk -v self_pid=$$ '$1 != self_pid'",
+                                 "41 worker\n42 worker\n")):
             with self.subTest(command=command):
-                self.assertTrue(C._predicate(guard, _event(guard, command)),
-                                f"C09 no longer discharges on a real guard: {command!r}")
+                self.assertTrue(C._predicate(guard, _record(command, stdout)),
+                                f"C09 no longer discharges on a real listing: {command!r}")
 
-    def test_the_operator_is_the_point_not_merely_adjacency(self) -> None:
-        """`;` and `||` are not pipes, and reading them as one would license the guard.
-
-        `a || b` runs b when a FAILS -- the opposite of feeding it -- so an exclusion filter
-        joined that way may never have run against the listing at all.
-        """
-        guard = {c.id: c for c in C.load_default()}["C09-checker-excludes-self"].discharged_by
-        for command in ("ps aux ; grep -v $$", "ps aux || grep -v $$"):
-            with self.subTest(command=command):
-                self.assertFalse(C._predicate(guard, _event(guard, command)),
-                                 f"a non-pipe operator discharged C09: {command!r}")
-
-    def test_the_splitter_keeps_the_operator_and_segments_is_unchanged(self) -> None:
-        """One scanner, two readings -- not two spellings that can drift apart."""
-        self.assertEqual(C.segment_pipeline("ps aux | grep -v $$"),
-                         [("ps aux", "|"), ("grep -v $$", "")])
-        self.assertEqual(C.segment_pipeline("ps aux || grep -v $$"),
-                         [("ps aux", "||"), ("grep -v $$", "")])
-        # A mention is ONE segment: this is why the hole closes without a special case.
-        self.assertEqual(C.segment_pipeline("echo 'ps aux | grep -v $$'"),
-                         [("echo 'ps aux | grep -v $$'", "")])
-        # The public shape every other caller reads is untouched.
-        self.assertEqual(C.segments("ps aux | grep -v $$"), ["ps aux", "grep -v $$"])
-        self.assertEqual(C.segments("make 2>&1 | tee log"), ["make 2>&1", "tee log"])
+    def test_a_listing_that_lists_itself_is_the_occasion_not_the_guard(self) -> None:
+        """`ps aux | grep worker` prints its own `grep worker` line: the checker counted itself."""
+        clause = {c.id: c for c in C.load_default()}["C09-checker-excludes-self"]
+        event = _record("ps aux | grep worker", "root 41 worker\nroot 42 grep worker\n")
+        self.assertTrue(C._predicate(clause.fingerprint, event))
+        self.assertFalse(C._predicate(clause.discharged_by, event))
 
     def test_the_check_can_fail(self) -> None:
-        # The fault is a DATA edit to the mechanism this law is about -- the operator C09's guard
-        # keys on -- not a special case wired to this test's own input. With the edge declared as
-        # `;`, the clause's own positive fixture `ps aux | grep -v $$` no longer discharges, and
-        # the loader must refuse the table rather than ship a guard nothing witnesses.
+        # The fault is a DATA edit to the guard: discharge on the listing that listed ITSELF.
+        # C09's own positive discharge fixture then no longer discharges, and the loader must
+        # refuse the table rather than ship a guard nothing witnesses.
         smoke_replace(
             self, CLAUSES,
-            b'"operator": "|",\n      "downstream_matches": "(?:^(?:grep|rg)',
-            b'"operator": ";",\n      "downstream_matches": "(?:^(?:grep|rg)',
+            b'"effect": "report_listing"', b'"effect": "report_self"',
             "tests.test_guard_coverings.EveryGuardIsWitnessedInBothDirections."
             "test_the_loader_enforces_it_rather_than_this_test",
             "CLAUSE-GUARD-FIXTURE-MISS")

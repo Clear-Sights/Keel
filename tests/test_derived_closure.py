@@ -9,9 +9,10 @@ What this retires: `guard_vocabulary`, `why_no_program` and `waiver` -- three pl
 state in English what the proof decides. Theorem 5 says a nominal covering is monotone in its
 vocabulary, so an unlisted spelling is a miss. On the GUARD side that miss is an undischarged
 demand (fail-closed) and is carried as a theorem instance per side. On the OCCASION side it would
-be the costly act proceeding unguarded, so the loader refuses a nominal occasion outright
-(`CLAUSE-OCCASION-NOMINAL`): every occasion is `always`, a host tool enum, a topology, or an
-EFFECT read from the world (Theorem 8). A row carrying any of the three fields is refused
+be the costly act proceeding unguarded; on the GUARD side it is a list of spellings standing in
+for an observation. The loader refuses a nominal side in either direction
+(`CLAUSE-OCCASION-NOMINAL`, `CLAUSE-GUARD-NOMINAL`): every side is `always`, a host tool enum,
+or an EFFECT read from the world (Theorem 8). A row carrying any of the three fields is refused
 (`CLAUSE-CARRIES-AN-EXCUSE`).
 """
 from __future__ import annotations
@@ -42,21 +43,31 @@ class EverySideHasAClassAndAnInstance(unittest.TestCase):
         self.assertEqual(51, len(sides), "side count moved; re-measure rather than edit")
         census = collections.Counter(C.classify_side(p) for _, _, p in sides)
         # Re-MEASURE if this moves. It is here so a side quietly changing class faces a test.
-        self.assertEqual(dict(census), {"effect": 16, "nominal": 13, "tool-enum": 8, "always": 7,
-                                        "composed": 5, "topology": 2})
+        self.assertEqual(dict(census), {"effect": 31, "tool-enum": 8, "always": 7, "composed": 5})
         closure = collections.Counter(C.derive_closure(p) for _, _, p in sides)
-        self.assertEqual(closure["shipped"], 2, "U01/U02's guards name only Keel's own probe")
-        # Every open vocabulary is on a GUARD side, where a missing spelling fails closed (an
-        # undischarged demand). No occasion is open: the loader refuses one at load.
-        self.assertEqual(closure["open"], 11)
+        # No side is open or merely shipped: a guard is a host tool call or an observed effect,
+        # and the loader refuses a nominal side in either direction.
+        self.assertEqual(0, closure["open"] + closure["shipped"] + closure["nominal"])
         self.assertEqual([], [f"{cid}.{n}" for cid, n, p in sides
-                              if n != "discharged_by" and C.derive_closure(p) == "open"])
+                              if C.classify_side(p) not in C.AGNOSTIC_CLASSES])
 
-    def test_TEETH_shipped_means_every_name_is_ours(self) -> None:
-        for cid, name, predicate in _sides():
-            if C.derive_closure(predicate) == "shipped":
-                with self.subTest(side=f"{cid}.{name}"):
-                    self.assertTrue(set(C.vocabulary(predicate)) <= C.SHIPPED_PROGRAMS)
+    def test_TEETH_a_nominal_guard_is_refused(self) -> None:
+        """Put a program name back on U03's guard: the LOADER refuses the table."""
+        rows = json.loads(CLAUSES.read_text(encoding="utf-8"))
+        by = {r["id"]: r for r in rows}
+        by["U03"]["discharged_by"] = {"kind": "program", "on": "tool_input.command",
+                                     "names": ["ps", "pgrep"]}
+        by["U03"]["fixtures_discharge"] = ["ps aux"]
+        by["U03"]["fixtures_no_discharge"] = ["echo 'ps aux'"]
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, "clauses.json")
+            path.write_text(json.dumps(rows), encoding="utf-8")
+            with self.assertRaises(C.ClauseError) as caught:
+                C.load_bundle(path)
+        self.assertEqual("CLAUSE-GUARD-NOMINAL", caught.exception.code)
+        self.assertIn("U03", str(caught.exception))
 
     def test_TEETH_the_instance_covers_every_side_and_is_current(self) -> None:
         text = CLAUSES_V.read_text(encoding="utf-8")
@@ -85,12 +96,10 @@ class EverySideHasAClassAndAnInstance(unittest.TestCase):
             "CLAUSE-CARRIES-AN-EXCUSE")
 
     def test_the_loader_refuses_a_textual_side(self) -> None:
-        """Turn A01's guard back into a regex over the raw command: refused, with no exemption."""
+        """Turn A01's guard into a regex over the raw command: refused, with no exemption."""
         smoke_replace(
             self, CLAUSES,
-            b'"discharged_by": {\n      "kind": "program",\n      "on": "tool_input.command",\n'
-            b'      "argv": [\n        [\n          "git",\n          "status"\n        ]\n'
-            b'      ]\n    }',
+            b'"discharged_by": {\n      "kind": "effect",\n      "effect": "observed_read"\n    }',
             b'"discharged_by": {\n      "kind": "regex",\n      "on": "tool_input.command",\n'
             b'      "pattern": "git status"\n    }',
             "tests.test_derived_closure.EverySideHasAClassAndAnInstance."

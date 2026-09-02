@@ -5,41 +5,277 @@
     "tools": [
       "Bash"
     ],
-    "occasion": "Any act is about to run in a session with no `git status` on record. Before the act, a push is not distinguishable from anything else without its name (Theorem 3), so the guard is owed before the first act.",
+    "occasion": "Any act is about to run in a session where nothing has observed the worktree. Before the act, a push is not distinguishable from anything else without its name (Theorem 3), so the guard is owed before the first act.",
     "costly": "push without knowing what is staged or which branch is current",
-    "guard": "run `git status` first",
+    "guard": "Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`): the branch, HEAD and dirty paths Keel measured before the act",
     "subject": "session_id",
     "fingerprint": {
       "kind": "always"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "argv": [
-        [
-          "git",
-          "status"
-        ]
-      ]
+      "kind": "effect",
+      "effect": "observed_read"
     },
     "window": "session",
-    "deny_reason": "no `git status` on record this session; run `git status` first -- a push under any name would otherwise publish commits whose landing nobody checked",
+    "deny_reason": "no observation of the worktree on record this session; Read `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`) first -- a push under any name would otherwise publish commits whose landing nobody checked",
     "construction": "POINTS.md#a01",
     "fixtures_pos": [
-      "git status",
-      "git status --short"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_neg": [
-      "echo 'git status'",
-      "ls -la"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "cat ~/.claude/keel_state/observed.json"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git status"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": true,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "On branch main\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_discharge": [
-      "git status",
-      "git status --short"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'git status'",
-      "git stash"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "cat ~/.claude/keel_state/observed.json"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git status"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": true,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "On branch main\n",
+          "stderr": ""
+        }
+      }
     ]
   },
   {
@@ -48,58 +284,231 @@
     "tools": [
       "Bash"
     ],
-    "occasion": "Any act is about to run in a session where nothing has listed a set. A bulk delete is not distinguishable before it runs without its name (Theorem 3), so the enumeration is owed before the first act; the removal itself is observed afterwards by U20, with the pre-image retained.",
+    "occasion": "Any act is about to run in a session where nothing has listed a set. A bulk delete is not distinguishable before it runs without its name (Theorem 3), so the listing is owed before the first act; the removal itself is observed afterwards by U20, with the pre-image retained.",
     "costly": "delete a set whose members were never listed, so the loss leaves no record of what it was",
-    "guard": "list the set first (`ls`, `find` without -delete, or `git status`)",
+    "guard": "list the set first: the host Glob tool, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths",
     "subject": "session_id",
     "fingerprint": {
       "kind": "always"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "argv": [
-        [
-          "ls"
-        ],
-        [
-          "find"
-        ],
-        [
-          "du"
-        ],
-        [
-          "git",
-          "status"
-        ]
-      ],
-      "unless": [
-        "(^|&&|;|\\|)\\s*find\\b[^|;]*-delete"
+      "any_of": [
+        {
+          "kind": "effect",
+          "effect": "observed_read"
+        },
+        {
+          "kind": "regex",
+          "on": "tool_name",
+          "pattern": "^Glob$"
+        }
       ]
     },
     "window": "session",
-    "deny_reason": "nothing listed first this session; run `ls`, `find` (without -delete), `du` or `git status` so a later loss has a record",
+    "deny_reason": "nothing listed a set first this session; Glob, or Read `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), so a later loss has a record",
     "construction": "POINTS.md#a02",
     "fixtures_pos": [
-      "ls -la build/",
-      "find . -name '*.tmp'",
-      "git status",
-      "du -sh build"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Glob",
+        "tool_input": {
+          "pattern": "**/*.py"
+        }
+      }
     ],
     "fixtures_neg": [
-      "echo 'ls build/'",
-      "find . -name '*.tmp' -delete"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'ls -la'"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      }
     ],
     "_note": "Subject: the operand keyed per demand. A trailing-slash path when there is one; otherwise the destructive form itself, because `git clean -fd` and `find ... -delete` name no path and an unkeyable occasion makes this clause abstain rather than deny.",
     "fixtures_discharge": [
-      "ls -la",
-      "find . -name x",
-      "du -sh .",
-      "git status"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Glob",
+        "tool_input": {
+          "pattern": "**/*.py"
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'ls -la'",
-      "lsof"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'ls -la'"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      }
     ]
   },
   {
@@ -108,40 +517,269 @@
     "tools": [
       "Bash"
     ],
-    "occasion": "Any act is about to run in a session with no fetch on record. A force-push is not distinguishable before it runs without its name (Theorem 3), so the fetch is owed before the first act.",
+    "occasion": "Any act is about to run in a session where nothing has seen the remote tips. A force-push is not distinguishable before it runs without its name (Theorem 3), so the observation is owed before the first act.",
     "costly": "overwrite remote history that was never read, discarding commits with no local copy",
-    "guard": "fetch the ref first (`git fetch`)",
+    "guard": "see the remote tips first: Read Keel's `remote.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`); Keel lists the remote once per session and writes it there, and writes nothing when the remote cannot be listed",
     "subject": "session_id",
     "fingerprint": {
       "kind": "always"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "argv": [
-        [
-          "git",
-          "fetch"
-        ]
-      ]
+      "kind": "effect",
+      "effect": "remote_read"
     },
     "window": "session",
-    "deny_reason": "no `git fetch` on record this session; fetch first, so a force-push under any name cannot overwrite a tip that was never seen",
+    "deny_reason": "no observation of the remote tips on record this session; Read `remote.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`) first, so a force-push under any name cannot overwrite a tip that was never seen",
     "construction": "POINTS.md#a03",
     "fixtures_pos": [
-      "git fetch origin",
-      "git fetch"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/remote.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": true
+        }
+      }
     ],
     "fixtures_neg": [
-      "echo 'git fetch'",
-      "git status"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'git fetch origin'"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git fetch origin"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": true,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": true,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_discharge": [
-      "git fetch origin"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/remote.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": true
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'git fetch origin'",
-      "git fetchall"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'git fetch origin'"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git fetch origin"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": true,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": true,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      }
     ]
   },
   {
@@ -169,10 +807,8 @@
       "Read"
     ],
     "fixtures_neg": [
-      "Glob",
-      "Grep",
-      "Agent",
-      "Task"
+      "Write",
+      "Bash"
     ],
     "_fixture_note": "terminal clause: fixtures validate discharged_by, since the fingerprint is always",
     "activated_by": {
@@ -201,7 +837,7 @@
     ],
     "occasion": "the act printed a passing report datum, and that PASS may later be cited as licensing evidence",
     "costly": "accepting a checker PASS that has never demonstrated it can reject an invalid or absent input",
-    "guard": "run this same checker under a planted fault -- its own `*_can_fail` cell, a `--self-test`, or meta_test against it -- so its failure is observed, not assumed",
+    "guard": "run this same checker under a planted fault and see it FAIL: a failing report from the checker is the observation",
     "subject": "session_id",
     "fingerprint": {
       "kind": "always"
@@ -272,25 +908,11 @@
       }
     ],
     "discharged_by": {
-      "any_of": [
-        {
-          "kind": "effect",
-          "effect": "report_fail",
-          "event": "PostToolUse",
-          "tools": [
-            "Bash"
-          ]
-        },
-        {
-          "kind": "program",
-          "event": "PreToolUse",
-          "tools": [
-            "Bash"
-          ],
-          "on": "tool_input.command",
-          "pattern": "(?:pytest|unittest|[^\\s]*(?:check|verify)[^\\s]*\\.(?:py|sh))",
-          "then_matches": "(can_fail|--self-test|\\bself_test\\b|\\bmeta_test\\b)"
-        }
+      "kind": "effect",
+      "effect": "report_fail",
+      "event": "PostToolUse",
+      "tools": [
+        "Bash"
       ],
       "key_from": {
         "on": "tool_input.command",
@@ -299,7 +921,7 @@
       }
     },
     "window": "session, per normalized checker key",
-    "deny_reason": "a checker reported PASS and this same checker has not been seen FAILING this session; run it under a planted fault (its `*_can_fail` cell, `--self-test`, or meta_test) so a failure is observed, before citing the PASS",
+    "deny_reason": "a checker reported PASS and this same checker has not been seen FAILING this session; run it under a planted fault so its failing report is observed, before citing the PASS",
     "construction": "POINTS.md#c08-check-can-fail",
     "fixtures_pos": [
       {
@@ -326,13 +948,6 @@
           "report_fail": true,
           "head_switched": false
         }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "pytest -q tests/test_x_can_fail.py"
-        }
       }
     ],
     "fixtures_neg": [
@@ -365,11 +980,18 @@
         "hook_event_name": "PreToolUse",
         "tool_name": "Bash",
         "tool_input": {
+          "command": "pytest -q tests/test_x_can_fail.py"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
           "command": "echo 'pytest --self-test'"
         }
       }
     ],
-    "_fixture_note": "terminal keyed clause: fixtures_pos/neg validate the PostToolUse failure guard; fixtures_activate validate checker recognition. The guard reads tool_response.exit_code under kind=nonzero -- read that off `discharged_by`, not off this sentence.\n\nCORRECTED, and the correction is the point. This note previously said the guard 'reads tool_response as TEXT, not tool_response.exit_code' and that a FAILING call yields the STRING 'Error: Exit code N'. Both were stale: the first described a regex guard the table has not shipped for some time, and the second is contradicted by the waiver directly below it, which measured raw hook payloads and found that form to be the TRANSCRIPT's rendering of a failed call rather than anything the hook receives. The two claims sat side by side, and the stale one pointed the wrong way: a reader deciding renewal from it concludes the host DOES ship a status and deletes the waiver. That is the expensive direction, reached from the clause's own file.\n\nThe 2279-tool-result census the old note cited is NOT re-stated here, because its source is not identified and cannot be re-run; treat it as withdrawn rather than as evidence. The waiver's 71-payload measurement names its source and stands until re-measured.\n\nNEITHER number is reproducible from this repository today, which is the real defect behind this clause being the only one of 24 that does not enforce. `plugin/keel/recorder.py` and `tools/payload_census.py` exist so the next reader does not have to take either on trust: enable KEEL_RECORD_SHAPES in a session with the plugin installed, exercise a succeeding AND a failing command, and run the census. It prints its denominator and refuses a verdict on zero payloads. Decide this waiver against that table, never against prose -- including this paragraph.",
+    "_fixture_note": "The guard is the effect `report_fail` on a PostToolUse Bash record keyed by the checker; a can-fail cell that swallows the failure into its own PASS is not an observation Keel can make, so running the checker under the fault directly is what pays it.",
     "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PreToolUse activation records the normalized checker command as its own obligation; only a nonzero PostToolUse for the equal key discharges it. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py.",
     "fixtures_discharge": [
       {
@@ -396,13 +1018,6 @@
           "report_fail": true,
           "head_switched": false
         }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "pytest -q tests/test_x_can_fail.py"
-        }
       }
     ],
     "fixtures_no_discharge": [
@@ -435,6 +1050,13 @@
         "hook_event_name": "PreToolUse",
         "tool_name": "Bash",
         "tool_input": {
+          "command": "pytest -q tests/test_x_can_fail.py"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
           "command": "echo 'pytest --self-test'"
         }
       }
@@ -442,61 +1064,292 @@
   },
   {
     "id": "C09-checker-excludes-self",
-    "event": "PreToolUse",
+    "event": "PostToolUse",
     "tools": [
       "Bash"
     ],
-    "occasion": "the trace is about to infer process presence from a ps pipeline whose checker can appear in its own result",
+    "occasion": "the act printed a process listing that contains a segment of its own command -- the checker appeared in its own result, by whatever program",
     "costly": "count or trust a grep-shaped process match without excluding the observer identity",
-    "guard": "run a process listing filtered by the shell or checker PID before trusting the match",
+    "guard": "produce a listing that excludes the observer: the output holds live pids and none of the act's own command text",
     "subject": "session_id",
     "fingerprint": {
-      "kind": "pipeline",
-      "on": "tool_input.command",
-      "upstream": {
-        "names": [
-          "ps"
-        ]
-      },
-      "operator": "|",
-      "downstream_matches": "^(?:grep|rg)\\b"
+      "kind": "effect",
+      "effect": "report_self"
     },
     "discharged_by": {
-      "kind": "pipeline",
-      "on": "tool_input.command",
-      "upstream": {
-        "names": [
-          "ps"
-        ]
-      },
-      "operator": "|",
-      "downstream_matches": "(?:^(?:grep|rg)\\b[^\\n]*(?:-v|--invert-match)[^\\n]*(?:\\$\\$|\\$BASHPID|self_pid|SELF_PID)|^awk\\b[^\\n]*(?:\\$\\$|\\$BASHPID|self_pid|SELF_PID)[^\\n]*(?:!=|!~))"
+      "kind": "effect",
+      "effect": "report_listing"
     },
     "window": "session",
-    "deny_reason": "trust a ps pipeline that can match its own checker; first filter the listing with grep -v/rg --invert-match or awk using $$, $BASHPID, or an explicit self_pid",
+    "deny_reason": "a process listing contained its own checker; before the next act, produce a listing that excludes the observer (pids present, the act's own command text absent) so a match is not the observer",
     "construction": "POINTS.md#c09-checker-excludes-self",
     "fixtures_pos": [
-      "ps aux | grep worker",
-      "ps -ef | rg queue-runner",
-      "ps ax | grep node | wc -l"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "ps aux | grep worker"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": true,
+          "report_self": true,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "root 41 grep worker\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_neg": [
-      "pgrep -af worker",
-      "pkill -f stale-worker",
-      "ps -eo pid,comm | awk -v self_pid=$$ '$1 != self_pid'",
-      "systemctl is-active worker.service"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pgrep -af worker"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": true,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": true,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "41 worker\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "systemctl is-active worker.service"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "active\n",
+          "stderr": ""
+        }
+      }
     ],
-    "_note": "Admission test: a checker included in its own observation can create a stable false-positive process count. That apparent presence is then used as fact, and repeated checks reproduce the same observer contamination; doing nothing never reveals the absent target. Recovery requires interrupting the accepted result and rerunning from a correctly separated observer, effectively restarting the decision path (3). The verdict's broad pgrep/pkill/killall branch is narrowed away because it does not require a grep process in a ps pipeline and would interrupt ordinary process operations unrelated to self-inclusion. The remaining fingerprint names the concrete self-match surface, while the guard requires an identity-bearing inverted filter rather than a name-only grep trick.",
+    "_note": "Admission test: a checker included in its own observation can create a stable false-positive process count. That apparent presence is then used as fact, and repeated checks reproduce the same observer contamination; doing nothing never reveals the absent target. Recovery requires interrupting the accepted result and rerunning from a correctly separated observer, effectively restarting the decision path (3). The verdict's broad pgrep/pkill/killall branch is narrowed away because it does not require a grep process in a ps pipeline and would interrupt ordinary process operations unrelated to self-inclusion. The remaining fingerprint names the concrete self-match surface, while the guard requires an identity-bearing inverted filter rather than a name-only grep trick. Re-covered: both sides are effects read off the listing itself, so the observer's presence is a datum, not a pipe shape.",
     "fixtures_discharge": [
-      "ps aux | grep -v $$",
-      "ps -eo pid,comm | awk -v self_pid=$$ '$1 != self_pid'",
-      "ps aux | grep node | grep -v $$"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pgrep -af worker"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": true,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": true,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "41 worker\n42 worker\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'ps aux | grep -v $$'",
-      "ps aux ; grep -v $$",
-      "ps aux || grep -v $$",
-      "ps aux | grep worker"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "ps aux | grep worker"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": true,
+          "report_self": true,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "root 41 grep worker\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'ps aux | grep -v $$'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "ps aux | grep -v $$\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "ps aux | grep -v $$"
+        }
+      }
     ]
   },
   {
@@ -643,39 +1496,192 @@
     ],
     "occasion": "The run is ending. An ending that is incomplete but looks complete is what stops the work, so the tell must be checked before stopping, not after.",
     "costly": "declare the run finished without ever asking the tree whether it is",
-    "guard": "run `git status` at least once this session",
+    "guard": "Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), at least once this session",
     "subject": "session_id",
     "fingerprint": {
       "kind": "always"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "argv": [
-        [
-          "git",
-          "status"
-        ]
-      ]
+      "kind": "effect",
+      "effect": "observed_read"
     },
     "window": "session",
-    "deny_reason": "ending with no `git status` on record: dirty is unfinished, and an ending nobody checked is the one that looks complete",
+    "deny_reason": "ending with no observation of the worktree on record: dirty is unfinished, and an ending nobody checked is the one that looks complete; Read `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`)",
     "construction": "POINTS.md#t01",
     "fixtures_pos": [
-      "git status --short",
-      "git status"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_neg": [
-      "git commit -m done",
-      "git log --oneline -3"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'git status'"
+        }
+      }
     ],
     "_fixture_note": "terminal clause: fixtures validate discharged_by (the guard), since the fingerprint is `always`",
     "fixtures_discharge": [
-      "git status"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'git status'",
-      "git diff"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'git status'"
+        }
+      }
     ]
   },
   {
@@ -808,22 +1814,18 @@
     ],
     "occasion": "a process that did not exist before the act is still running after it -- a worker launched by whatever program",
     "costly": "launch a nested worker",
-    "guard": "run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --writable-home --response-transport --result-write`",
+    "guard": "run a capability probe of the worker after the launch and see it report PASS -- Keel's own `tools/probe_child_capability.py`, or any probe printing a report",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "pids_spawned"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "probe_child_capability.py"
-      ],
-      "then_matches": "--writable-home[^\\n]*--response-transport[^\\n]*--result-write\\b"
+      "kind": "effect",
+      "effect": "report_pass"
     },
     "window": "session",
-    "deny_reason": "a worker was launched and the child-capability probe has not run this session; run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --writable-home --response-transport --result-write` before the next act",
+    "deny_reason": "a worker was launched and no probe has reported PASS since; run a capability probe (Keel ships `tools/probe_child_capability.py`) before the next act",
     "construction": "POINTS.md#u01",
     "fixtures_pos": [
       {
@@ -909,11 +1911,99 @@
       }
     ],
     "fixtures_discharge": [
-      "probe_child_capability.py --writable-home /t --response-transport pipe --result-write"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "python3 tools/probe_child_capability.py --writable-home /t"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "PASS\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'probe_child_capability.py --writable-home /t --result-write'",
-      "probe_child_capability.py --writable-home /t"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'PASS'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "python3 tools/probe_child_capability.py"
+        }
+      }
     ]
   },
   {
@@ -924,7 +2014,7 @@
     ],
     "occasion": "a worker was launched and this session had already launched one -- a re-launch, by whatever program",
     "costly": "re-launch a nested-worker target",
-    "guard": "run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --target TARGET --after-failure --require-change`",
+    "guard": "after a failure, change something, then run the target's probe and see it report PASS",
     "subject": {
       "on": "tool_input.command",
       "pattern": "(?:dispatch\\.sh|--target)\\s+([A-Za-z0-9][\\w.-]*)\\b",
@@ -935,15 +2025,11 @@
       "effect": "pids_spawned_again"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "probe_child_capability.py"
-      ],
-      "then_matches": "--target\\s+\\S+[^\\n]*--after-failure[^\\n]*--require-change\\b"
+      "kind": "effect",
+      "effect": "report_after_change"
     },
     "window": "session",
-    "deny_reason": "a worker was re-launched and nothing proved its target changed since the failure; run `python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\" --target TARGET --after-failure --require-change` before the next act",
+    "deny_reason": "a worker was re-launched and nothing proved its target changed since the failure: change something, then run the target's probe to a PASS, before the next act",
     "construction": "POINTS.md#u02",
     "fixtures_pos": [
       {
@@ -1029,11 +2115,99 @@
       }
     ],
     "fixtures_discharge": [
-      "probe_child_capability.py --target x --after-failure retry --require-change"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "probe --target x"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": true,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "PASS\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'probe_child_capability.py --target x --require-change'",
-      "probe_child_capability.py --target x"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "probe --target x"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "PASS\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "probe --target x --after-failure"
+        }
+      }
     ]
   },
   {
@@ -1044,22 +2218,26 @@
     ],
     "occasion": "a process that was running before the act is not running after it -- ended by whatever program, or none",
     "costly": "use a PID in a signal operation",
-    "guard": "run `ps`, `pgrep`, or an equivalent observer-namespace process listing",
+    "guard": "produce a process listing: an output that holds at least two live pids, from whatever program, or Read Keel's `observed.json`, which lists the session's processes",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "pids_gone"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "ps",
-        "pgrep"
+      "any_of": [
+        {
+          "kind": "effect",
+          "effect": "report_pids"
+        },
+        {
+          "kind": "effect",
+          "effect": "observed_read"
+        }
       ]
     },
     "window": "session",
-    "deny_reason": "a running process was ended and nothing in this session had listed processes; run `ps` or `pgrep` now, before the next act, so the process ended is a known one",
+    "deny_reason": "a running process was ended and nothing in this session had listed processes; produce a listing (live pids in the output) before the next act, so the process ended is a known one",
     "construction": "POINTS.md#u03",
     "fixtures_pos": [
       {
@@ -1145,12 +2323,175 @@
       }
     ],
     "fixtures_discharge": [
-      "ps aux",
-      "pgrep -f worker"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "ps aux"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": true,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "root 1 init\nroot 41 worker\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'ps aux'",
-      "psql"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'ps aux'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "ps aux\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "ps aux"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      }
     ]
   },
   {
@@ -1161,22 +2502,18 @@
     ],
     "occasion": "the act opened an outbound connection -- through whatever program",
     "costly": "send a mutating request to an external service",
-    "guard": "run an authenticated read canary such as `curl ... -H 'Authorization: ...'`",
+    "guard": "run a read of the network that changes nothing and reports no failure -- an authenticated read canary",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "net_out"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "curl"
-      ],
-      "then_matches": "(?:-H|--header)\\s+[\\\"']?Authorization:"
+      "kind": "effect",
+      "effect": "net_read"
     },
     "window": "session",
-    "deny_reason": "an outbound connection was made with no authenticated read canary on record; run one (a read with an Authorization header) before the next act",
+    "deny_reason": "an outbound connection was made with no network read on record; run a read canary (a connection that changes nothing and reports no failure) before the next act",
     "construction": "POINTS.md#u06",
     "fixtures_pos": [
       {
@@ -1260,11 +2597,97 @@
       }
     ],
     "fixtures_discharge": [
-      "curl -H 'Authorization: Bearer t' https://x"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "curl -H 'Authorization: Bearer t' https://x"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": true,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": true,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "{}",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo \"curl -H 'Authorization: Bearer t' https://x\"",
-      "curl https://x"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "curl -X POST https://x"
+        },
+        "keel_effect": {
+          "files_changed": [
+            "out"
+          ],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": true,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "curl https://x"
+        }
+      }
     ]
   },
   {
@@ -1275,22 +2698,18 @@
     ],
     "occasion": "the act created a signed commit -- through whatever program",
     "costly": "create a signed git commit",
-    "guard": "run a signer canary such as `printf test | gpg --clearsign`",
+    "guard": "produce a signature datum: sign something and see the signature block, or verify one",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "commit_signed"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "gpg"
-      ],
-      "then_matches": "(--clearsign\\b|--detach-sign\\b)"
+      "kind": "effect",
+      "effect": "report_signature"
     },
     "window": "session",
-    "deny_reason": "a signed commit was created and no signer canary is on record; run `printf test | gpg --clearsign` before the next act",
+    "deny_reason": "a signed commit was created and no signature datum is on record; sign something (`printf test | gpg --clearsign`, or any signer) so the signature block is observed, before the next act",
     "construction": "POINTS.md#u08",
     "fixtures_pos": [
       {
@@ -1372,12 +2791,99 @@
       }
     ],
     "fixtures_discharge": [
-      "gpg --clearsign f",
-      "gpg --detach-sign f"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "printf test | gpg --clearsign"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": true,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "-----BEGIN PGP SIGNATURE-----\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'gpg --clearsign f'",
-      "gpg --list-keys"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "gpg --list-keys"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "pub rsa\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "printf test | gpg --clearsign"
+        }
+      }
     ]
   },
   {
@@ -1388,32 +2894,26 @@
     ],
     "occasion": "HEAD moved to a commit that already existed -- a switch or checkout, through whatever program",
     "costly": "switch or check out a git ref",
-    "guard": "know the ref exists: `git rev-parse --verify REF`, or have created it yourself with `git checkout -b/-B REF` or `git branch REF`",
+    "guard": "know the ref: a quiet act that prints the ref name or commit id the ref snapshot holds (`git rev-parse --verify REF`, `git branch`, `git show-ref`, or any listing of refs), or Read Keel's `observed.json`, which carries the refs",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "head_switched"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "argv": [
-        [
-          "git",
-          "rev-parse"
-        ],
-        [
-          "git",
-          "branch"
-        ],
-        [
-          "git",
-          "show-ref"
-        ]
+      "any_of": [
+        {
+          "kind": "effect",
+          "effect": "report_ref"
+        },
+        {
+          "kind": "effect",
+          "effect": "observed_read"
+        }
       ]
     },
     "window": "session",
-    "deny_reason": "HEAD moved to a ref nothing in this session verified or created; run `git rev-parse --verify REF`, `git branch` or `git show-ref` before the next act",
+    "deny_reason": "HEAD moved to a ref nothing in this session observed; print the ref (`git rev-parse --verify REF`, `git branch`, `git show-ref`) before the next act",
     "construction": "POINTS.md#u09",
     "_natural_guard": "Creating a ref is discharged by work someone actually does: `git checkout -B REF origin/main` is how a session makes the branch it later returns to, and creation is the strongest possible proof the ref exists. Measured on the frozen corpus: the sole U09 denial checked out `claude/gyroscope-terminal-clauses`, a branch the same session had created 12 calls earlier with `git checkout -B` -- the guard was already run, under a name the old discharged_by refused to see. `git rev-parse --verify` remains the explicit probe for refs the session did not make.",
     "fixtures_pos": [
@@ -1523,13 +3023,175 @@
       }
     ],
     "fixtures_discharge": [
-      "git rev-parse --verify main",
-      "git branch --show-current",
-      "git show-ref --verify refs/heads/main"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git rev-parse --verify main"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": true,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "4969418917\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/observed.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": true,
+          "remote_read": false
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'git rev-parse --verify main'",
-      "git revert HEAD"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'git rev-parse --verify main'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "git rev-parse --verify main\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git branch"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/home/operator/.claude/keel_state/other.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        }
+      }
     ]
   },
   {
@@ -1541,7 +3203,7 @@
     ],
     "occasion": "the act printed a null datum, or nothing at all while reading a structured file -- through whatever program",
     "costly": "traverse structured JSON data",
-    "guard": "look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file",
+    "guard": "look at the structure first: a query on the same file that prints a non-null JSON datum (`jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`), or Read the file",
     "subject": {
       "on": [
         "tool_input.command",
@@ -1557,12 +3219,8 @@
     "discharged_by": {
       "any_of": [
         {
-          "kind": "program",
-          "on": "tool_input.command",
-          "names": [
-            "jq"
-          ],
-          "then_matches": "(\\s-e\\b|\\bkeys\\b|\\btype\\b|\\bhas\\s*\\()"
+          "kind": "effect",
+          "effect": "report_structured"
         },
         {
           "kind": "regex",
@@ -1572,7 +3230,7 @@
       ]
     },
     "window": "session",
-    "deny_reason": "a traversal of structured data produced null; look at the structure before the next act: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or Read the file",
+    "deny_reason": "a traversal of structured data produced null; look at the structure before the next act: print a non-null JSON datum from the file (`jq 'keys'`, `jq 'type'`), or Read the file",
     "construction": "POINTS.md#u10",
     "fixtures_pos": [
       {
@@ -1655,27 +3313,111 @@
     ],
     "_natural_guard": "The old guard demanded specifically `jq -e` with a type/has assertion -- a ritual observed 0 times in 2152 real Bash calls. The observation people actually make before traversing a JSON file is `jq 'keys'` or `jq 'type'` on it: measured on the frozen corpus, the session ran `jq 'keys' FILE` before every per-file traversal chain (e.g. call 2100 `jq 'keys' calibration_preregistered.json` precedes 2104 `jq 'del(.tasks)'` on the same file). That look is the guard -- it answers the same question (what shape is this document) and is discharged by work that is already part of the job. `jq -e` still discharges. COMPOSED over the host surface, the same move U12 and U19 took to Grep: reading the file IS looking at its structure, and `Read` is a CLOSED host enum, so naming it retires a vocabulary instead of widening one -- a `jq`-only guard is monotone in vocabulary (Coverings.v Thm 5) and is defeated by inspecting the file any other way. The subject had to move with it: a Read carries its file in `tool_input.file_path`, not in a command, so with a single-field subject the composed guard would key to \"\" and discharge nothing.",
     "fixtures_discharge": [
-      "jq -e . f.json",
-      "jq 'keys' f.json",
-      "jq 'type' f.json",
-      "jq 'has(\"k\")' f.json",
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "jq keys payload.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": true,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "[\"a\"]",
+          "stderr": ""
+        }
+      },
       {
         "hook_event_name": "PreToolUse",
         "tool_name": "Read",
         "tool_input": {
-          "file_path": "f.json"
+          "file_path": "payload.json"
         }
       }
     ],
     "fixtures_no_discharge": [
-      "echo 'jq -e . f.json'",
-      "jq . f.json",
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "jq .name payload.json"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": true,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "null\n",
+          "stderr": ""
+        }
+      },
       {
         "hook_event_name": "PreToolUse",
         "tool_name": "Write",
         "tool_input": {
-          "file_path": "f.json",
-          "content": "{}"
+          "file_path": "payload.json"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "jq keys payload.json"
         }
       }
     ]
@@ -1688,7 +3430,7 @@
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "apply a patch",
-    "guard": "run `rg`/`grep` for the patch context and read the target immediately before applying",
+    "guard": "look at the target before applying: Grep or Read it, or print its path from the worktree (`git diff`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds)",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
@@ -1697,41 +3439,23 @@
     "discharged_by": {
       "any_of": [
         {
-          "kind": "program",
-          "on": "tool_input.command",
-          "names": [
-            "rg",
-            "grep"
-          ]
-        },
-        {
           "kind": "regex",
           "on": "tool_name",
           "pattern": "^Grep$"
         },
         {
-          "kind": "program",
-          "on": "tool_input.command",
-          "argv": [
-            [
-              "git",
-              "diff"
-            ],
-            [
-              "git",
-              "show"
-            ]
-          ]
-        },
-        {
           "kind": "regex",
           "on": "tool_name",
           "pattern": "^Read$"
+        },
+        {
+          "kind": "effect",
+          "effect": "report_paths"
         }
       ]
     },
     "window": "session",
-    "deny_reason": "a Bash call changed file content and nothing in this session searched the context or read the target; look at what changed (`git diff`, `rg`/`grep`, Grep, or Read) before the next act -- the pre-image is retained",
+    "deny_reason": "a Bash call changed file content and nothing in this session looked at the target; Grep, Read, or print what changed (`git diff`, `rg`/`grep`) before the next act -- the pre-image is retained",
     "construction": "POINTS.md#u12",
     "fixtures_pos": [
       {
@@ -1847,47 +3571,117 @@
     "fixtures_discharge": [
       {
         "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "rg pattern src/"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "grep -rn pattern src/"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
         "tool_name": "Grep",
         "tool_input": {
           "pattern": "x",
           "path": "."
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git diff --stat"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": true,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": " src/a.py | 2 +-\n",
+          "stderr": ""
         }
       }
     ],
     "fixtures_no_discharge": [
       {
         "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "echo 'rg pattern src/'"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "rgb"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
         "tool_name": "Write",
         "tool_input": {
           "file_path": "/x"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'rg pattern src/'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "rg pattern src/\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "rg pattern src/"
         }
       }
     ]
@@ -1900,7 +3694,7 @@
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "apply a generated patch",
-    "guard": "run `git apply --check PATCH` first",
+    "guard": "look at what the patch touches first: Read the target, or print its path from the worktree (`git diff`, `git apply --stat`)",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
@@ -1909,39 +3703,18 @@
     "discharged_by": {
       "any_of": [
         {
-          "kind": "program",
-          "on": "tool_input.command",
-          "argv": [
-            [
-              "git",
-              "apply"
-            ]
-          ],
-          "then_matches": "--check\\b"
-        },
-        {
-          "kind": "program",
-          "on": "tool_input.command",
-          "argv": [
-            [
-              "git",
-              "diff"
-            ],
-            [
-              "git",
-              "show"
-            ]
-          ]
-        },
-        {
           "kind": "regex",
           "on": "tool_name",
           "pattern": "^Read$"
+        },
+        {
+          "kind": "effect",
+          "effect": "report_paths"
         }
       ]
     },
     "window": "session",
-    "deny_reason": "a Bash call changed file content the way a patch does and no dry run is on record; look at what changed (`git diff`, or `git apply --check` on the patch) before the next act -- the pre-image is retained",
+    "deny_reason": "a Bash call changed file content the way a patch does and nothing looked at the target; Read it, or print what changed (`git diff`, `git apply --stat`) before the next act -- the pre-image is retained",
     "construction": "POINTS.md#u13",
     "fixtures_pos": [
       {
@@ -2055,11 +3828,113 @@
       }
     ],
     "fixtures_discharge": [
-      "git apply --check p.diff"
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git apply --stat p.diff"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": true,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": " a.txt | 1 +\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'git apply --check p.diff'",
-      "git apply p.diff"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'git apply --check p.diff'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "git apply --check p.diff\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git apply p.diff"
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      }
     ]
   },
   {
@@ -2070,7 +3945,7 @@
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "perform an in-place text rewrite",
-    "guard": "look at the text you are about to rewrite: `rg`/`grep` for the pattern, or `cmp`/checksum the file",
+    "guard": "look at the text you are about to rewrite: Grep or Read it, or print its path from the worktree (`git diff`, `cmp`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds)",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
@@ -2079,45 +3954,23 @@
     "discharged_by": {
       "any_of": [
         {
-          "kind": "program",
-          "on": "tool_input.command",
-          "names": [
-            "cmp",
-            "sha256sum",
-            "shasum",
-            "rg",
-            "grep",
-            "diff"
-          ]
-        },
-        {
           "kind": "regex",
           "on": "tool_name",
           "pattern": "^Grep$"
         },
         {
-          "kind": "program",
-          "on": "tool_input.command",
-          "argv": [
-            [
-              "git",
-              "diff"
-            ],
-            [
-              "git",
-              "show"
-            ]
-          ]
-        },
-        {
           "kind": "regex",
           "on": "tool_name",
           "pattern": "^Read$"
+        },
+        {
+          "kind": "effect",
+          "effect": "report_paths"
         }
       ]
     },
     "window": "session",
-    "deny_reason": "a Bash call rewrote file content nobody had looked at; look at what changed (`git diff`, `cmp`/checksum, `rg`/`grep`, Grep, or Read) before the next act -- the pre-image is retained",
+    "deny_reason": "a Bash call rewrote file content nobody had looked at; Grep, Read, or print what changed (`git diff`, `cmp`, `rg`/`grep`) before the next act -- the pre-image is retained",
     "construction": "POINTS.md#u19",
     "fixtures_pos": [
       {
@@ -2234,75 +4087,117 @@
     "fixtures_discharge": [
       {
         "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "cmp a b"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "sha256sum f"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "shasum -a 256 f"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "rg x f"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "grep x f"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "diff a b"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
         "tool_name": "Grep",
         "tool_input": {
           "pattern": "x",
           "path": "."
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {
+          "file_path": "/x"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "git diff --stat"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": true,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": " src/a.py | 2 +-\n",
+          "stderr": ""
         }
       }
     ],
     "fixtures_no_discharge": [
       {
         "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "echo 'cmp a b'"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {
-          "command": "cmpxchg"
-        }
-      },
-      {
-        "hook_event_name": "PreToolUse",
         "tool_name": "Write",
         "tool_input": {
           "file_path": "/x"
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'rg pattern src/'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "rg pattern src/\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "rg pattern src/"
         }
       }
     ]
@@ -2315,7 +4210,7 @@
     ],
     "occasion": "a file that existed before the act is gone after it, or HEAD was reset to an ancestor with the worktree changed -- destroyed by whatever program",
     "costly": "make a destructive behavior-changing mutation",
-    "guard": "run an independent behavior observer such as the relevant test or probe first",
+    "guard": "run an independent behavior observer first: any verifier that prints a report, PASS or FAIL",
     "subject": "session_id",
     "fingerprint": {
       "any_of": [
@@ -2330,29 +4225,19 @@
       ]
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "names": [
-        "pytest",
-        "curl"
-      ],
-      "argv": [
-        [
-          "go",
-          "test"
-        ],
-        [
-          "cargo",
-          "test"
-        ],
-        [
-          "npm",
-          "test"
-        ]
+      "any_of": [
+        {
+          "kind": "effect",
+          "effect": "report_pass"
+        },
+        {
+          "kind": "effect",
+          "effect": "report_fail"
+        }
       ]
     },
     "window": "session",
-    "deny_reason": "content was destroyed and no independent behaviour observer ran first; run the relevant test or probe before the next act -- the pre-image is retained in the snapshot tree",
+    "deny_reason": "content was destroyed and no independent behaviour observer ran first; run the relevant test or probe (a report, PASS or FAIL) before the next act -- the pre-image is retained in the snapshot tree",
     "construction": "POINTS.md#u20",
     "fixtures_pos": [
       {
@@ -2491,15 +4376,183 @@
     ],
     "_absorbed_from_U17": "U17 (preview-the-selector, quarantined at 29/30 candidate FP) covered `find -delete` where A02's dir-keyed extractor abstains. The occasion is conserved here: a selector-driven delete is a destructive behavior-changing mutation, and U20's guard -- run the relevant test or probe first -- is the guard real work performs (measured 0 candidate FP, 8 true positives on the frozen corpus).",
     "fixtures_discharge": [
-      "go test ./...",
-      "cargo test",
-      "npm test",
-      "pytest -q",
-      "curl https://x"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "go test ./..."
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "ok  pkg 0.1s\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pytest -q"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": true,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "1 failed\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'go test ./...'",
-      "go build ./..."
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "go build ./..."
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'go test ./...'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "go test ./...\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pytest -q"
+        }
+      }
     ]
   },
   {
@@ -2510,51 +4563,18 @@
     ],
     "occasion": "the act opened an outbound connection -- a publish reaches its registry through one, under whatever program",
     "costly": "publish or release an artifact after runtime testing",
-    "guard": "run the suite with warnings promoted to errors on a supported runtime",
+    "guard": "run the suite so that a warning would have failed it: a passing report with no warning line",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "net_out"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "any_of": [
-        {
-          "names": [
-            "pytest",
-            "tox",
-            "nox",
-            "unittest",
-            "cargo",
-            "npm",
-            "pnpm",
-            "yarn",
-            "go",
-            "node"
-          ],
-          "env": {
-            "PYTHONWARNINGS": "error",
-            "RUSTFLAGS": "-Dwarnings",
-            "NODE_OPTIONS": "--throw-deprecation"
-          }
-        },
-        {
-          "names": [
-            "pytest",
-            "unittest",
-            "nox",
-            "tox"
-          ],
-          "opts": [
-            "^-W\\s*error",
-            "^-Werror"
-          ]
-        }
-      ]
+      "kind": "effect",
+      "effect": "report_nowarn"
     },
     "window": "session",
-    "deny_reason": "an outbound connection was made and no suite ran with warnings promoted to errors this session; run it before the next act",
+    "deny_reason": "an outbound connection was made and no warning-free passing run is on record this session; run the suite with warnings promoted to errors before the next act",
     "construction": "POINTS.md#u24",
     "fixtures_pos": [
       {
@@ -2636,16 +4656,141 @@
       }
     ],
     "fixtures_discharge": [
-      "python -W error -m pytest",
-      "PYTHONWARNINGS=error pytest",
-      "RUSTFLAGS=\"-Dwarnings\" cargo test"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "PYTHONWARNINGS=error pytest -q"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": true,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "40 passed\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'python -W error -m pytest'",
-      "python -m pytest",
-      "echo 'note; PYTHONWARNINGS=error pytest'",
-      "grep -rn 'x; PYTHONWARNINGS=error' notes.md",
-      "pytest -q"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pytest -q"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "1 warning\n40 passed\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'PYTHONWARNINGS=error pytest'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "PYTHONWARNINGS=error pytest\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "PYTHONWARNINGS=error pytest"
+        }
+      }
     ]
   },
   {
@@ -2656,50 +4801,18 @@
     ],
     "occasion": "the act printed a scanner-report datum with no findings -- from whatever scanner",
     "costly": "run a scanner as an acceptance check",
-    "guard": "run its prefix-distractor regression test first",
+    "guard": "see the scanner find something: run it against its prefix-distractor regression so a report with findings is observed",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "report_clean"
     },
     "discharged_by": {
-      "kind": "program",
-      "on": "tool_input.command",
-      "any_of": [
-        {
-          "names": [
-            "pytest",
-            "unittest"
-          ],
-          "args": [
-            "prefix",
-            "distractor"
-          ]
-        },
-        {
-          "argv": [
-            [
-              "go",
-              "test"
-            ],
-            [
-              "cargo",
-              "test"
-            ],
-            [
-              "npm",
-              "test"
-            ]
-          ],
-          "args": [
-            "prefix",
-            "distractor"
-          ]
-        }
-      ]
+      "kind": "effect",
+      "effect": "report_fail"
     },
     "window": "session",
-    "deny_reason": "a scan reported clean and its prefix-distractor regression has not been seen this session; run it before the next act",
+    "deny_reason": "a scan reported clean and this session has not seen a scanner report findings; run its prefix-distractor regression (a report with findings) before the next act",
     "construction": "POINTS.md#u25",
     "fixtures_pos": [
       {
@@ -2781,13 +4894,141 @@
       }
     ],
     "fixtures_discharge": [
-      "pytest -k prefix",
-      "go test -run distractor"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pytest -k prefix"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": true,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "1 failed\n",
+          "stderr": ""
+        }
+      }
     ],
     "fixtures_no_discharge": [
-      "echo 'pytest -k prefix'",
-      "pytest -q",
-      "grep -rn 'pytest -k prefix' notes.md"
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pytest -q"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": true,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "2 passed\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo 'pytest -k prefix'"
+        },
+        "keel_effect": {
+          "files_changed": [],
+          "files_removed": [],
+          "head_moved": false,
+          "head_switched": false,
+          "head_reset": false,
+          "commit_signed": false,
+          "remote_ref_moved": [],
+          "remote_landed": null,
+          "pids_gone": [],
+          "pids_spawned": [],
+          "pids_spawned_again": false,
+          "net_out": false,
+          "report_null": false,
+          "report_pass": false,
+          "report_clean": false,
+          "report_fail": false,
+          "report_ref": false,
+          "report_paths": false,
+          "report_pids": false,
+          "report_self": false,
+          "report_structured": false,
+          "report_signature": false,
+          "report_nowarn": false,
+          "fetch_head_written": false,
+          "net_read": false,
+          "report_after_change": false,
+          "report_listing": false,
+          "observed_read": false,
+          "remote_read": false
+        },
+        "tool_response": {
+          "stdout": "pytest -k prefix\n",
+          "stderr": ""
+        }
+      },
+      {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "pytest -k prefix"
+        }
+      }
     ]
   }
 ]

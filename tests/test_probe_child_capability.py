@@ -55,8 +55,8 @@ def run(*argv: str, home: str | None = None, state: str | None = None):
 
 class TheProbeExists(unittest.TestCase):
     def test_the_file_the_clauses_name_is_shipped(self) -> None:
-        """The whole defect in one assertion: the discharge named a file nobody had written."""
-        self.assertTrue(PROBE.is_file(), f"{PROBE} is what U01 and U02 discharge on")
+        """The whole defect in one assertion: the remedy named a file nobody had written."""
+        self.assertTrue(PROBE.is_file(), f"{PROBE} is the probe U01's remedy names")
 
     def test_it_ships_inside_the_plugin(self) -> None:
         """It must install with the plugin, not sit in the development tree only.
@@ -101,50 +101,6 @@ class TheProbeRuns(unittest.TestCase):
 
     def test_require_change_needs_its_subject(self) -> None:
         self.assertNotEqual(0, run("--require-change", "--after-failure").returncode)
-
-
-class EveryGuardIsRunnable(unittest.TestCase):
-    """Generalised from the defect, so the next one fails here instead of in a user's session.
-
-    `U01` and `U02` were found by reading. Two mechanical properties would have caught them on the
-    day they landed, and neither existed:
-
-      (a) a file a guard tells the operator to run must be shipped;
-      (b) the command a guard tells the operator to run must satisfy that clause's OWN discharge
-          pattern -- otherwise the operator obeys the instruction exactly and is denied again.
-
-    (b) is the sharper one. A guard and its `discharged_by` are written at different times by
-    different hands, and nothing compared them: the instruction could drift from the pattern and the
-    only symptom would be a user following directions and getting refused, with no way to tell
-    whether they had typed it wrong.
-    """
-
-    @staticmethod
-    def _clauses():
-        return json.loads((PLUGIN / "keel" / "clauses.json").read_text(encoding="utf-8"))
-
-    def test_every_guard_satisfies_its_own_discharge(self) -> None:
-        """Obeying the instruction literally must clear the clause that gave it."""
-        unsatisfied = []
-        for row in self._clauses():
-            discharge = row.get("discharged_by") or {}
-            if discharge.get("kind") != "regex" or discharge.get("on") != "tool_input.command":
-                continue
-            quoted = re.findall(r"`([^`]+)`", row.get("guard", ""))
-            if not quoted:
-                continue
-            if not any(re.search(discharge["pattern"], command) for command in quoted):
-                unsatisfied.append(f"{row['id']}: {quoted} vs /{discharge['pattern']}/")
-        self.assertEqual([], sorted(unsatisfied),
-                         "a clause's guard names a command that does not satisfy that clause's own "
-                         "discharge pattern; an operator obeying it exactly is denied again")
-
-    def test_the_check_has_a_subject(self) -> None:
-        """Report an empty subject rather than passing over one."""
-        commands = [r for r in self._clauses()
-                    if (r.get("discharged_by") or {}).get("on") == "tool_input.command"
-                    and re.findall(r"`([^`]+)`", r.get("guard", ""))]
-        self.assertTrue(commands, "no clause pairs a quoted guard command with a command discharge")
 
 
 class TheProbeCanRefuse(unittest.TestCase):

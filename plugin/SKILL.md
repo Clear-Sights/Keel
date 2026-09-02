@@ -96,30 +96,30 @@ this page cannot quietly lag the table it describes.
 
 | ID | Costly fate | Guard | Construction |
 | --- | --- | --- | --- |
-| `A01` | push without knowing what is staged or which branch is current | run `git status` first | [POINTS.md#a01](POINTS.md#a01) |
-| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first (`ls`, `find` without -delete, or `git status`) | [POINTS.md#a02](POINTS.md#a02) |
-| `A03` | overwrite remote history that was never read, discarding commits with no local copy | fetch the ref first (`git fetch`) | [POINTS.md#a03](POINTS.md#a03) |
+| `A01` | push without knowing what is staged or which branch is current | Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`): the branch, HEAD and dirty paths Keel measured before the act | [POINTS.md#a01](POINTS.md#a01) |
+| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first: the host Glob tool, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths | [POINTS.md#a02](POINTS.md#a02) |
+| `A03` | overwrite remote history that was never read, discarding commits with no local copy | see the remote tips first: Read Keel's `remote.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`); Keel lists the remote once per session and writes it there, and writes nothing when the remote cannot be listed | [POINTS.md#a03](POINTS.md#a03) |
 | `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](POINTS.md#c03-verify-what-returns) |
-| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault -- its own `*_can_fail` cell, a `--self-test`, or meta_test against it -- so its failure is observed, not assumed | [POINTS.md#c08-check-can-fail](POINTS.md#c08-check-can-fail) |
-| `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | run a process listing filtered by the shell or checker PID before trusting the match | [POINTS.md#c09-checker-excludes-self](POINTS.md#c09-checker-excludes-self) |
+| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault and see it FAIL: a failing report from the checker is the observation | [POINTS.md#c08-check-can-fail](POINTS.md#c08-check-can-fail) |
+| `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | produce a listing that excludes the observer: the output holds live pids and none of the act's own command text | [POINTS.md#c09-checker-excludes-self](POINTS.md#c09-checker-excludes-self) |
 | `D01` | fan out work with nothing probed first | probe the ground first with a read or a search, so the brief describes what is there | [POINTS.md#d01](POINTS.md#d01) |
 | `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | [POINTS.md#p01](POINTS.md#p01) |
 | `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | [POINTS.md#p01](POINTS.md#p01) |
-| `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](POINTS.md#t01) |
+| `T01` | declare the run finished without ever asking the tree whether it is | Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), at least once this session | [POINTS.md#t01](POINTS.md#t01) |
 | `T02` | end the run treating a push report as a landing | let the ending measure the remote: every remote head that moved this session must equal a local ref (a push that landed); Keel lists the remote itself at Stop | [POINTS.md#t02](POINTS.md#t02) |
-| `U01` | launch a nested worker | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --writable-home --response-transport --result-write` | [POINTS.md#u01](POINTS.md#u01) |
-| `U02` | re-launch a nested-worker target | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --target TARGET --after-failure --require-change` | [POINTS.md#u02](POINTS.md#u02) |
-| `U03` | use a PID in a signal operation | run `ps`, `pgrep`, or an equivalent observer-namespace process listing | [POINTS.md#u03](POINTS.md#u03) |
-| `U06` | send a mutating request to an external service | run an authenticated read canary such as `curl ... -H 'Authorization: ...'` | [POINTS.md#u06](POINTS.md#u06) |
-| `U08` | create a signed git commit | run a signer canary such as `printf test \| gpg --clearsign` | [POINTS.md#u08](POINTS.md#u08) |
-| `U09` | switch or check out a git ref | know the ref exists: `git rev-parse --verify REF`, or have created it yourself with `git checkout -b/-B REF` or `git branch REF` | [POINTS.md#u09](POINTS.md#u09) |
-| `U10` | traverse structured JSON data | look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file | [POINTS.md#u10](POINTS.md#u10) |
-| `U12` | apply a patch | run `rg`/`grep` for the patch context and read the target immediately before applying | [POINTS.md#u12](POINTS.md#u12) |
-| `U13` | apply a generated patch | run `git apply --check PATCH` first | [POINTS.md#u13](POINTS.md#u13) |
-| `U19` | perform an in-place text rewrite | look at the text you are about to rewrite: `rg`/`grep` for the pattern, or `cmp`/checksum the file | [POINTS.md#u19](POINTS.md#u19) |
-| `U20` | make a destructive behavior-changing mutation | run an independent behavior observer such as the relevant test or probe first | [POINTS.md#u20](POINTS.md#u20) |
-| `U24` | publish or release an artifact after runtime testing | run the suite with warnings promoted to errors on a supported runtime | [POINTS.md#u24](POINTS.md#u24) |
-| `U25` | run a scanner as an acceptance check | run its prefix-distractor regression test first | [POINTS.md#u25](POINTS.md#u25) |
+| `U01` | launch a nested worker | run a capability probe of the worker after the launch and see it report PASS -- Keel's own `tools/probe_child_capability.py`, or any probe printing a report | [POINTS.md#u01](POINTS.md#u01) |
+| `U02` | re-launch a nested-worker target | after a failure, change something, then run the target's probe and see it report PASS | [POINTS.md#u02](POINTS.md#u02) |
+| `U03` | use a PID in a signal operation | produce a process listing: an output that holds at least two live pids, from whatever program, or Read Keel's `observed.json`, which lists the session's processes | [POINTS.md#u03](POINTS.md#u03) |
+| `U06` | send a mutating request to an external service | run a read of the network that changes nothing and reports no failure -- an authenticated read canary | [POINTS.md#u06](POINTS.md#u06) |
+| `U08` | create a signed git commit | produce a signature datum: sign something and see the signature block, or verify one | [POINTS.md#u08](POINTS.md#u08) |
+| `U09` | switch or check out a git ref | know the ref: a quiet act that prints the ref name or commit id the ref snapshot holds (`git rev-parse --verify REF`, `git branch`, `git show-ref`, or any listing of refs), or Read Keel's `observed.json`, which carries the refs | [POINTS.md#u09](POINTS.md#u09) |
+| `U10` | traverse structured JSON data | look at the structure first: a query on the same file that prints a non-null JSON datum (`jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`), or Read the file | [POINTS.md#u10](POINTS.md#u10) |
+| `U12` | apply a patch | look at the target before applying: Grep or Read it, or print its path from the worktree (`git diff`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds) | [POINTS.md#u12](POINTS.md#u12) |
+| `U13` | apply a generated patch | look at what the patch touches first: Read the target, or print its path from the worktree (`git diff`, `git apply --stat`) | [POINTS.md#u13](POINTS.md#u13) |
+| `U19` | perform an in-place text rewrite | look at the text you are about to rewrite: Grep or Read it, or print its path from the worktree (`git diff`, `cmp`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds) | [POINTS.md#u19](POINTS.md#u19) |
+| `U20` | make a destructive behavior-changing mutation | run an independent behavior observer first: any verifier that prints a report, PASS or FAIL | [POINTS.md#u20](POINTS.md#u20) |
+| `U24` | publish or release an artifact after runtime testing | run the suite so that a warning would have failed it: a passing report with no warning line | [POINTS.md#u24](POINTS.md#u24) |
+| `U25` | run a scanner as an acceptance check | see the scanner find something: run it against its prefix-distractor regression so a report with findings is observed | [POINTS.md#u25](POINTS.md#u25) |
 
 <!-- END GENERATED: clause-routes -->
 
