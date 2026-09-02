@@ -61,9 +61,7 @@ def strip_comments(text: str) -> str:
 
 def compile_and_index(path: pathlib.Path) -> tuple[str | None, dict[str, list[str]]]:
     """coqc the file; return its stdout and the .glob index grouped by entry kind."""
-    for stale in PROOFS.glob(path.stem + ".*"):
-        if stale.suffix in (".vo", ".vok", ".vos", ".glob"):
-            stale.unlink()
+    # coqc rewrites .vo/.glob itself; deleting them first raced a concurrent grader.
     proc = subprocess.run(["coqc", "-q", "-Q", str(PROOFS), "", path.name], cwd=PROOFS,
                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:

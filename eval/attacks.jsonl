@@ -7,3 +7,5 @@
 {"angle": "effect-named-by-no-clause", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "bash eval/attacks.sh dead_effect_is_gone", "cwd": "..", "found_as": "K27/EFF-01"}
 {"angle": "creation-outside-the-space", "layer": "effects", "target": "EFFECTS", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: the vocabulary entry is the sentence the observers are held to; the observers are the cells"}
 {"angle": "effect-named-by-no-clause", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: observers compute effects, they do not name them"}
+{"angle": "sibling-spawn-makes-a-look-loud", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: tree observers do not read processes"}
+{"angle": "sibling-spawn-makes-a-look-loud", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "bash eval/attacks.sh look_survives_sibling_spawn", "cwd": "..", "found_as": "CI 3/15 jobs; EF-06/K22"}

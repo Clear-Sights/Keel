@@ -51,4 +51,21 @@ import json; from keel import effects
 named = {l.get("effect") for c in json.load(open("plugin/keel/clauses.json")) for s in ("fingerprint","activated_by","discharged_by") if isinstance(c.get(s), dict) for l in [c[s]] + (c[s].get("any_of") or []) + (c[s].get("all_of") or [])}
 raise SystemExit(0 if "fetch_head_written" not in effects.EFFECTS and "fetch_head_written" not in named else 1)'; }
 
+look_survives_sibling_spawn() {  # a process born beside the act does not make a look loud
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import pathlib, subprocess, tempfile
+from keel import effects
+d = tempfile.mkdtemp(); repo = pathlib.Path(d, "repo"); repo.mkdir(); state = pathlib.Path(d, "state")
+g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, check=True)
+g("init", "-q", "-b", "main"); g("config", "user.email", "k@x"); g("config", "user.name", "k")
+pathlib.Path(repo, "a.txt").write_text("one\n"); g("add", "a.txt"); g("commit", "-q", "-m", "a")
+effects.snapshot(state, "s", "", str(repo))
+sibling = subprocess.Popen(["sleep", "30"])  # born in this session tree during the act, not by it
+out = subprocess.run("git status", shell=True, cwd=repo, capture_output=True, text=True)
+d = effects.delta(state, "s", "", {"cwd": str(repo), "tool_input": {"command": "git status"}, "tool_response": {"stdout": out.stdout}})
+sibling.kill()
+raise SystemExit(0 if d["report_ref"] else 1)
+PY
+}
+
 "$@"
