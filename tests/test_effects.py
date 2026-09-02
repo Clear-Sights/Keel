@@ -165,10 +165,30 @@ class TheObserverSeesTheWorld(Repo):
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-qm", "on other")
         git(self.repo, "checkout", "-q", "main")
-        time.sleep(1.1)  # the commit predates the snapshot by a whole second
         d = self.observe("git checkout -q other")
         self.assertTrue(d["head_moved"])
         self.assertTrue(d["head_switched"])
+
+    def test_a_backdated_commit_is_still_a_creation(self) -> None:
+        """K11: the switch/create split read the committer date, which the act itself sets."""
+        d = self.observe("printf two > a.txt && git add -A && "
+                         "GIT_COMMITTER_DATE='2000-01-01T00:00:00' git commit -qm backdated")
+        self.assertTrue(d["head_moved"])
+        self.assertFalse(d["head_switched"], "a commit the act made read as a switch to an old one")
+        self.assertFalse(d["commit_signed"])
+
+    def test_a_checkout_of_an_unreachable_commit_reads_as_created(self) -> None:
+        """The stated limit of reachability: a commit no pre-act ref reaches is not a switch."""
+        git(self.repo, "checkout", "-q", "-b", "gone")
+        pathlib.Path(self.repo, "c.txt").write_text("c\n", encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-qm", "dangling")
+        sha = git(self.repo, "rev-parse", "HEAD").strip()
+        git(self.repo, "checkout", "-q", "main")
+        git(self.repo, "branch", "-D", "gone")
+        d = self.observe(f"git checkout -q {sha}")
+        self.assertTrue(d["head_moved"])
+        self.assertFalse(d["head_switched"])
 
     def test_a_hard_reset_to_an_ancestor_is_a_reset(self) -> None:
         pathlib.Path(self.repo, "a.txt").write_text("two\n", encoding="utf-8")

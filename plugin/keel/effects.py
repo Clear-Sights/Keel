@@ -30,7 +30,6 @@ import json
 import os
 import pathlib
 import re
-import shutil
 import subprocess
 import time
 from typing import Any
@@ -143,18 +142,17 @@ def _repo_root(cwd: str) -> str | None:
 def worktree_tree(root: str, index: pathlib.Path) -> str | None:
     """The tree object of the ENTIRE worktree, untracked files included, via a private index.
 
-    `git add -A` into a copy of the real index, then `write-tree`: the real index is untouched,
+    `git add -A` into an EMPTY private index, then `write-tree`: the real index is untouched,
     and every blob is now in the object store, so a later `git show <tree>:<path>` recovers the
-    pre-image of anything the act changed or removed.
+    pre-image of anything the act changed or removed. The index starts empty on purpose. A copy
+    of the real one carries its stat cache, and any look (`git diff`, `git status`) refreshes
+    that cache: a modified, unstaged file is then cached as clean against its stale blob, and a
+    copy made after the look reported the old content, so the look itself read as a rewrite.
+    Nothing cached, nothing trusted: every file is hashed at every snapshot.
     """
-    located = _git(root, "rev-parse", "--git-path", "index")
-    real = pathlib.Path(root, located.strip()) if located else pathlib.Path("")
     try:
         index.parent.mkdir(parents=True, exist_ok=True)
-        if real.is_file():
-            shutil.copyfile(real, index)
-        elif index.exists():
-            index.unlink()
+        index.unlink(missing_ok=True)
     except OSError:
         return None
     env = {"GIT_INDEX_FILE": str(index)}
@@ -665,12 +663,14 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
                 ancestor = _git(root, "merge-base", "--is-ancestor", new_head, old_head)
                 out["head_reset"] = ancestor is not None and bool(changed or removed)
                 body = _git(root, "cat-file", "commit", new_head) or ""
-                # A commit that existed before the act -- a ref pointed at it, or it was made
-                # before the snapshot -- is being SWITCHED to. One that did not was CREATED.
-                made = _git(root, "log", "-1", "--format=%ct", new_head)
-                existed = (new_head in before_refs.values()
-                           or (made is not None and made.strip().isdigit()
-                               and int(made.strip()) < int(before.get("t", 0))))
+                # A commit reachable from a ref that existed before the act is being SWITCHED
+                # to; one that is not was CREATED. Reachability is read from the pre-act refs,
+                # never from the commit's own timestamp: a committer date is whatever the act
+                # says it is (`GIT_COMMITTER_DATE`), so a backdated commit read as a switch and
+                # its signature was never examined (K11). Stated limit: a checkout of a commit
+                # no pre-act ref reached (a dangling or reflog-only commit) reads as created.
+                existed = any(_git(root, "merge-base", "--is-ancestor", new_head, tip) is not None
+                              for tip in set(before_refs.values()) if tip)
                 out["head_switched"] = existed
                 out["commit_signed"] = (not existed) and "\ngpgsig " in body
     else:

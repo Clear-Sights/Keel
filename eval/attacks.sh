@@ -98,4 +98,38 @@ PY
 subagent_ending_is_reconciled() {  # a clause declaring Stop is reconciled at SubagentStop under that agent's ledger
   cd "$REPO" && W=$(mktemp -d) && out=$(printf '%s' '{"hook_event_name":"SubagentStop","session_id":"s","agent_id":"sub","cwd":"'"$W"'"}' | KEEL_STATE_DIR="$W/state" CLAUDE_PLUGIN_ROOT="$REPO/plugin" bash plugin/hooks/dispatch.sh) && printf '%s' "$out" | grep -q '"decision": *"block"' && printf '%s' "$out" | grep -q 'T01'; }
 
+look_is_not_a_rewrite_under_a_stat_cache() {  # 80 rewrite-then-look cycles: a look never reads as a rewrite (was 5/80 with a copied index)
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import os, pathlib, subprocess, tempfile
+from keel import effects
+def git(repo, *a): return subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True, text=True).stdout
+def obs(state, repo, cmd):
+    effects.snapshot(state, "s", "", repo); done = subprocess.run(cmd, shell=True, cwd=repo, capture_output=True, text=True)
+    return effects.delta(state, "s", "", {"tool_input": {"command": cmd}, "tool_response": {"stdout": done.stdout}})
+miss = 0
+for i in range(80):
+    tmp = tempfile.mkdtemp(); repo = os.path.join(tmp, "repo"); state = pathlib.Path(tmp, "state"); os.mkdir(repo)
+    git(repo, "init", "-q", "-b", "main"); git(repo, "config", "user.email", "k@x"); git(repo, "config", "user.name", "k")
+    p = pathlib.Path(repo, "a.txt"); p.write_text("one\n"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "base")
+    obs(state, repo, "ls"); p.write_text("two\n")
+    d = obs(state, repo, "git diff")
+    miss += d["files_changed"] != [] or not d["report_paths"]
+print("misses", miss, "of 80"); raise SystemExit(1 if miss else 0)
+PY
+}
+backdated_commit_is_a_creation() {  # K11: the switch/create split must not read the committer date the act sets
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import os, pathlib, subprocess, tempfile
+from keel import effects
+tmp = tempfile.mkdtemp(); repo = os.path.join(tmp, "repo"); state = pathlib.Path(tmp, "state"); os.mkdir(repo)
+git = lambda *a: subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True, text=True)
+git("init", "-q", "-b", "main"); git("config", "user.email", "k@x"); git("config", "user.name", "k")
+pathlib.Path(repo, "a.txt").write_text("one\n"); git("add", "-A"); git("commit", "-qm", "base")
+effects.snapshot(state, "s", "", repo)
+subprocess.run("printf two > a.txt && git add -A && GIT_COMMITTER_DATE=2000-01-01T00:00:00 git commit -qm back", shell=True, cwd=repo)
+d = effects.delta(state, "s", "", {"tool_input": {"command": "git commit"}, "tool_response": {"stdout": ""}})
+raise SystemExit(0 if d["head_moved"] and not d["head_switched"] else 1)
+PY
+}
+
 "$@"
