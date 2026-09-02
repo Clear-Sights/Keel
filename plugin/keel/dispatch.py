@@ -24,12 +24,13 @@ healing only by uninstalling the gate.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 from . import clauses as C
-from . import journal, wire
+from . import effects, journal, wire
 from .ledger import Demand, Ledger, derive_id, legacy_state, state_dir
 
 # A HEADER ON THE COMMAND, and nowhere else. The exemption is the one thing that turns the whole
@@ -279,6 +280,66 @@ def _closed_not_evaluable(event: dict, detail: str) -> dict | None:
     return None
 
 
+def _effect_record(ledger: Ledger, event: dict, moment: str) -> None:
+    """Observe the world around a Bash call and attach what changed as `event["keel_effect"]`.
+
+    A record already on the event is a RECORDED session (the corpus) and is kept as-is; a live
+    event never carries one, because the host builds the event and `keel_effect` is not a field
+    it knows. `moment` is "before" (snapshot only), "after" (delta) or "stop" (the remote).
+    Observation never raises into the decision: a failed observation is a None in the record,
+    which the predicates read as NOT-EVALUABLE.
+    """
+    if isinstance(event.get("keel_effect"), dict):
+        return
+    session, agent = _ids(event)
+    cwd = str(event.get("cwd") or os.getcwd())
+    try:
+        if moment == "before":
+            if event.get("tool_name") == "Bash":
+                effects.snapshot(ledger.root, session, agent, cwd)
+        elif moment == "after":
+            if event.get("tool_name") == "Bash":
+                event["keel_effect"] = effects.delta(ledger.root, session, agent, event)
+        elif moment == "stop":
+            event["keel_effect"] = effects.at_stop(ledger.root, session, agent, cwd)
+    except Exception as exc:
+        event["keel_effect"] = {name: None for name in effects.EFFECTS}
+        event["keel_effect"]["not_evaluable"] = type(exc).__name__
+
+
+def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent: str):
+    """A demand an effect raised at PostToolUse denies the NEXT call, unless that call is its guard.
+
+    The act has already happened, so the deny cannot land on it; it lands on whatever the
+    session tries next, and the only call that passes is one discharging an open demand. That
+    is what makes an after-the-fact occasion fail CLOSED: the session cannot proceed past a
+    destructive effect it never looked at.
+    """
+    open_rows = ledger.open_demands(session, agent)
+    if not open_rows:
+        return None, False
+    by_id = {cl.id: cl for cl in table}
+    owed, progress = [], False
+    for row in open_rows:
+        cl = by_id.get(row.get("clause_id"))
+        if cl is None or C.classify_side(cl.fingerprint) != "effect":
+            continue
+        # The guard must name what the demand is keyed on: a Read of `other.json` does not pay
+        # for the traversal of `payload.json`. Session-wide subjects agree trivially.
+        if C.discharges(cl, event) and derive_id(session, agent, cl.id, _subject(cl, event)) == row["id"]:
+            ledger.discharge(session, agent, row["id"], "guard call observed")
+            progress = True
+            continue
+        owed.append(_keyed_reason(cl, row.get("subject") or ""))
+    # A call that pays ANY open demand passes, or two open demands could never both be paid:
+    # each guard would be refused for the other's debt. What is refused is a call that pays
+    # nothing while something is owed -- and the refusal names everything owed, at once, so the
+    # session learns the whole debt in one interruption rather than one clause per attempt.
+    if not owed or progress:
+        return None, progress
+    return _deny("; ".join(owed)), progress
+
+
 def _applicable(table, event: dict):
     name, tool = event.get("hook_event_name"), event.get("tool_name")
     for cl in table:
@@ -308,7 +369,12 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
                                      "`keel-allow:`."}
         return {}
     _watch_standing(table, ledger, event, session, agent)
+    held, progress = _open_effect_denial(table, ledger, event, session, agent)
+    if held is not None:
+        return held
+    _effect_record(ledger, event, "before")
     command = _get(event, "tool_input.command")
+    denials = []
     for cl in _applicable(table, event):
         try:
             if C.discharges(cl, event):
@@ -330,6 +396,7 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
                         return _deny(_keyed_reason(cl, subject))
                     continue
                 ledger.discharge(session, agent, did, "guard call observed")
+                progress = True
                 continue
             if C.match(cl, event):
                 subject = _subject(cl, event)
@@ -343,23 +410,60 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
                 # The licence must be an OBSERVED discharge, never merely an absent demand.
                 if ledger.is_licensed(session, agent, did):
                     continue
-                ledger.demand(Demand(id=did, session=session, agent=agent,
-                                     clause_id=cl.id, subject=subject,
-                                     reason=cl.deny_reason))
-                return _deny(_keyed_reason(cl, subject))
+                denials.append((cl, subject, did))
         except Exception:
             continue
-    return {}
+    # ONE REFUSAL NAMES EVERY CLAUSE REFUSING. Three clauses fire on every first act of a
+    # session (their occasion is `always`: before the act, Theorem 3 leaves nothing else to
+    # read), and returning at the first would cost one interruption per clause to learn a debt
+    # that could have been stated once.
+    #
+    # A GUARD CALL PASSES THE `always` OCCASIONS. Three clauses fire on every act, and each is
+    # discharged by a different guard, so without this the first guard would be refused by
+    # the other two and no session could ever begin. A call that discharged some clause on
+    # this event is progress toward the debt and is not refused by an occasion that fires on
+    # everything; it is still refused by an occasion that selects (a host tool enum), because
+    # those do not owe the session an opening move.
+    # The demand is recorded only for a refusal that stands: a waived one would leave a row
+    # open at Stop for an act that was allowed.
+    if progress:
+        denials = [d for d in denials if (d[0].fingerprint or {}).get("kind") != "always"]
+    if not denials:
+        return {}
+    for cl, subject, did in denials:
+        ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
+                             subject=subject, reason=cl.deny_reason))
+    return _deny("; ".join(_keyed_reason(cl, subject) for cl, subject, _ in denials))
 
 
 def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
     session, agent = _ids(event)
+    _effect_record(ledger, event, "after")
     _watch_standing(table, ledger, event, session, agent)
     for cl in _applicable(table, event):
         try:
+            after_the_act = C.classify_side(cl.fingerprint) == "effect"
             if C.discharges(cl, event):
                 did = derive_id(session, agent, cl.id, _subject(cl, event))
-                ledger.discharge(session, agent, did, "guard call completed")
+                # AN EFFECT'S GUARD IS "LOOK AT WHAT YOU JUST DID", and that cannot be done
+                # in advance. A pre-act clause is licensed by a guard seen before the act; an
+                # effect clause is discharged only against a demand its effect has raised.
+                # Otherwise the suite run every session opens with would license the deletion
+                # that comes an hour later -- measured: U20 never fired once a `pytest` had
+                # run earlier in the session.
+                if not after_the_act or did in ledger.open_ids(session, agent):
+                    ledger.discharge(session, agent, did, "guard call completed")
+                continue
+            # AN EFFECT IS THE OCCASION, OBSERVED AFTER THE ACT. The demand is raised here and
+            # the next call pays it (`_open_effect_denial`); this event itself cannot be
+            # refused, the act is done. `match` fails closed on an unmeasured effect.
+            if after_the_act and C.match(cl, event):
+                subject = _subject(cl, event)
+                did = derive_id(session, agent, cl.id, subject)
+                if not ledger.is_licensed(session, agent, did):
+                    ledger.demand(Demand(id=did, session=session, agent=agent,
+                                         clause_id=cl.id, subject=subject,
+                                         reason=cl.deny_reason))
         except Exception:
             continue
     return {}
@@ -435,6 +539,8 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     if event.get("stop_hook_active") is True:
         return {}
     session, agent = _ids(event)
+    _effect_record(ledger, event, "stop")
+    _watch_standing(table, ledger, event, session, agent)
     try:
         open_rows = ledger.open_demands(session, agent)
     except Exception as exc:

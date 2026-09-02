@@ -51,6 +51,17 @@ DESTRUCTIVE = (b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id"
                b'"tool_input":{"command":"rm -rf build/"}}')
 # One byte 0x9D inside the operand a dict-subject clause extracts, so the surrogate lands squarely
 # in `derive_id` -- the exact path that used to abstain in silence.
+# An effect observed after a Bash call: the traversal printed null, keyed on the file it read.
+# The record is FULL -- an absent effect is NOT-EVALUABLE, not "did not happen".
+KEYED_EFFECT = json.dumps({
+    "hook_event_name": "PostToolUse", "tool_name": "Bash", "session_id": "g-keyed",
+    "tool_input": {"command": "jq .name payload.json"},
+    "keel_effect": {**{n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
+                                      "pids_gone", "pids_spawned") else False
+                       for n in __import__("keel.effects", fromlist=["EFFECTS"]).EFFECTS},
+                    "remote_landed": None, "report_null": True}}).encode()
+NEXT_CALL = (b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"g-keyed",'
+             b'"tool_input":{"command":"echo next"}}')
 DESTRUCTIVE_BAD_BYTE = (b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"g-bad",'
                         b'"tool_input":{"command":"rm -rf bui\x9dld/"}}')
 
@@ -79,18 +90,32 @@ class TestTheRecord(StateCase):
         self.assertEqual(len([r for r in rows(self.state) if r["kind"] == "session"]), 1)
 
     def test_deny_row_names_clause_and_subject(self):
+        """A first act with nothing on record is refused by the three `always` occasions at once;
+        the row carries the first clause named and, session-wide, an empty subject."""
         run(DESTRUCTIVE, self.state)
         denies = [r for r in rows(self.state) if r["kind"] == "deny"]
         self.assertEqual(len(denies), 1)
-        self.assertEqual(denies[0]["clause_id"], "A02")
-        self.assertEqual(denies[0]["subject"], "build/")
+        self.assertEqual(denies[0]["clause_id"], "A01")
+        self.assertEqual(denies[0]["subject"], "")
+
+    def test_keyed_deny_row_names_the_operand(self):
+        """An effect keyed on a file: the traversal printed null, and the next call is refused
+        keyed on the file the traversal read."""
+        run(KEYED_EFFECT, self.state)
+        run(NEXT_CALL, self.state)
+        denies = [r for r in rows(self.state) if r["kind"] == "deny"]
+        self.assertEqual(len(denies), 1)
+        self.assertEqual(denies[0]["clause_id"], "U10")
+        self.assertEqual(denies[0]["subject"], "payload.json")
 
     def test_subject_is_read_back_from_the_message_the_agent_saw(self):
         """Two derivations of one fact is two facts. The row parses the subject out of the rendered
         reason so the log can never disagree with what the agent was actually told."""
-        body = run(DESTRUCTIVE, self.state)
+        run(KEYED_EFFECT, self.state)
+        body = run(NEXT_CALL, self.state)
         reason = body["hookSpecificOutput"]["permissionDecisionReason"]
         subject = [r for r in rows(self.state) if r["kind"] == "deny"][0]["subject"]
+        self.assertTrue(subject, "the deny was not keyed, so this compares an empty string")
         self.assertIn(f"`{subject}`", reason)
 
     def test_every_row_names_its_plugin(self):

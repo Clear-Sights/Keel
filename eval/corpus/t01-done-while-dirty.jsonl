@@ -1,4 +1,4 @@
 {"description": "a session edits files and then declares itself finished without ever running git status", "clause": "T01", "derailment": "the run ends looking complete; uncommitted work and stray files are silently abandoned", "derails_at": 2}
 {"hook_event_name": "PreToolUse", "session_id": "t01", "cwd": "/work/repo", "tool_name": "Write", "tool_input": {"file_path": "/work/repo/calc.py", "content": "x"}}
 {"hook_event_name": "PostToolUse", "session_id": "t01", "cwd": "/work/repo", "tool_name": "Write", "tool_input": {"file_path": "/work/repo/calc.py", "content": "x"}}
-{"hook_event_name": "Stop", "session_id": "t01", "cwd": "/work/repo"}
+{"hook_event_name": "Stop", "session_id": "t01", "cwd": "/work/repo", "keel_effect": {"remote_ref_moved": [], "remote_landed": true}}

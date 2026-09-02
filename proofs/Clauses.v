@@ -14,16 +14,8 @@ Section Instance.
     forall c, scan (mention c) = [ {| seg_argv := ["echo"] |} ].
 
   (* SIDE A01_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition A01_fingerprint_names : list string := ["git"].
-  Lemma A01_fingerprint_clean : ~ In "echo" A01_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem A01_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p A01_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ A01_fingerprint_clean). Qed.
-  Theorem A01_fingerprint_monotone : forall W, (forall p, In p A01_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p A01_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=always closure=always *)
+  (* terminal: fires on every event of its surface; the Theorem 3 boundary *)
 
   (* SIDE A01_discharged_by *)
   (* class=nominal closure=open *)
@@ -38,16 +30,8 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE A02_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition A02_fingerprint_names : list string := ["rm"; "find"; "truncate"; "git"].
-  Lemma A02_fingerprint_clean : ~ In "echo" A02_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem A02_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p A02_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ A02_fingerprint_clean). Qed.
-  Theorem A02_fingerprint_monotone : forall W, (forall p, In p A02_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p A02_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=always closure=always *)
+  (* terminal: fires on every event of its surface; the Theorem 3 boundary *)
 
   (* SIDE A02_discharged_by *)
   (* class=nominal closure=open *)
@@ -62,16 +46,8 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE A03_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition A03_fingerprint_names : list string := ["git"].
-  Lemma A03_fingerprint_clean : ~ In "echo" A03_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem A03_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p A03_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ A03_fingerprint_clean). Qed.
-  Theorem A03_fingerprint_monotone : forall W, (forall p, In p A03_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p A03_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=always closure=always *)
+  (* terminal: fires on every event of its surface; the Theorem 3 boundary *)
 
   (* SIDE A03_discharged_by *)
   (* class=nominal closure=open *)
@@ -102,14 +78,17 @@ Section Instance.
   (* terminal: fires on every event of its surface; the Theorem 3 boundary *)
 
   (* SIDE C08-check-can-fail_activated_by *)
-  (* class=nominal closure=open *)
-  (* pattern 0: '(?:pytest|unittest|[^\\s]*(?:check|verify)[^\\s]*\\.(?:py|sh))' -- a regular vocabulary, checked in Python to exclude 'echo'; the instance is conditional on that. *)
-  Theorem C08_check_can_fail_activated_by_pattern0_immune : forall V : string -> Prop,
-    ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
-  Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
+  (* class=effect closure=world *)
+  (* effects: report_pass -- what the act did, read from the world, not the command *)
+  Theorem C08_check_can_fail_activated_by_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem C08_check_can_fail_activated_by_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE C08-check-can-fail_discharged_by *)
-  (* class=nominal closure=open *)
+  (* class=composed closure=host *)
   (* pattern 0: '(?:pytest|unittest|[^\\s]*(?:check|verify)[^\\s]*\\.(?:py|sh))' -- a regular vocabulary, checked in Python to exclude 'echo'; the instance is conditional on that. *)
   Theorem C08_check_can_fail_discharged_by_pattern0_immune : forall V : string -> Prop,
     ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
@@ -170,40 +149,34 @@ Section Instance.
   (* terminal: fires on every event of its surface; the Theorem 3 boundary *)
 
   (* SIDE T02_activated_by *)
-  (* class=nominal closure=open *)
-  Definition T02_activated_by_names : list string := ["git"].
-  Lemma T02_activated_by_clean : ~ In "echo" T02_activated_by_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem T02_activated_by_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p T02_activated_by_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ T02_activated_by_clean). Qed.
-  Theorem T02_activated_by_monotone : forall W, (forall p, In p T02_activated_by_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p T02_activated_by_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: remote_ref_moved -- what the act did, read from the world, not the command *)
+  Theorem T02_activated_by_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem T02_activated_by_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE T02_discharged_by *)
-  (* class=nominal closure=open *)
-  Definition T02_discharged_by_names : list string := ["git"; "git"].
-  Lemma T02_discharged_by_clean : ~ In "echo" T02_discharged_by_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem T02_discharged_by_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p T02_discharged_by_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ T02_discharged_by_clean). Qed.
-  Theorem T02_discharged_by_monotone : forall W, (forall p, In p T02_discharged_by_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p T02_discharged_by_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: remote_landed -- what the act did, read from the world, not the command *)
+  Theorem T02_discharged_by_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem T02_discharged_by_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U01_fingerprint *)
-  (* class=nominal closure=shipped *)
-  Definition U01_fingerprint_names : list string := ["dispatch.sh"].
-  Lemma U01_fingerprint_clean : ~ In "echo" U01_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U01_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U01_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U01_fingerprint_clean). Qed.
-  Theorem U01_fingerprint_monotone : forall W, (forall p, In p U01_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U01_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: pids_spawned -- what the act did, read from the world, not the command *)
+  Theorem U01_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U01_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U01_discharged_by *)
   (* class=nominal closure=shipped *)
@@ -218,16 +191,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U02_fingerprint *)
-  (* class=nominal closure=shipped *)
-  Definition U02_fingerprint_names : list string := ["dispatch.sh"].
-  Lemma U02_fingerprint_clean : ~ In "echo" U02_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U02_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U02_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U02_fingerprint_clean). Qed.
-  Theorem U02_fingerprint_monotone : forall W, (forall p, In p U02_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U02_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: pids_spawned_again -- what the act did, read from the world, not the command *)
+  Theorem U02_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U02_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U02_discharged_by *)
   (* class=nominal closure=shipped *)
@@ -242,16 +213,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U03_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U03_fingerprint_names : list string := ["kill"; "killall"; "pkill"].
-  Lemma U03_fingerprint_clean : ~ In "echo" U03_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U03_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U03_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U03_fingerprint_clean). Qed.
-  Theorem U03_fingerprint_monotone : forall W, (forall p, In p U03_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U03_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: pids_gone -- what the act did, read from the world, not the command *)
+  Theorem U03_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U03_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U03_discharged_by *)
   (* class=nominal closure=open *)
@@ -266,16 +235,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U06_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U06_fingerprint_names : list string := ["curl"].
-  Lemma U06_fingerprint_clean : ~ In "echo" U06_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U06_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U06_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U06_fingerprint_clean). Qed.
-  Theorem U06_fingerprint_monotone : forall W, (forall p, In p U06_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U06_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: net_out -- what the act did, read from the world, not the command *)
+  Theorem U06_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U06_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U06_discharged_by *)
   (* class=nominal closure=open *)
@@ -290,16 +257,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U08_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U08_fingerprint_names : list string := ["git"].
-  Lemma U08_fingerprint_clean : ~ In "echo" U08_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U08_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U08_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U08_fingerprint_clean). Qed.
-  Theorem U08_fingerprint_monotone : forall W, (forall p, In p U08_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U08_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: commit_signed -- what the act did, read from the world, not the command *)
+  Theorem U08_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U08_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U08_discharged_by *)
   (* class=nominal closure=open *)
@@ -314,16 +279,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U09_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U09_fingerprint_names : list string := ["git"; "git"].
-  Lemma U09_fingerprint_clean : ~ In "echo" U09_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U09_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U09_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U09_fingerprint_clean). Qed.
-  Theorem U09_fingerprint_monotone : forall W, (forall p, In p U09_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U09_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: head_switched -- what the act did, read from the world, not the command *)
+  Theorem U09_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U09_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U09_discharged_by *)
   (* class=nominal closure=open *)
@@ -338,16 +301,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U10_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U10_fingerprint_names : list string := ["jq"].
-  Lemma U10_fingerprint_clean : ~ In "echo" U10_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U10_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U10_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U10_fingerprint_clean). Qed.
-  Theorem U10_fingerprint_monotone : forall W, (forall p, In p U10_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U10_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: report_null -- what the act did, read from the world, not the command *)
+  Theorem U10_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U10_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U10_discharged_by *)
   (* class=composed closure=host *)
@@ -366,20 +327,18 @@ Section Instance.
   Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
 
   (* SIDE U12_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U12_fingerprint_names : list string := ["git"; "patch"].
-  Lemma U12_fingerprint_clean : ~ In "echo" U12_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U12_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U12_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U12_fingerprint_clean). Qed.
-  Theorem U12_fingerprint_monotone : forall W, (forall p, In p U12_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U12_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: files_changed -- what the act did, read from the world, not the command *)
+  Theorem U12_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U12_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U12_discharged_by *)
   (* class=composed closure=host *)
-  Definition U12_discharged_by_names : list string := ["rg"; "grep"].
+  Definition U12_discharged_by_names : list string := ["rg"; "grep"; "git"; "git"].
   Lemma U12_discharged_by_clean : ~ In "echo" U12_discharged_by_names.
   Proof. simpl; intuition discriminate. Qed.
   Theorem U12_discharged_by_immune :
@@ -392,22 +351,24 @@ Section Instance.
   Theorem U12_discharged_by_pattern0_immune : forall V : string -> Prop,
     ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
   Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
+  (* pattern 1: '^Read$' -- a regular vocabulary, checked in Python to exclude 'echo'; the instance is conditional on that. *)
+  Theorem U12_discharged_by_pattern1_immune : forall V : string -> Prop,
+    ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
+  Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
 
   (* SIDE U13_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U13_fingerprint_names : list string := ["git"; "patch"].
-  Lemma U13_fingerprint_clean : ~ In "echo" U13_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U13_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U13_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U13_fingerprint_clean). Qed.
-  Theorem U13_fingerprint_monotone : forall W, (forall p, In p U13_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U13_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: files_changed -- what the act did, read from the world, not the command *)
+  Theorem U13_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U13_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U13_discharged_by *)
-  (* class=nominal closure=open *)
-  Definition U13_discharged_by_names : list string := ["git"].
+  (* class=composed closure=host *)
+  Definition U13_discharged_by_names : list string := ["git"; "git"; "git"].
   Lemma U13_discharged_by_clean : ~ In "echo" U13_discharged_by_names.
   Proof. simpl; intuition discriminate. Qed.
   Theorem U13_discharged_by_immune :
@@ -416,22 +377,24 @@ Section Instance.
   Theorem U13_discharged_by_monotone : forall W, (forall p, In p U13_discharged_by_names -> W p) ->
     forall c, nominal Text string scan (fun p => In p U13_discharged_by_names) c -> nominal Text string scan W c.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* pattern 0: '^Read$' -- a regular vocabulary, checked in Python to exclude 'echo'; the instance is conditional on that. *)
+  Theorem U13_discharged_by_pattern0_immune : forall V : string -> Prop,
+    ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
+  Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
 
   (* SIDE U19_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U19_fingerprint_names : list string := ["sed"; "perl"].
-  Lemma U19_fingerprint_clean : ~ In "echo" U19_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U19_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U19_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U19_fingerprint_clean). Qed.
-  Theorem U19_fingerprint_monotone : forall W, (forall p, In p U19_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U19_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: files_changed -- what the act did, read from the world, not the command *)
+  Theorem U19_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U19_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U19_discharged_by *)
   (* class=composed closure=host *)
-  Definition U19_discharged_by_names : list string := ["cmp"; "sha256sum"; "shasum"; "rg"; "grep"; "diff"].
+  Definition U19_discharged_by_names : list string := ["cmp"; "sha256sum"; "shasum"; "rg"; "grep"; "diff"; "git"; "git"].
   Lemma U19_discharged_by_clean : ~ In "echo" U19_discharged_by_names.
   Proof. simpl; intuition discriminate. Qed.
   Theorem U19_discharged_by_immune :
@@ -444,18 +407,20 @@ Section Instance.
   Theorem U19_discharged_by_pattern0_immune : forall V : string -> Prop,
     ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
   Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
+  (* pattern 1: '^Read$' -- a regular vocabulary, checked in Python to exclude 'echo'; the instance is conditional on that. *)
+  Theorem U19_discharged_by_pattern1_immune : forall V : string -> Prop,
+    ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
+  Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
 
   (* SIDE U20_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U20_fingerprint_names : list string := ["rm"; "truncate"; "git"].
-  Lemma U20_fingerprint_clean : ~ In "echo" U20_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U20_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U20_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U20_fingerprint_clean). Qed.
-  Theorem U20_fingerprint_monotone : forall W, (forall p, In p U20_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U20_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: files_removed, head_reset -- what the act did, read from the world, not the command *)
+  Theorem U20_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U20_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U20_discharged_by *)
   (* class=nominal closure=open *)
@@ -470,16 +435,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U24_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U24_fingerprint_names : list string := ["npm"; "twine"; "cargo"].
-  Lemma U24_fingerprint_clean : ~ In "echo" U24_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U24_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U24_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U24_fingerprint_clean). Qed.
-  Theorem U24_fingerprint_monotone : forall W, (forall p, In p U24_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U24_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
+  (* class=effect closure=world *)
+  (* effects: net_out -- what the act did, read from the world, not the command *)
+  Theorem U24_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U24_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U24_discharged_by *)
   (* class=nominal closure=open *)
@@ -494,20 +457,14 @@ Section Instance.
   Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
 
   (* SIDE U25_fingerprint *)
-  (* class=nominal closure=open *)
-  Definition U25_fingerprint_names : list string := ["go"; "cargo"; "npm"].
-  Lemma U25_fingerprint_clean : ~ In "echo" U25_fingerprint_names.
-  Proof. simpl; intuition discriminate. Qed.
-  Theorem U25_fingerprint_immune :
-    mention_immune Text mention (structural Text string scan (fun p => In p U25_fingerprint_names)).
-  Proof. exact (structural_immune Text string scan mention "echo" scan_mention_single _ U25_fingerprint_clean). Qed.
-  Theorem U25_fingerprint_monotone : forall W, (forall p, In p U25_fingerprint_names -> W p) ->
-    forall c, nominal Text string scan (fun p => In p U25_fingerprint_names) c -> nominal Text string scan W c.
-  Proof. intros W H. exact (nominal_monotone Text string scan _ W H). Qed.
-  (* pattern 0: '(?i).*scan(?:ner)?\\w*\\.py' -- a regular vocabulary, checked in Python to exclude 'echo'; the instance is conditional on that. *)
-  Theorem U25_fingerprint_pattern0_immune : forall V : string -> Prop,
-    ~ V "echo" -> mention_immune Text mention (structural Text string scan V).
-  Proof. intros V H. exact (structural_immune Text string scan mention "echo" scan_mention_single V H). Qed.
+  (* class=effect closure=world *)
+  (* effects: report_clean -- what the act did, read from the world, not the command *)
+  Theorem U25_fingerprint_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),
+    name_agnostic string (effect string E d).
+  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.
+  Theorem U25_fingerprint_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->
+    forall segs, effect string E d segs /\ ~ effect string E d' segs.
+  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.
 
   (* SIDE U25_discharged_by *)
   (* class=nominal closure=open *)
@@ -523,116 +480,95 @@ Section Instance.
 
 End Instance.
 
-Print Assumptions A01_fingerprint_clean.
-Print Assumptions A01_fingerprint_immune.
-Print Assumptions A01_fingerprint_monotone.
 Print Assumptions A01_discharged_by_clean.
 Print Assumptions A01_discharged_by_immune.
 Print Assumptions A01_discharged_by_monotone.
-Print Assumptions A02_fingerprint_clean.
-Print Assumptions A02_fingerprint_immune.
-Print Assumptions A02_fingerprint_monotone.
 Print Assumptions A02_discharged_by_clean.
 Print Assumptions A02_discharged_by_immune.
 Print Assumptions A02_discharged_by_monotone.
-Print Assumptions A03_fingerprint_clean.
-Print Assumptions A03_fingerprint_immune.
-Print Assumptions A03_fingerprint_monotone.
 Print Assumptions A03_discharged_by_clean.
 Print Assumptions A03_discharged_by_immune.
 Print Assumptions A03_discharged_by_monotone.
-Print Assumptions C08_check_can_fail_activated_by_pattern0_immune.
+Print Assumptions C08_check_can_fail_activated_by_name_agnostic.
+Print Assumptions C08_check_can_fail_activated_by_separates.
 Print Assumptions C08_check_can_fail_discharged_by_pattern0_immune.
 Print Assumptions C09_checker_excludes_self_fingerprint_name_agnostic.
 Print Assumptions C09_checker_excludes_self_discharged_by_name_agnostic.
 Print Assumptions T01_discharged_by_clean.
 Print Assumptions T01_discharged_by_immune.
 Print Assumptions T01_discharged_by_monotone.
-Print Assumptions T02_activated_by_clean.
-Print Assumptions T02_activated_by_immune.
-Print Assumptions T02_activated_by_monotone.
-Print Assumptions T02_discharged_by_clean.
-Print Assumptions T02_discharged_by_immune.
-Print Assumptions T02_discharged_by_monotone.
-Print Assumptions U01_fingerprint_clean.
-Print Assumptions U01_fingerprint_immune.
-Print Assumptions U01_fingerprint_monotone.
+Print Assumptions T02_activated_by_name_agnostic.
+Print Assumptions T02_activated_by_separates.
+Print Assumptions T02_discharged_by_name_agnostic.
+Print Assumptions T02_discharged_by_separates.
+Print Assumptions U01_fingerprint_name_agnostic.
+Print Assumptions U01_fingerprint_separates.
 Print Assumptions U01_discharged_by_clean.
 Print Assumptions U01_discharged_by_immune.
 Print Assumptions U01_discharged_by_monotone.
-Print Assumptions U02_fingerprint_clean.
-Print Assumptions U02_fingerprint_immune.
-Print Assumptions U02_fingerprint_monotone.
+Print Assumptions U02_fingerprint_name_agnostic.
+Print Assumptions U02_fingerprint_separates.
 Print Assumptions U02_discharged_by_clean.
 Print Assumptions U02_discharged_by_immune.
 Print Assumptions U02_discharged_by_monotone.
-Print Assumptions U03_fingerprint_clean.
-Print Assumptions U03_fingerprint_immune.
-Print Assumptions U03_fingerprint_monotone.
+Print Assumptions U03_fingerprint_name_agnostic.
+Print Assumptions U03_fingerprint_separates.
 Print Assumptions U03_discharged_by_clean.
 Print Assumptions U03_discharged_by_immune.
 Print Assumptions U03_discharged_by_monotone.
-Print Assumptions U06_fingerprint_clean.
-Print Assumptions U06_fingerprint_immune.
-Print Assumptions U06_fingerprint_monotone.
+Print Assumptions U06_fingerprint_name_agnostic.
+Print Assumptions U06_fingerprint_separates.
 Print Assumptions U06_discharged_by_clean.
 Print Assumptions U06_discharged_by_immune.
 Print Assumptions U06_discharged_by_monotone.
-Print Assumptions U08_fingerprint_clean.
-Print Assumptions U08_fingerprint_immune.
-Print Assumptions U08_fingerprint_monotone.
+Print Assumptions U08_fingerprint_name_agnostic.
+Print Assumptions U08_fingerprint_separates.
 Print Assumptions U08_discharged_by_clean.
 Print Assumptions U08_discharged_by_immune.
 Print Assumptions U08_discharged_by_monotone.
-Print Assumptions U09_fingerprint_clean.
-Print Assumptions U09_fingerprint_immune.
-Print Assumptions U09_fingerprint_monotone.
+Print Assumptions U09_fingerprint_name_agnostic.
+Print Assumptions U09_fingerprint_separates.
 Print Assumptions U09_discharged_by_clean.
 Print Assumptions U09_discharged_by_immune.
 Print Assumptions U09_discharged_by_monotone.
-Print Assumptions U10_fingerprint_clean.
-Print Assumptions U10_fingerprint_immune.
-Print Assumptions U10_fingerprint_monotone.
+Print Assumptions U10_fingerprint_name_agnostic.
+Print Assumptions U10_fingerprint_separates.
 Print Assumptions U10_discharged_by_clean.
 Print Assumptions U10_discharged_by_immune.
 Print Assumptions U10_discharged_by_monotone.
 Print Assumptions U10_discharged_by_pattern0_immune.
-Print Assumptions U12_fingerprint_clean.
-Print Assumptions U12_fingerprint_immune.
-Print Assumptions U12_fingerprint_monotone.
+Print Assumptions U12_fingerprint_name_agnostic.
+Print Assumptions U12_fingerprint_separates.
 Print Assumptions U12_discharged_by_clean.
 Print Assumptions U12_discharged_by_immune.
 Print Assumptions U12_discharged_by_monotone.
 Print Assumptions U12_discharged_by_pattern0_immune.
-Print Assumptions U13_fingerprint_clean.
-Print Assumptions U13_fingerprint_immune.
-Print Assumptions U13_fingerprint_monotone.
+Print Assumptions U12_discharged_by_pattern1_immune.
+Print Assumptions U13_fingerprint_name_agnostic.
+Print Assumptions U13_fingerprint_separates.
 Print Assumptions U13_discharged_by_clean.
 Print Assumptions U13_discharged_by_immune.
 Print Assumptions U13_discharged_by_monotone.
-Print Assumptions U19_fingerprint_clean.
-Print Assumptions U19_fingerprint_immune.
-Print Assumptions U19_fingerprint_monotone.
+Print Assumptions U13_discharged_by_pattern0_immune.
+Print Assumptions U19_fingerprint_name_agnostic.
+Print Assumptions U19_fingerprint_separates.
 Print Assumptions U19_discharged_by_clean.
 Print Assumptions U19_discharged_by_immune.
 Print Assumptions U19_discharged_by_monotone.
 Print Assumptions U19_discharged_by_pattern0_immune.
-Print Assumptions U20_fingerprint_clean.
-Print Assumptions U20_fingerprint_immune.
-Print Assumptions U20_fingerprint_monotone.
+Print Assumptions U19_discharged_by_pattern1_immune.
+Print Assumptions U20_fingerprint_name_agnostic.
+Print Assumptions U20_fingerprint_separates.
 Print Assumptions U20_discharged_by_clean.
 Print Assumptions U20_discharged_by_immune.
 Print Assumptions U20_discharged_by_monotone.
-Print Assumptions U24_fingerprint_clean.
-Print Assumptions U24_fingerprint_immune.
-Print Assumptions U24_fingerprint_monotone.
+Print Assumptions U24_fingerprint_name_agnostic.
+Print Assumptions U24_fingerprint_separates.
 Print Assumptions U24_discharged_by_clean.
 Print Assumptions U24_discharged_by_immune.
 Print Assumptions U24_discharged_by_monotone.
-Print Assumptions U25_fingerprint_clean.
-Print Assumptions U25_fingerprint_immune.
-Print Assumptions U25_fingerprint_monotone.
-Print Assumptions U25_fingerprint_pattern0_immune.
+Print Assumptions U25_fingerprint_name_agnostic.
+Print Assumptions U25_fingerprint_separates.
 Print Assumptions U25_discharged_by_clean.
 Print Assumptions U25_discharged_by_immune.
 Print Assumptions U25_discharged_by_monotone.

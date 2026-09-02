@@ -130,7 +130,5 @@ class ACommentLineDoesNotDisarmTheTable(unittest.TestCase):
         if name == "activated_by":
             return list(clause.fixtures_activate or [])
         if name == "discharged_by":
-            # A discharge fixture set is not authored separately; the row's positives are the
-            # commands it names, and the guard predicate is checked against them the same way.
-            return list(clause.fixtures_pos or [])
+            return list(clause.fixtures_discharge or [])
         return list(clause.fixtures_pos or [])
