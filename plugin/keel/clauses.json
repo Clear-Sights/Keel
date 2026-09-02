@@ -2205,8 +2205,10 @@
     ],
     "occasion": "a process that was running before the act is not running after it -- ended by whatever program, or none",
     "costly": "use a PID in a signal operation",
-    "guard": "produce a process listing: an output that holds at least two live pids, from whatever program, or Read Keel's `observed.json`, which lists the session's processes",
-    "subject": "session_id",
+    "guard": "produce a process listing: an output that holds at least two live pids and the pid that was ended, from whatever program, or Read Keel's `observed.json`, which lists the session's processes -- keyed on the ended pid: a listing that does not name it pays nothing",
+    "subject": {
+      "effect": "pids_gone"
+    },
     "fingerprint": {
       "kind": "effect",
       "effect": "pids_gone"
@@ -3402,8 +3404,10 @@
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "apply a patch",
-    "guard": "look at the target before applying: Grep or Read it, or print its path from the worktree (`git diff`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds)",
-    "subject": "session_id",
+    "guard": "look at the changed file itself before applying: Grep or Read it, or print its path from the worktree (`git diff`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds) -- keyed on each changed path: the look must name that path, and a look at another file pays nothing",
+    "subject": {
+      "effect": "files_changed"
+    },
     "fingerprint": {
       "kind": "effect",
       "effect": "files_changed"
@@ -3664,8 +3668,10 @@
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "apply a generated patch",
-    "guard": "look at what the patch touches first: Read the target, or print its path from the worktree (`git diff`, `git apply --stat`)",
-    "subject": "session_id",
+    "guard": "look at the file the patch changed: Read the target, or print its path from the worktree (`git diff`, `git apply --stat`) -- keyed on each changed path: the look must name that path, and a look at another file pays nothing",
+    "subject": {
+      "effect": "files_changed"
+    },
     "fingerprint": {
       "kind": "effect",
       "effect": "files_changed"
@@ -3913,8 +3919,10 @@
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "perform an in-place text rewrite",
-    "guard": "look at the text you are about to rewrite: Grep or Read it, or print its path from the worktree (`git diff`, `cmp`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds)",
-    "subject": "session_id",
+    "guard": "look at the rewritten file itself: Grep or Read it, or print its path from the worktree (`git diff`, `cmp`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds) -- keyed on each changed path: the look must name that path, and a look at another file pays nothing",
+    "subject": {
+      "effect": "files_changed"
+    },
     "fingerprint": {
       "kind": "effect",
       "effect": "files_changed"

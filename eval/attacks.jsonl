@@ -19,3 +19,4 @@
 {"angle": "act-set-timestamp-decides-a-classification", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: tree deltas compare content, never timestamps"}
 {"angle": "content-loss-under-another-status", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "green", "reproducer": "bash eval/attacks.sh emptied_is_removed", "cwd": "..", "found_as": "K17 29/30"}
 {"angle": "content-loss-under-another-status", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "grep -q 'has none after it' plugin/keel/effects.py", "cwd": "..", "found_as": "K17 29/30"}
+{"angle": "constant-payload-pays-a-keyed-guard", "layer": "dispatcher", "target": "discharge", "expect": "green", "reproducer": "bash eval/attacks.sh constant_payload_pays_no_keyed_demand", "cwd": "..", "found_as": "AG-10 29/30"}

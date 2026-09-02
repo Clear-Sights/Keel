@@ -57,6 +57,8 @@ EFFECTS: dict[str, str] = {
     # check, or a report shape where no trace exists -- never by what it was called.
     "report_ref": "an act that changed no file, ref or process printed a ref name or commit id the ref snapshot holds",
     "report_paths": "an act that changed no file, ref or process printed a path the worktree snapshot holds",
+    "named_paths": "the worktree paths that report named, in full: what a demand keyed on a changed path is paid by",
+    "named_pids": "the live pids that report named: what a demand keyed on a gone pid is paid by",
     "report_pids": "the act printed at least two pids that were alive at the snapshot",
     "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself",
     "report_structured": "the act printed a JSON datum that is not null",
@@ -525,7 +527,8 @@ _TOKEN = re.compile(r"[A-Za-z0-9_./-]+")
 def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bool) -> dict[str, Any]:
     """The guard effects a trace can check: a datum the report states equals one the world holds."""
     tokens = set(_TOKEN.findall(text or ""))
-    out: dict[str, Any] = {"report_ref": None, "report_paths": None, "report_pids": None}
+    out: dict[str, Any] = {"report_ref": None, "report_paths": None, "report_pids": None,
+                           "named_paths": None, "named_pids": None}
     refs_then = before.get("refs")
     if refs_then is not None:
         names = {n.split("/", 2)[-1] for n in refs_then if n.startswith(("refs/heads/", "refs/remotes/"))}
@@ -550,12 +553,25 @@ def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bo
             parts = path.split("/")
             for i in range(1, len(parts)):
                 held.add("/".join(parts[:i]))
-        out["report_paths"] = quiet and any(
-            t.removeprefix("./").rstrip("/") in held or t.rsplit("/", 1)[-1] in held for t in tokens)
+        # The named paths are kept in FULL, resolved from a basename or a prefix the report
+        # printed, so a demand keyed on `src/main.py` is paid by `git diff` printing
+        # `a/src/main.py` and by `ls src` printing `main.py`, and by nothing that printed
+        # neither (AG-10: a constant payload must not pay a keyed demand).
+        named = set()
+        for t in tokens:
+            t = t.removeprefix("./").rstrip("/")
+            base = t.rsplit("/", 1)[-1]
+            for path in paths:
+                if path and (path == t or path.endswith("/" + t) or path.rsplit("/", 1)[-1] == base
+                             or (t and path.startswith(t + "/"))):
+                    named.add(path)
+        out["named_paths"] = sorted(named) if quiet else []
+        out["report_paths"] = quiet and bool(named)
     alive = before.get("alive")
     if alive is not None:
         live = set(alive)
         claimed = {int(t) for t in tokens if t.isdigit() and int(t) in live}
+        out["named_pids"] = sorted(claimed)
         out["report_pids"] = len(claimed) >= LISTING_FLOOR
         out["report_listing"] = out["report_pids"] and not _lists_itself(text, before.get("command"))
     return out
@@ -630,7 +646,8 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
 def read_delta(state: pathlib.Path, event: dict[str, Any]) -> dict[str, Any]:
     """The record for a host Read: it did nothing to the world, and it may have observed Keel's own datum."""
     out: dict[str, Any] = {name: False for name in EFFECTS}
-    for name in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned"):
+    for name in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned",
+                 "named_paths", "named_pids"):
         out[name] = []
     out["observed_read"] = _artifact_read(state, event, OBSERVED)
     out["remote_read"] = _artifact_read(state, event, REMOTE)

@@ -149,4 +149,7 @@ raise SystemExit(0 if ok and d["files_removed"] == ["a.txt"] and d["files_change
 PY
 }
 
+constant_payload_pays_no_keyed_demand() {  # AG-10: a look at another target pays nothing for a rewrite
+  cd "$REPO" && PYTHONPATH=plugin python3 -m unittest -q tests.test_keyed_effects.ALookPaysOnlyWhatItNames.test_TEETH_a_read_of_another_file_pays_nothing tests.test_keyed_effects.ALookPaysOnlyWhatItNames.test_TEETH_a_listing_that_names_another_path_pays_nothing >/dev/null 2>&1; }
+
 "$@"

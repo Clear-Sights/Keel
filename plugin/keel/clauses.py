@@ -427,6 +427,9 @@ def derive_closure(predicate: Any) -> str:
     return cls
 
 
+KEYABLE_EFFECTS = ("files_changed", "files_removed", "pids_gone")
+
+
 def subject_fields(spec: Any) -> list[str]:
     """The event fields a subject extractor may read, in order.
 
@@ -647,6 +650,12 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EFFECT-EVENT",
                           f"{clause.id}: an effect occasion is observed after the act; declare PostToolUse")
     disc = _discriminator(clause)
+    if isinstance(clause.subject, dict) and "effect" in clause.subject:
+        # A subject keyed on a datum must name one the record carries as a LIST, or nothing
+        # could ever raise a demand under it and the clause would be silently unenforceable.
+        if clause.subject["effect"] not in KEYABLE_EFFECTS or len(clause.subject) != 1:
+            raise ClauseError("CLAUSE-SUBJECT-UNKEYABLE-EFFECT",
+                              f"{clause.id}: subject effect must be one of {KEYABLE_EFFECTS}")
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-POS-MISS", f"{clause.id}: {fixture!r}")
@@ -664,7 +673,7 @@ def _admit(clause: Clause) -> Clause:
         # one. `git clean -fd` and `find . -name '*.tmp' -delete` name no trailing-slash path, so
         # its extractor returned "" and the dispatcher allowed both -- a bulk delete passing the
         # clause written to stop it, with the fixture list asserting the opposite.
-        if isinstance(clause.subject, dict):
+        if isinstance(clause.subject, dict) and "effect" not in clause.subject:
             keyed = _fixture_event(clause.subject, fixture)
             fields = subject_fields(clause.subject)
             value = _resolve(keyed, fields[0] if fields else "")

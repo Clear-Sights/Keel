@@ -133,6 +133,68 @@ def _ids(event: dict) -> tuple[str, str]:
 _MISSING_FIELD = None
 
 
+# A DEMAND KEYED ON WHAT THE ACT DID. An effect clause's subject may be the datum its effect
+# produced -- `{"effect": "files_changed"}` -- so a rewrite of two files raises two demands,
+# each keyed on its path, and a guard pays exactly the one it names: a Read of `config.txt`,
+# a `git diff` whose output names `config.txt`, a Grep aimed at it. Before this the subject
+# was the session, so any look at any path paid every rewrite (AG-10: a constant payload paid
+# a trace-checked guard, 29 of 30 targets). `observed.json` is Keel's own measurement of the
+# dirty paths and pids, so a Read of it names them all -- that is what the artifact is for.
+_NAMED_BY = {"files_changed": "named_paths", "files_removed": "named_paths", "pids_gone": "named_pids"}
+
+
+def _effect_keyed(clause) -> str | None:
+    spec = clause.subject
+    return spec.get("effect") if isinstance(spec, dict) and "effect" in spec else None
+
+
+def _subjects(clause, event: dict) -> list[str]:
+    """Every key this event raises for the clause: one per datum for an effect subject."""
+    effect = _effect_keyed(clause)
+    if effect is None:
+        return [_subject(clause, event)]
+    record = event.get("keel_effect") if isinstance(event.get("keel_effect"), dict) else {}
+    data = record.get(effect)
+    return [str(d)[:200] for d in data] if isinstance(data, list) else []
+
+
+def _names(clause, event: dict, subject: str) -> bool:
+    """Does this guard event name the datum a demand is keyed on?"""
+    effect = _effect_keyed(clause)
+    record = event.get("keel_effect") if isinstance(event.get("keel_effect"), dict) else {}
+    if record.get("observed_read") is True:
+        return True
+    named = record.get(_NAMED_BY.get(effect, ""))
+    if isinstance(named, list) and subject in {str(n) for n in named}:
+        return True
+    for field in ("tool_input.file_path", "tool_input.path", "tool_input.notebook_path"):
+        value = _get(event, field)
+        if isinstance(value, str) and value and (value == subject or value.endswith("/" + subject)
+                                                 or subject.endswith("/" + value.rsplit("/", 1)[-1])
+                                                 and value.rsplit("/", 1)[-1] == subject.rsplit("/", 1)[-1]):
+            return True
+    return False
+
+
+def _pay(clause, ledger: Ledger, event: dict, session: str, agent: str, *, only_open: bool,
+         how: str) -> bool:
+    """Discharge what this guard event pays for the clause; True if it paid anything.
+
+    A session-keyed or extractor-keyed clause pays the one demand its subject derives; an
+    effect-keyed clause pays every open demand of its own whose datum this event names."""
+    if _effect_keyed(clause) is not None:
+        rows = [row for row in ledger.open_demands(session, agent)
+                if row.get("clause_id") == clause.id and _names(clause, event, row.get("subject") or "")]
+        for row in rows:
+            ledger.discharge(session, agent, row["id"], how)
+        return bool(rows)
+    did = derive_id(session, agent, clause.id, _subject(clause, event))
+    if only_open and did not in ledger.open_ids(session, agent):
+        return False
+    ledger.discharge(session, agent, did, how)
+    return True
+
+
 def _subject(clause, event: dict) -> str:
     """The ledger key. It must yield the SAME value for the costly act and for its guard.
 
@@ -206,6 +268,10 @@ def _deny(reason: str) -> dict:
 # the raw subject produced -- is worse than silence, because it points the session at its own id.
 def _keyed_reason(clause, subject: str) -> str:
     base = f"[{clause.id}] {clause.deny_reason}"
+    if _effect_keyed(clause) is not None:
+        return (f"{base} -- keyed on `{subject}`, so the guard must name `{subject}`: Read it, "
+                f"Grep it, or print it from the worktree; a look at another target does not "
+                f"discharge this." + _construction(clause))
     if isinstance(clause.subject, dict):
         if not subject:
             return base + _construction(clause)
@@ -339,7 +405,9 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
             continue
         # The guard must name what the demand is keyed on: a Read of `other.json` does not pay
         # for the traversal of `payload.json`. Session-wide subjects agree trivially.
-        if C.discharges(cl, event) and derive_id(session, agent, cl.id, _subject(cl, event)) == row["id"]:
+        if C.discharges(cl, event) and (
+                _names(cl, event, row.get("subject") or "") if _effect_keyed(cl) is not None
+                else derive_id(session, agent, cl.id, _subject(cl, event)) == row["id"]):
             ledger.discharge(session, agent, row["id"], "guard call observed")
             progress = True
             continue
@@ -406,13 +474,10 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
             # after a rewrite although U12 fires at PostToolUse. Terminal clauses are watched
             # by `_watch_standing`, under their own subject.
             if cl.event not in ("Stop", "SubagentStop") and C.discharges(cl, event):
-                subject = _subject(cl, event)
-                did = derive_id(session, agent, cl.id, subject)
                 # An effect clause is discharged only against a demand its effect raised (the
                 # rule `post_tool_use` states); a pre-act clause is licensed in advance.
-                if (C.classify_side(cl.fingerprint) != "effect"
-                        or did in ledger.open_ids(session, agent)):
-                    ledger.discharge(session, agent, did, "guard call observed")
+                if _pay(cl, ledger, event, session, agent, how="guard call observed",
+                        only_open=C.classify_side(cl.fingerprint) == "effect"):
                     progress = True
                 continue
             if id(cl) not in applicable:
@@ -468,15 +533,14 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
             # only here. So A01's guard (a Read of the worktree measurement) pays A01's
             # PreToolUse demand from this event, and T01's standing guard the same.
             if cl.event not in ("Stop", "SubagentStop") and C.discharges(cl, event):
-                did = derive_id(session, agent, cl.id, _subject(cl, event))
                 # AN EFFECT'S GUARD IS "LOOK AT WHAT YOU JUST DID", and that cannot be done
                 # in advance. A pre-act clause is licensed by a guard seen before the act; an
                 # effect clause is discharged only against a demand its effect has raised.
                 # Otherwise the suite run every session opens with would license the deletion
                 # that comes an hour later -- measured: U20 never fired once a `pytest` had
                 # run earlier in the session.
-                if not after_the_act or did in ledger.open_ids(session, agent):
-                    ledger.discharge(session, agent, did, "guard call completed")
+                _pay(cl, ledger, event, session, agent, how="guard call completed",
+                     only_open=after_the_act)
                 continue
             if id(cl) not in applicable:
                 continue
@@ -484,12 +548,12 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
             # the next call pays it (`_open_effect_denial`); this event itself cannot be
             # refused, the act is done. `match` fails closed on an unmeasured effect.
             if after_the_act and C.match(cl, event):
-                subject = _subject(cl, event)
-                did = derive_id(session, agent, cl.id, subject)
-                if not ledger.is_licensed(session, agent, did):
-                    ledger.demand(Demand(id=did, session=session, agent=agent,
-                                         clause_id=cl.id, subject=subject,
-                                         reason=cl.deny_reason))
+                for subject in _subjects(cl, event):
+                    did = derive_id(session, agent, cl.id, subject)
+                    if not ledger.is_licensed(session, agent, did):
+                        ledger.demand(Demand(id=did, session=session, agent=agent,
+                                             clause_id=cl.id, subject=subject,
+                                             reason=cl.deny_reason))
         except Exception:
             continue
     command = _get(event, "tool_input.command")

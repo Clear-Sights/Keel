@@ -343,7 +343,10 @@ class OccasionAlgebra(unittest.TestCase):
         walking past the clause written to stop it.
         """
         bundle = json.loads((PLUGIN / "keel" / "clauses.json").read_text())
-        with_extractor = [r for r in bundle if isinstance(r.get("subject"), dict)]
+        # An effect subject (`{"effect": "files_changed"}`) is keyed on the datum the record
+        # carries, not on an operand extracted from the event; it has no pattern to defeat.
+        with_extractor = [r for r in bundle
+                          if isinstance(r.get("subject"), dict) and "pattern" in r["subject"]]
         self.assertTrue(with_extractor, "no clause keys on an extractor; this law is vacuous")
 
         planted = 0

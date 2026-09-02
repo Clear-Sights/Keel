@@ -32,7 +32,8 @@ CWD = "/work/repo"
 
 def full(**eff):
     base = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
-                           "pids_gone", "pids_spawned") else False for n in effects.EFFECTS}
+                           "pids_gone", "pids_spawned", "named_paths", "named_pids") else False
+            for n in effects.EFFECTS}
     base["head_switched"] = False
     base["remote_landed"] = None   # measured only at the ending
     base.update(eff)
@@ -234,11 +235,11 @@ def specs():
         before=act("dispatch.sh worker1", "u02", pids_spawned=[9001])
                + act(f"# keel-guard: U01\n{PROBE} --writable-home --response-transport --result-write", "u02", report_pass=True)
                + act("sed -i s/a/b/ worker1.cfg", "u02", files_changed=["worker1.cfg"])
-               + act("# keel-guard: U12 U13 U19\ngit diff --stat", "u02", report_paths=True)))
+               + act("# keel-guard: U12 U13 U19\ngit diff --stat", "u02", report_paths=True, named_paths=["worker1.cfg"])))
     S.append(effect_session("u03-kill-without-looking", "U03",
         "a process is ended without anything having looked at the table",
         "a process that was running before the call is gone after it, and no ps or pgrep in this session produced its pid",
-        "u03", "kill 4821", {"pids_gone": [4821]}, "ps aux", guard_effect={"report_pids": True}))
+        "u03", "kill 4821", {"pids_gone": [4821]}, "ps aux", guard_effect={"report_pids": True, "named_pids": [4821]}))
     s = "u06"
     p = prelude(s) + act("git fetch origin", s, net_out=True)
     S.append(session("u06-mutating-request-unauthenticated", "U06",
@@ -267,21 +268,21 @@ def specs():
         "a patch is applied without anything having read the target",
         "the call changed file content and no search or read of the target is on record",
         "u12", "patch -p1 < changes.txt", {"files_changed": ["src/main.py"]}, "git diff",
-        guard_effect={"report_paths": True}))
+        guard_effect={"report_paths": True, "named_paths": ["src/main.py"]}))
     s = "u13"
     p = prelude(s)
     S.append(session("u13-patch-file-without-check", "U13",
         "the call changed file content the way a patch does, and no `git apply --check` is on record: a failing hunk leaves the tree half-changed",
         p + act("git apply fix.patch", s, files_changed=["src/main.py"]) + [pre("echo next", s)]
-        + act("# keel-guard: U13\ngit apply --stat fix.patch", s, report_paths=True)
-        + act("# keel-guard: U12 U19\ngit diff", s, report_paths=True) + [pre("echo next", s)],
+        + act("# keel-guard: U13\ngit apply --stat fix.patch", s, report_paths=True, named_paths=["src/main.py"])
+        + act("# keel-guard: U12 U19\ngit diff", s, report_paths=True, named_paths=["src/main.py"]) + [pre("echo next", s)],
         derails_at=len(p) + 2, expect="recovery",
         description="a .patch file is applied with no look at the target; the refusal names the three clauses one rewrite owes, and each committed guard pays what its effect shows"))
     S.append(effect_session("u19-inplace-rewrite-unverified", "U19",
         "an in-place rewrite with nothing comparing before and after",
         "the call rewrote file content nobody had looked at",
         "u19", "sed -i s/old/new/ config.txt", {"files_changed": ["config.txt"]}, "git diff",
-        guard_effect={"report_paths": True}))
+        guard_effect={"report_paths": True, "named_paths": ["config.txt"]}))
     s = "u19e"
     p = prelude(s)
     edit = {"file_path": "config.txt", "old_string": "old", "new_string": "new"}

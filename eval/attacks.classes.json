@@ -11,5 +11,8 @@
  ],
  "surface": [
   "hooks.json+occasion-tools"
+ ],
+ "dispatcher": [
+  "discharge"
  ]
 }
