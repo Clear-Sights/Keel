@@ -9,3 +9,4 @@
 {"angle": "effect-named-by-no-clause", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: observers compute effects, they do not name them"}
 {"angle": "sibling-spawn-makes-a-look-loud", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: tree observers do not read processes"}
 {"angle": "sibling-spawn-makes-a-look-loud", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "bash eval/attacks.sh look_survives_sibling_spawn", "cwd": "..", "found_as": "CI 3/15 jobs; EF-06/K22"}
+{"angle": "file-mutation-covered-on-one-surface", "layer": "surface", "target": "hooks.json+occasion-tools", "expect": "green", "reproducer": "bash eval/attacks.sh write_surface_is_observed", "cwd": "..", "found_as": "K03 30/31, H7, POSTURE-08"}

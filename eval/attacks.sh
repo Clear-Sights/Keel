@@ -68,4 +68,16 @@ raise SystemExit(0 if d["report_ref"] else 1)
 PY
 }
 
+write_surface_is_observed() {  # the host's write tools are matched by the hooks and fire the effect occasions
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import json
+from keel import clauses
+hooks = json.load(open("plugin/hooks/hooks.json"))["hooks"]
+ok = all(any(t in (h.get("matcher") or "").split("|") for h in hooks[m]) for t in ("Write", "Edit", "MultiEdit", "NotebookEdit") for m in ("PreToolUse", "PostToolUse"))
+u19 = next(c for c in clauses.load_default() if c.id == "U19")
+ev = {"hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_input": {"file_path": "x"}, "keel_effect": {"files_changed": ["x"]}}
+raise SystemExit(0 if ok and clauses._predicate(u19.fingerprint, ev) is True else 1)
+PY
+}
+
 "$@"

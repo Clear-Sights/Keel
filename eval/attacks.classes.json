@@ -8,5 +8,8 @@
  "effects": [
   "_tree_delta+_walk_delta",
   "EFFECTS"
+ ],
+ "surface": [
+  "hooks.json+occasion-tools"
  ]
 }

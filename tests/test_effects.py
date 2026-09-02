@@ -457,13 +457,13 @@ class TheDispatcherEnforcesAnEffect(Repo):
         rewrite's, not the session's."""
         smoke_replace(
             self, PLUGIN / "keel" / "dispatch.py",
-            b'            if event.get("tool_name") == "Bash":\n'
+            b'            if tool not in HOST_READS:\n'
             b'                event["keel_effect"] = effects.delta(',
-            b'            if event.get("tool_name") == "Bash-disarmed":\n'
+            b'            if tool in HOST_READS:\n'
             b'                event["keel_effect"] = effects.delta(',
             "tests.test_effects.TheDispatcherEnforcesAnEffect."
             "test_a_rewrite_nobody_looked_at_refuses_the_next_call_until_the_diff_is_seen",
-            "U12",
+            "still owed",  # no delta for any tool: the guard acts pay nothing either, so every demand stands
         )
 
 

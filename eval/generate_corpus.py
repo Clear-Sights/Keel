@@ -207,7 +207,8 @@ def specs():
         "the run ends looking complete; uncommitted work and stray files are silently abandoned",
         prelude(s, observed=False) + [pre("", s, tool="Write", file_path="/work/repo/calc.py", content="x"),
          {"hook_event_name": "PostToolUse", "session_id": s, "cwd": CWD, "tool_name": "Write",
-          "tool_input": {"file_path": "/work/repo/calc.py", "content": "x"}},
+          "tool_input": {"file_path": "/work/repo/calc.py", "content": "x"},
+          "keel_effect": full(files_changed=["calc.py"])},
          stop(s)],
         derails_at=4, description="a session edits files and then declares itself finished without ever observing the worktree"))
     s = "t02"
@@ -281,6 +282,21 @@ def specs():
         "the call rewrote file content nobody had looked at",
         "u19", "sed -i s/old/new/ config.txt", {"files_changed": ["config.txt"]}, "git diff",
         guard_effect={"report_paths": True}))
+    s = "u19e"
+    p = prelude(s)
+    edit = {"file_path": "config.txt", "old_string": "old", "new_string": "new"}
+    S.append(session("u19-edit-rewrite-unverified", "U19",
+        "an in-place rewrite by the host's own Edit tool with no read of the result; the same point as the sed session, on the other surface",
+        p + [pre("", s, tool="Edit", **edit),
+             {"hook_event_name": "PostToolUse", "session_id": s, "cwd": CWD, "tool_name": "Edit",
+              "tool_input": edit, "keel_effect": full(files_changed=["config.txt"])},
+             pre("echo next", s),
+             pre("", s, tool="Read", file_path="config.txt"),
+             {"hook_event_name": "PostToolUse", "session_id": s, "cwd": CWD, "tool_name": "Read",
+              "tool_input": {"file_path": "config.txt"}, "keel_effect": full()},
+             pre("echo next", s)],
+        derails_at=len(p) + 2, expect="recovery",
+        description="a session rewrites a file through the host's Edit tool and moves on without reading what it wrote; the next act is refused until a Read of the file is on record"))
     S.append(effect_session("u20-delete-without-a-green-test", "U20",
         "a delete with no test run standing behind it",
         "a file that existed before the call is gone after it, and nothing has shown the tree still passes",
