@@ -701,8 +701,14 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
             memory["spawned"] = remembered
     net_now = net_active_opens()
     out["net_out"] = assigned_counter(before, net_now)
+    # Three states the ending reads: True (this session transmitted), False (every act was
+    # measured and none did), None (some act could not be measured). None used to collapse into
+    # False, so a session whose network was unmeasurable ended as "nothing transmitted, the push
+    # landed" -- the fail-open direction, on the one clause that measures the remote.
     if out["net_out"]:
         memory["net_out"] = True
+    elif out["net_out"] is None and memory.get("net_out") is not True:
+        memory["net_out"] = None
     memory["net_after"] = net_now  # the next idle gap starts here
     # THE GUARD SIDE, read from the same trace. A quiet act changed nothing and left nothing.
     spawned = out.get("pids_spawned") or []
@@ -741,9 +747,11 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     slot = _slot(state, session, agent)
     memory = _memory(slot)
     out: dict[str, Any] = {"remote_ref_moved": None, "remote_landed": None}
-    if not memory.get("net_out"):
+    if memory.get("net_out") is False:
+        # Measured: no act of this session transmitted, so no remote ref can have moved.
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
+    # Transmitted, or could not tell: ask the remote rather than assume.
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
     if not root:
         return out

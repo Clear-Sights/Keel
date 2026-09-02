@@ -1067,7 +1067,7 @@
     "id": "C09-checker-excludes-self",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "the act printed a process listing that contains a segment of its own command -- the checker appeared in its own result, by whatever program",
     "costly": "count or trust a grep-shaped process match without excluding the observer identity",
@@ -1801,7 +1801,7 @@
     "id": "U01",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a process that did not exist before the act is still running after it -- a worker launched by whatever program",
     "costly": "launch a nested worker",
@@ -1999,7 +1999,7 @@
     "id": "U02",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a worker was launched and this session had already launched one -- a re-launch, by whatever program",
     "costly": "re-launch a nested-worker target",
@@ -2201,7 +2201,7 @@
     "id": "U03",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a process that was running before the act is not running after it -- ended by whatever program, or none",
     "costly": "use a PID in a signal operation",
@@ -2481,7 +2481,7 @@
     "id": "U06",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "the act opened an outbound connection -- through whatever program",
     "costly": "send a mutating request to an external service",
@@ -2675,7 +2675,7 @@
     "id": "U08",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "the act created a signed commit -- through whatever program",
     "costly": "create a signed git commit",
@@ -2869,7 +2869,7 @@
     "id": "U09",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "HEAD moved to a commit that already existed -- a switch or checkout, through whatever program",
     "costly": "switch or check out a git ref",
@@ -3173,8 +3173,7 @@
     "id": "U10",
     "event": "PostToolUse",
     "tools": [
-      "Bash",
-      "Read"
+      "*"
     ],
     "occasion": "the act printed a null datum, or nothing at all while reading a structured file -- through whatever program",
     "costly": "traverse structured JSON data",
@@ -3399,7 +3398,7 @@
     "id": "U12",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "apply a patch",
@@ -3661,7 +3660,7 @@
     "id": "U13",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "apply a generated patch",
@@ -3910,7 +3909,7 @@
     "id": "U19",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a file that existed before the act has different content after it -- rewritten by whatever program",
     "costly": "perform an in-place text rewrite",
@@ -4173,7 +4172,7 @@
     "id": "U20",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "a file that existed before the act is gone after it, or HEAD was reset to an ancestor with the worktree changed -- destroyed by whatever program",
     "costly": "make a destructive behavior-changing mutation",
@@ -4522,7 +4521,7 @@
     "id": "U24",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "the act opened an outbound connection -- a publish reaches its registry through one, under whatever program",
     "costly": "publish or release an artifact after runtime testing",
@@ -4757,7 +4756,7 @@
     "id": "U25",
     "event": "PostToolUse",
     "tools": [
-      "Bash"
+      "*"
     ],
     "occasion": "the act printed a scanner-report datum with no findings -- from whatever scanner",
     "costly": "run a scanner as an acceptance check",

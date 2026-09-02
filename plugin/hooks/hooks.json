@@ -9,7 +9,7 @@
             "type": "command"
           }
         ],
-        "matcher": "Bash|Read"
+        "matcher": "Bash|Edit|MultiEdit|NotebookEdit|Read|Write"
       }
     ],
     "PreCompact": [
@@ -33,7 +33,7 @@
             "type": "command"
           }
         ],
-        "matcher": "Agent|AskUserQuestion|Bash|ExitPlanMode|Glob|Grep|Read|Task"
+        "matcher": "Agent|AskUserQuestion|Bash|Edit|ExitPlanMode|Glob|Grep|MultiEdit|NotebookEdit|Read|Task|Write"
       }
     ],
     "SessionStart": [

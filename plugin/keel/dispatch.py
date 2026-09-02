@@ -275,7 +275,7 @@ def _closed_not_evaluable(event: dict, detail: str) -> dict | None:
 
 
 def _effect_record(ledger: Ledger, event: dict, moment: str) -> None:
-    """Observe the world around a Bash call and attach what changed as `event["keel_effect"]`.
+    """Observe the world around a call and attach what changed as `event["keel_effect"]`.
 
     A record already on the event is a RECORDED session (the corpus) and is kept as-is; a live
     event never carries one, because the host builds the event and `keel_effect` is not a field
@@ -288,13 +288,20 @@ def _effect_record(ledger: Ledger, event: dict, moment: str) -> None:
     session, agent = _ids(event)
     cwd = str(event.get("cwd") or os.getcwd())
     try:
+        # EVERY TOOL THAT CAN CHANGE THE WORLD IS OBSERVED, not only Bash. With Bash alone,
+        # the host's own Write/Edit/MultiEdit/NotebookEdit calls were outside the observer, so
+        # every file-mutation point was covered on one surface and bypassed on the other
+        # (measured: 30 of 31 targets under that angle). The observer reads the world, not the
+        # tool, so the same snapshot/delta serves them all; host reads are the exception because
+        # they change nothing and Read alone carries a datum (Keel's own artifacts).
+        tool = event.get("tool_name")
         if moment == "before":
-            if event.get("tool_name") == "Bash":
+            if tool not in HOST_READS:
                 effects.snapshot(ledger.root, session, agent, cwd)
         elif moment == "after":
-            if event.get("tool_name") == "Bash":
+            if tool not in HOST_READS:
                 event["keel_effect"] = effects.delta(ledger.root, session, agent, event)
-            elif event.get("tool_name") == "Read":
+            elif tool == "Read":
                 # A Read does nothing to the world; what it can do is observe Keel's own
                 # measurement, and that observation is the datum three guards are paid by.
                 event["keel_effect"] = effects.read_delta(ledger.root, event)
@@ -587,8 +594,14 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
         # read files was blocked demanding `git status` and `git fetch` under its own agent_id.
         # A clause that fires where it did not declare is the false-block that gets a gate switched
         # off, and a switched-off gate has zero coverage.
-        if cl.event != event_name:
-            continue
+        # An ending is an ending: a clause declaring Stop is reconciled at SubagentStop too, under
+        # that agent's OWN ledger key (its guards were recorded there, its artifacts are its own).
+        # The earlier scoping to the exact event let a subagent push and end unreconciled (30 of
+        # 31 targets under that angle); the false block it was written against was T02 demanding a
+        # fetch of a session that never pushed, which is now excluded below by its occasion.
+        if cl.event not in ("Stop", "SubagentStop") or event_name not in ("Stop", "SubagentStop"):
+            if cl.event != event_name:
+                continue
         # Keyed activations materialize their own per-key demand rows as the occasions arrive.
         # They need no synthetic session-wide standing row; open_demands above reconciles them.
         if cl.activated_by is not None and cl.activated_by.get("key_from") is not None:
@@ -606,7 +619,9 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     open_rows = list(open_rows) + undischarged
     if not open_rows:
         return {}
-    lines = "; ".join(f"[{r['clause_id']}] {r['reason']}" for r in open_rows[:5])
+    # Every open row is named: the count says N and the text used to show five of them, so a
+    # replay reading the names could not see the sixth, and neither could the operator.
+    lines = "; ".join(f"[{r['clause_id']}] {r['reason']}" for r in open_rows)
     return _block(f"{len(open_rows)} unreconciled obligation(s): {lines}")
 
 
