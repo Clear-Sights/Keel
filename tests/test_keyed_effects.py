@@ -17,20 +17,10 @@ import subprocess
 import tempfile
 import unittest
 
-from tests.plant_support import PLUGIN, REPO, smoke_replace
-from keel import effects
+from tests.plant_support import PLUGIN, REPO, record, smoke_replace
 
 HOOK = PLUGIN / "hooks" / "dispatch.sh"
 STATE_PATH = "/home/operator/.claude/keel_state/observed.json"
-
-
-def record(**eff) -> dict:
-    rec = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone",
-                          "pids_spawned", "named_paths", "named_pids") else False
-           for n in effects.EFFECTS}
-    rec["remote_landed"] = None
-    rec.update(eff)
-    return rec
 
 
 class ALookPaysOnlyWhatItNames(unittest.TestCase):

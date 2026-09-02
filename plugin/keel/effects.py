@@ -64,7 +64,7 @@ EFFECTS: dict[str, str] = {
     "report_structured": "the act printed a JSON datum that is not null",
     "report_signature": "the act printed a signature block or a verified-signature datum",
     "report_nowarn": "report_pass, and the report carries no warning line",
-    "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network",
+    "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network. Stated limit (K13): the host counter cannot say what was reached, so a quiet connect to a closed port is a read; the trace refuses a mention, not a wasted call",
     "report_after_change": "report_pass on an act that ran after a file changed since the last spawn",
     "report_listing": "report_pids, and the output holds no segment of the act's own command: a listing that excluded the observer",
     "observed_read": "the host Read tool returned Keel's own worktree measurement (observed.json), as written",
@@ -207,13 +207,53 @@ def _stat_fields(pid: int) -> list[str] | None:
     return stat.rsplit(")", 1)[-1].split()
 
 
-def process_session(pid: int) -> int | None:
-    """The process session (setsid group) a pid belongs to -- the lineage a daemonized worker
-    keeps after it is reparented away from this session's tree."""
-    fields = _stat_fields(pid)
-    if not fields or len(fields) <= _SID_AFTER_COMM or not fields[_SID_AFTER_COMM].isdigit():
+def proc_table() -> dict[int, tuple[str, int, int]] | None:
+    """ONE pass over /proc: pid -> (start time, parent, process session), for what is running.
+
+    Every caller wants a different projection of the same read -- the session's subtree, the
+    whole host, a pid's session -- and a function per projection re-read every process's stat
+    line two and three times per act. The start time is what makes a reused pid a new process.
+    A zombie is not running: it has ended and nobody has reaped it yet, and an orphaned worker
+    under a pid 1 that does not reap stays in /proc as one, so "still in /proc" is not "alive".
+    """
+    proc = pathlib.Path("/proc")
+    if not proc.is_dir():
         return None
-    return int(fields[_SID_AFTER_COMM])
+    table: dict[int, tuple[str, int, int]] = {}
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        fields = _stat_fields(int(entry.name))
+        if not fields or len(fields) <= _STARTTIME_AFTER_COMM or fields[0] == "Z":
+            continue
+        table[int(entry.name)] = (fields[_STARTTIME_AFTER_COMM], int(fields[1]),
+                                  int(fields[_SID_AFTER_COMM]) if fields[_SID_AFTER_COMM].isdigit() else 0)
+    return table
+
+
+def under(root: int, table: dict[int, tuple[str, int, int]]) -> dict[int, str]:
+    """pid -> start time for the processes of `table` whose ancestry reaches `root`."""
+    kin: dict[int, str] = {}
+    for pid, (start, _, _) in table.items():
+        cursor, hops = pid, 0
+        while cursor > 1 and hops < _ANCESTRY_CAP:
+            if cursor == root:
+                kin[pid] = start
+                break
+            cursor, hops = (table[cursor][1] if cursor in table else 1), hops + 1
+    return kin
+
+
+def _ancestry(hops: int) -> list[int]:
+    """This process and up to `hops` ancestors, nearest first. One walk, read two ways."""
+    chain, pid = [], os.getpid()
+    for _ in range(hops + 1):
+        chain.append(pid)
+        fields = _stat_fields(pid)
+        if not fields or len(fields) < 2 or int(fields[1]) <= 1:
+            break
+        pid = int(fields[1])
+    return chain
 
 
 def session_root() -> int:
@@ -227,66 +267,13 @@ def session_root() -> int:
     tree that the session ends is therefore unobserved; that boundary is the price of an
     observation that says something, and it is stated on the effect.
     """
-    pid = os.getpid()
-    for _ in range(2):
-        fields = _stat_fields(pid)
-        if not fields or len(fields) < 2:
-            break
-        parent = int(fields[1])
-        if parent <= 1:
-            break
-        pid = parent
-    return pid
-
-
-def pids(root: int | None = None) -> dict[int, str] | None:
-    """pid -> start time for every process under `root`, from /proc. The start time is what
-    makes a reused pid a new process."""
-    proc = pathlib.Path("/proc")
-    if not proc.is_dir():
-        return None
-    parents: dict[int, int] = {}
-    starts: dict[int, str] = {}
-    for entry in proc.iterdir():
-        if not entry.name.isdigit():
-            continue
-        fields = _stat_fields(int(entry.name))
-        if not fields or len(fields) <= _STARTTIME_AFTER_COMM:
-            continue
-        if fields[0] == "Z":
-            # A zombie is not running: it has ended and nobody has reaped it yet. An orphaned
-            # worker under a pid 1 that does not reap stays in /proc as one, so "still in
-            # /proc" is not "alive".
-            continue
-        parents[int(entry.name)] = int(fields[1])
-        starts[int(entry.name)] = fields[_STARTTIME_AFTER_COMM]
-    if root is None:
-        return starts
-    under: dict[int, str] = {}
-    for pid in starts:
-        cursor, hops = pid, 0
-        while cursor > 1 and hops < _ANCESTRY_CAP:
-            if cursor == root:
-                under[pid] = starts[pid]
-                break
-            cursor, hops = parents.get(cursor, 1), hops + 1
-    return under
+    return _ancestry(2)[-1]
 
 
 def _own_chain() -> set[int]:
     """This process and its ancestors: they are alive at one snapshot and gone at the next by
     construction, and they are never the act's doing."""
-    chain, pid = set(), os.getpid()
-    for _ in range(8):
-        chain.add(pid)
-        try:
-            stat = pathlib.Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
-            pid = int(stat.rsplit(")", 1)[-1].split()[1])
-        except (OSError, ValueError, IndexError):
-            break
-        if pid <= 1:
-            break
-    return chain
+    return set(_ancestry(7))
 
 
 def net_active_opens() -> int | None:
@@ -328,13 +315,12 @@ def net_active_opens() -> int | None:
 #     cost of a host that opens connections by itself is one demand per session, never a miss.
 
 
-def assigned_process(pid: int, before: dict[str, Any], in_tree: dict[int, str]) -> bool:
+def assigned_process(pid: int, sid: int, in_tree: dict[int, str], sids_then: set[int]) -> bool:
     if pid in in_tree:
         return True
-    sid = process_session(pid)
     if not sid:  # kernel threads carry session 0: no lineage, never this session's
         return False
-    return sid in set(before.get("sids") or [])
+    return sid in sids_then
 
 
 def assigned_counter(before: dict[str, Any], now: int | None) -> bool | None:
@@ -351,12 +337,18 @@ def _slot(state: pathlib.Path, session: str, agent: str) -> pathlib.Path:
     return state / f"effects-{key}"
 
 
-def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str, Any]:
-    """Record the world before the act. Written under the state dir for `delta` to read."""
+def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
+             opens_act: bool = True) -> dict[str, Any]:
+    """Record the world before the act. Written under the state dir for `delta` to read.
+
+    `opens_act=False` is the session start: the SAME measurement, written for the operator to
+    Read, leaving no pre-image behind -- there is no act for a `delta` to describe yet, and a
+    snapshot left there would let a PostToolUse with no PreToolUse report a clean act instead
+    of NOT-EVALUABLE.
+    """
     slot = _slot(state, session, agent)
     slot.mkdir(parents=True, exist_ok=True)
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
-    own_fields = _stat_fields(os.getpid()) or []
     memory = _memory(slot)
     if root and not memory.get("remote_measured") and (
             time.time() - float(memory.get("remote_tried", 0)) >= REMOTE_RETRY_S):
@@ -371,55 +363,38 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
     net_after = memory.get("net_after")
     snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root,
                             "tree": None, "walk": None, "refs": None, "session_root": session_root(),
-                            "tick": own_fields[_STARTTIME_AFTER_COMM] if len(own_fields) > _STARTTIME_AFTER_COMM else None,
                             "pids": None, "sids": None, "alive": None, "net": net_now,
                             "net_ambient": (net_after is not None and net_now is not None
                                             and net_now != net_after)}
     if root:
-        snap["tree"] = worktree_tree(root, slot / "index.before")
+        snap["tree"] = worktree_tree(root, slot / "index")
         snap["refs"] = refs(root)
     elif os.path.isdir(cwd):
         snap["walk"] = walk_tree(cwd)
-    table = pids(snap["session_root"])
+    table = proc_table()
     if table is not None:
         own = _own_chain()
-        snap["pids"] = {str(p): s for p, s in table.items() if p not in own}
+        kin = under(snap["session_root"], table)
+        snap["pids"] = {str(p): s for p, s in kin.items() if p not in own}
         # Workers this session launched and orphaned (a daemon is reparented to pid 1 and
         # leaves the tree) stay this session's processes: remembered when spawned, watched
         # while they live.
-        everyone = pids()
         for pid, start in (memory.get("spawned") or {}).items():
-            if everyone is not None and everyone.get(int(pid)) == start:
+            if int(pid) in table and table[int(pid)][0] == start:
                 snap["pids"][pid] = start
-        sids = {process_session(p) for p in table} | {process_session(snap["session_root"])}
-        snap["sids"] = sorted(s for s in sids if s is not None)
-        snap["alive"] = sorted(everyone) if everyone is not None else None
-    (slot / "before.json").write_text(json.dumps(snap), encoding="utf-8")
+        sids = {table[p][2] for p in kin} | {table[snap["session_root"]][2]
+                                              if snap["session_root"] in table else 0}
+        snap["sids"] = sorted(x for x in sids if x)
+        snap["alive"] = sorted(table)
+    if opens_act:
+        (slot / "before.json").write_text(json.dumps(snap), encoding="utf-8")
     write_observed(state, root, snap)
     return snap
 
 
 def observe(state: pathlib.Path, session: str, agent: str, cwd: str) -> None:
     """Write the artifacts without opening an act: the session start, before anything runs."""
-    slot = _slot(state, session, agent)
-    slot.mkdir(parents=True, exist_ok=True)
-    root = _repo_root(cwd) if os.path.isdir(cwd) else None
-    snap: dict[str, Any] = {"t": time.time(), "tree": None, "refs": None, "walk": None, "pids": None}
-    if root:
-        snap["tree"] = worktree_tree(root, slot / "index.before")
-        snap["refs"] = refs(root)
-        memory = _memory(slot)
-        if not memory.get("remote_measured"):
-            memory["remote_measured"] = observe_remote(state, root) is not None
-            memory["remote_tried"] = time.time()
-            memory["net_after"] = net_active_opens()
-            _remember(slot, memory)
-    elif os.path.isdir(cwd):
-        snap["walk"] = walk_tree(cwd)
-    table = pids(session_root())
-    if table is not None:
-        snap["pids"] = {str(p): s for p, s in table.items() if p not in _own_chain()}
-    write_observed(state, root, snap)
+    snapshot(state, session, agent, cwd, opens_act=False)
 
 
 def _memory(slot: pathlib.Path) -> dict[str, Any]:
@@ -524,7 +499,8 @@ def _lists_itself(text: str, command: Any) -> bool:
 _TOKEN = re.compile(r"[A-Za-z0-9_./-]+")
 
 
-def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bool) -> dict[str, Any]:
+def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bool,
+                  listed_self: bool = False) -> dict[str, Any]:
     """The guard effects a trace can check: a datum the report states equals one the world holds."""
     tokens = set(_TOKEN.findall(text or ""))
     out: dict[str, Any] = {"report_ref": None, "report_paths": None, "report_pids": None,
@@ -573,7 +549,7 @@ def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bo
         claimed = {int(t) for t in tokens if t.isdigit() and int(t) in live}
         out["named_pids"] = sorted(claimed)
         out["report_pids"] = len(claimed) >= LISTING_FLOOR
-        out["report_listing"] = out["report_pids"] and not _lists_itself(text, before.get("command"))
+        out["report_listing"] = out["report_pids"] and not listed_self
     return out
 
 
@@ -673,7 +649,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     memory = _memory(slot)
     root = before.get("root")
     if root:
-        after_tree = worktree_tree(root, slot / "index.after")
+        after_tree = worktree_tree(root, slot / "index")
         changed, removed = _tree_delta(root, before.get("tree"), after_tree)
         out["pre_image"] = before.get("tree")
         after_refs = refs(root)
@@ -705,27 +681,27 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
         changed, removed = _walk_delta(before.get("walk"), walk_tree(before["cwd"])
                                        if os.path.isdir(before.get("cwd", "")) else None)
     out["files_changed"], out["files_removed"] = changed, removed
-    everyone = pids()
+    table = proc_table()
     then = before.get("pids")
-    if everyone is not None and then is not None:
+    if table is not None and then is not None:
         own = _own_chain()
-        in_tree = pids(before.get("session_root")) or {}
+        in_tree = under(before.get("session_root") or 0, table)
         out["pids_gone"] = sorted(int(p) for p, s in then.items()
-                                  if everyone.get(int(p)) != s)
+                                  if int(p) not in table or table[int(p)][0] != s)
         # New on the HOST (not merely absent from the tree's snapshot), alive, and assigned.
-        alive_then = set(before.get("alive") or [])
+        alive_then, sids_then = set(before.get("alive") or []), set(before.get("sids") or [])
         spawned = sorted(
-            p for p, s in everyone.items()
+            p for p, (start, _, sid) in table.items()
             if p not in own
-            and (p not in alive_then or (str(p) in then and then[str(p)] != s))
-            and assigned_process(p, before, in_tree))
+            and (p not in alive_then or (str(p) in then and then[str(p)] != start))
+            and assigned_process(p, sid, in_tree, sids_then))
         out["pids_spawned"] = spawned
         out["pids_spawned_again"] = bool(spawned) and memory.get("spawns", 0) > 0
         if spawned:
             memory["spawns"] = memory.get("spawns", 0) + 1
             remembered = dict(memory.get("spawned") or {})
             for p in spawned:
-                remembered[str(p)] = everyone[p]
+                remembered[str(p)] = table[p][0]
             memory["spawned"] = remembered
     net_now = net_active_opens()
     out["net_out"] = assigned_counter(before, net_now)
@@ -749,7 +725,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     # loud on 3 of 15 CI jobs, while the spawn itself fires U01 on its own effect.
     still = changed == [] and removed == [] and not out.get("head_moved")
     out.update(trace_effects(response.get("stdout") if isinstance(response.get("stdout"), str) else "",
-                             dict(before, command=tool_input.get("command")), root, still))
+                             before, root, still, out["report_self"]))
     out["net_read"] = (None if out["net_out"] is None else
                        bool(out["net_out"]) and still and not out["report_fail"])
     out["report_after_change"] = bool(out["report_pass"]) and bool(memory.get("changed_since_spawn"))

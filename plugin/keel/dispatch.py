@@ -78,15 +78,26 @@ ALLOW_LEGACY = re.compile(r"^#\s*gyroscope-allow:\s*(\S.*)$")
 GUARD = re.compile(r"^#\s*keel-guard:\s*([A-Za-z0-9_,\s-]+)$")
 
 
-def _guard_marker(command: str) -> set[str]:
-    """The clause ids a Bash call commits to pay, from its leading comment header."""
+def _header(command):
+    """The leading comment lines of a command, where a marker may appear -- spelled once for
+    both markers. The scan stops dead at the first line that is not blank and not a comment;
+    a missing command is an empty header, said here rather than at each call site."""
+    if not isinstance(command, str):
+        return
     for line in command.split("\n"):
         stripped = line.strip()
         if not stripped:
             continue
         if not stripped.startswith("#"):
-            return set()
-        found = GUARD.match(stripped)
+            # Command text. Everything from here on is payload, not preamble.
+            return
+        yield stripped
+
+
+def _guard_marker(command) -> set[str]:
+    """The clause ids a Bash call commits to pay, from its leading comment header."""
+    for line in _header(command):
+        found = GUARD.match(line)
         if found:
             return {p for p in re.split(r"[,\s]+", found.group(1)) if p}
     return set()
@@ -99,17 +110,11 @@ def _allow_marker(command: str):
     an exemption, and both patterns refuse a marker with nothing after it. The spelling travels
     with it so the caller can say something about the old one.
     """
-    for line in command.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if not stripped.startswith("#"):
-            # Command text. Everything from here on is payload, not preamble.
-            return None
-        found = ALLOW.match(stripped)
+    for line in _header(command):
+        found = ALLOW.match(line)
         if found:
             return "keel", found.group(1)
-        found = ALLOW_LEGACY.match(stripped)
+        found = ALLOW_LEGACY.match(line)
         if found:
             return "gyroscope", found.group(1)
     return None
@@ -128,9 +133,6 @@ def _ids(event: dict) -> tuple[str, str]:
     """Per-thread, never pooled. A main-thread Stop is structurally agentless; an ambiguous
     agent id contributes nothing rather than borrowing a sibling's demands."""
     return str(event.get("session_id") or ""), str(event.get("agent_id") or "")
-
-
-_MISSING_FIELD = None
 
 
 # A DEMAND KEYED ON WHAT THE ACT DID. An effect clause's subject may be the datum its effect
@@ -215,21 +217,18 @@ def _subject(clause, event: dict) -> str:
         # With a single field the guard yields no key at all, so it can never discharge the
         # demand it plainly satisfies -- the guard would be composed over two surfaces while the
         # SUBJECT stayed nominal, and the composition would silently do nothing.
-        fields = C.subject_fields(spec)
-        raw = _MISSING_FIELD
-        for field in fields:
+        raw = ""
+        for field in C.subject_fields(spec):
             candidate = _get(event, field)
             if isinstance(candidate, str) and candidate:
                 raw = candidate
                 break
-        if not isinstance(raw, str):
-            return ""
-        m = re.search(spec.get("pattern") or "", raw)
+        m = re.search(spec.get("pattern") or "", raw) if raw else None
         if not m:
             return ""
         try:
             return str(m.group(spec.get("group", 1)) or "")[:200]
-        except (IndexError, re.error):
+        except IndexError:
             return ""
     return str(_get(event, spec) or "")[:200]
 
@@ -293,7 +292,7 @@ def _keyed_reason(clause, subject: str) -> str:
 # here, the worst a bad anchor can do is omit one sentence from one deny message. The deny itself
 # -- the load-bearing half -- is never withheld because its footnote is malformed.
 def _construction(clause) -> str:
-    anchor = getattr(clause, "construction", "") or ""
+    anchor = clause.construction or ""
     if not C.CONSTRUCTION_ANCHOR.fullmatch(anchor):
         return ""
     return f" Construction: {anchor}."
@@ -303,7 +302,7 @@ def _block(reason: str) -> dict:
     return {"decision": "block", "reason": f"{_PREFIX}: {reason}"}
 
 
-def _context(text: str, event_name: str = "SessionStart") -> dict:
+def _context(text: str, event_name: str) -> dict:
     return {"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": text}}
 
 
@@ -391,8 +390,7 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
         return None, False
     by_id = {cl.id: cl for cl in table}
     owed, progress = [], False
-    command = _get(event, "tool_input.command")
-    committed = _guard_marker(command) if isinstance(command, str) else set()
+    committed = _guard_marker(_get(event, "tool_input.command"))
     for row in open_rows:
         cl = by_id.get(row.get("clause_id"))
         # A terminal clause's debt is settled at the ending, by `reconcile`; it does not
@@ -432,14 +430,12 @@ COMMIT_HINT = (" -- a guard that is itself a Bash act passes on a leading `# kee
                "line and is checked by its effect after it runs")
 
 
-def _applicable(table, event: dict):
-    name, tool = event.get("hook_event_name"), event.get("tool_name")
-    for cl in table:
-        if cl.event != name:
-            continue
-        if cl.tools and cl.tools != ["*"] and tool not in cl.tools:
-            continue
-        yield cl
+def _applies(cl, event: dict) -> bool:
+    """Does this clause declare this event and this tool? Asked of one clause where the answer
+    is used, not pre-walked into a set of `id()`s: the caller already loops the table."""
+    if cl.event != event.get("hook_event_name"):
+        return False
+    return not cl.tools or cl.tools == ["*"] or event.get("tool_name") in cl.tools
 
 
 def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
@@ -466,7 +462,6 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
         return held
     _effect_record(ledger, event, "before")
     denials = []
-    applicable = {id(cl) for cl in _applicable(table, event)}
     for cl in table:
         try:
             # A GUARD IS READ ON EVERY EVENT, whatever event the clause fires on: a Glob licenses
@@ -480,7 +475,7 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
                         only_open=C.classify_side(cl.fingerprint) == "effect"):
                     progress = True
                 continue
-            if id(cl) not in applicable:
+            if not _applies(cl, event):
                 continue
             if C.match(cl, event):
                 subject = _subject(cl, event)
@@ -515,8 +510,7 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     if not denials:
         return {}
     for cl, subject, did in denials:
-        ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
-                             subject=subject, reason=cl.deny_reason))
+        ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
     return _deny("; ".join(_keyed_reason(cl, subject) for cl, subject, _ in denials))
 
 
@@ -524,7 +518,6 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
     session, agent = _ids(event)
     _effect_record(ledger, event, "after")
     _watch_standing(table, ledger, event, session, agent)
-    applicable = {id(cl) for cl in _applicable(table, event)}
     for cl in table:
         try:
             after_the_act = C.classify_side(cl.fingerprint) == "effect"
@@ -542,7 +535,7 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
                 _pay(cl, ledger, event, session, agent, how="guard call completed",
                      only_open=after_the_act)
                 continue
-            if id(cl) not in applicable:
+            if not _applies(cl, event):
                 continue
             # AN EFFECT IS THE OCCASION, OBSERVED AFTER THE ACT. The demand is raised here and
             # the next call pays it (`_open_effect_denial`); this event itself cannot be
@@ -551,13 +544,10 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
                 for subject in _subjects(cl, event):
                     did = derive_id(session, agent, cl.id, subject)
                     if not ledger.is_licensed(session, agent, did):
-                        ledger.demand(Demand(id=did, session=session, agent=agent,
-                                             clause_id=cl.id, subject=subject,
-                                             reason=cl.deny_reason))
+                        ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
         except Exception:
             continue
-    command = _get(event, "tool_input.command")
-    committed = _guard_marker(command) if isinstance(command, str) else set()
+    committed = _guard_marker(_get(event, "tool_input.command"))
     if committed:
         still = {row["clause_id"] for row in ledger.open_demands(session, agent)}
         broken = sorted(committed & still)
@@ -593,8 +583,7 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                         continue
                     subject = f"standing:{key}"
                     did = derive_id(session, agent, cl.id, subject)
-                    ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
-                                         subject=subject, reason=cl.deny_reason))
+                    ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
                     # NO `continue` HERE, and the reason is the whole shape of a keyed standing
                     # clause: ONE ACT CAN BE BOTH THE OCCASION AND THE GUARD. C08 is the case --
                     # running a checker's own can-fail plant both produces a PASS that could be
@@ -617,10 +606,11 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                     # discharge under the subject "activated" -- rows that net to zero and mean
                     # nothing, in the journal whose whole job is saying what was owed. Benign to
                     # the verdict, junk to a reader, and two shapes wearing one code path.
-                    aid = derive_id(session, agent, cl.id, "activated")
-                    ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
-                                         subject="activated", reason="occasion observed"))
-                    ledger.discharge(session, agent, aid, "occasion observed")
+                    # ONE row: a demand written and discharged on the next line netted to zero
+                    # in the journal whose whole job is saying what was owed; `reconcile` asks
+                    # `is_licensed`, so only the discharge was ever read.
+                    ledger.discharge(session, agent, derive_id(session, agent, cl.id, "activated"),
+                                     "occasion observed")
             if C.discharges(cl, event):
                 key = C.event_key(cl.discharged_by, event)
                 if cl.discharged_by.get("key_from") is not None and not key:
@@ -799,12 +789,8 @@ def _record(event: dict, out: dict) -> None:
         wire_out = out.get("hookSpecificOutput") if isinstance(out, dict) else None
         if isinstance(wire_out, dict) and wire_out.get("permissionDecision") == "deny":
             reason = str(wire_out.get("permissionDecisionReason") or "")
-            clause_id = ""
-            start = reason.find("[")
-            end = reason.find("]", start)
-            if start != -1 and end != -1:
-                clause_id = reason[start + 1:end]
-            journal.note_deny(event, clause_id, _subject_of(reason), reason)
+            named = _bracketed_ids(reason)  # one parser for the ids a message names
+            journal.note_deny(event, named[0] if named else "", _subject_of(reason), reason)
         elif isinstance(out, dict) and out.get("decision") == "block":
             reason = str(out.get("reason") or "")
             journal.note_block(event, _stated_count(reason), _bracketed_ids(reason))
@@ -888,7 +874,6 @@ def _bracketed_ids(text: str) -> list:
 
 
 def main() -> int:
-    repaired = escaped = 0
     try:
         raw, repaired = wire.read_stdin()
         event = json.loads(raw or "{}")

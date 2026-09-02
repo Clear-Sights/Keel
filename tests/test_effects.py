@@ -28,13 +28,12 @@ import pathlib
 import re
 import socket
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
 import unittest.mock
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN, hook_decision, smoke_replace
 from keel import clauses as C
 from keel import effects
 from keel.ledger import Ledger
@@ -278,7 +277,7 @@ class TheObserverSeesTheWorld(Repo):
         effects.snapshot(self.state, "s", "", self.repo)
         time.sleep(0.6)  # the act; the foreign session starts its worker meanwhile
         d = effects.delta(self.state, "s", "", {})
-        born = [p for p in effects.pids() or {} if effects.process_session(p) == foreign]
+        born = [p for p, (_, _, sid) in (effects.proc_table() or {}).items() if sid == foreign]
         self.assertTrue(born, "the foreign session left nothing alive to judge")
         self.assertFalse(set(born) & set(d["pids_spawned"]), f"assigned a foreign lineage: {born}")
 
@@ -383,10 +382,7 @@ class TheDispatcherEnforcesAnEffect(Repo):
     def _hook(self, **payload) -> dict:
         payload.setdefault("session_id", "fx")
         payload.setdefault("cwd", self.repo)
-        env = dict(os.environ, KEEL_STATE_DIR=str(self.state), CLAUDE_PLUGIN_ROOT=str(PLUGIN))
-        done = subprocess.run(["bash", str(SHIM)], input=json.dumps(payload), capture_output=True,
-                              text=True, env=env, timeout=60)
-        return json.loads(done.stdout.strip() or "{}")
+        return hook_decision(payload, self.state)
 
     def _act(self, command: str, run: bool = True) -> tuple[dict, dict]:
         """A Bash call through the hook, the world observed live around it, its output real."""

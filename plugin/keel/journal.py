@@ -44,14 +44,13 @@ import pathlib
 import time
 from datetime import datetime, timezone
 
+from .ledger import state_dir
+
 PLUGIN = "keel"
 
 
 def _root(root=None) -> pathlib.Path:
-    if root:
-        return pathlib.Path(root)
-    from .ledger import state_dir
-    return state_dir()
+    return pathlib.Path(root) if root else state_dir()
 
 
 def _append(row: dict, root=None) -> None:

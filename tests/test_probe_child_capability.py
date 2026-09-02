@@ -28,8 +28,6 @@ operator drives it, and each is required to go RED on a real fault before its gr
 """
 from __future__ import annotations
 
-import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -41,8 +39,7 @@ from tests.plant_support import PLUGIN, REPO, smoke_replace
 
 PROBE = PLUGIN / "tools" / "probe_child_capability.py"
 
-sys.path.insert(0, str(PLUGIN))
-import tools.probe_child_capability as probe_module  # noqa: E402
+import tools.probe_child_capability as probe_module  # noqa: E402  (PLUGIN is on sys.path: plant_support)
 
 
 def run(*argv: str, home: str | None = None, state: str | None = None):

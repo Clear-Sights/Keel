@@ -180,13 +180,12 @@ Section Coverings.
       -- there is always another runner. So the interesting question is not "is the list right"
       but WHICH WAY a missing entry fails. *)
 
-  Definition nominal (V : Program -> Prop) : Covering := structural V.
-
-  (** THEOREM 5 (monotone in the vocabulary). Widening the list can only ever ADD fires.
-      A missing name is therefore always a MISS, never a false fire. *)
+  (** THEOREM 5 (monotone in the vocabulary). A NOMINAL covering is `structural` over a
+      vocabulary of program names -- the same object, not a second one. Widening the list can
+      only ever ADD fires. A missing name is therefore always a MISS, never a false fire. *)
   Theorem nominal_monotone :
     forall (V W : Program -> Prop),
-      (forall p, V p -> W p) -> forall c, nominal V c -> nominal W c.
+      (forall p, V p -> W p) -> forall c, structural V c -> structural W c.
   Proof.
     intros V W Hsub c [s [p [rest [Hin [Hargv HV]]]]].
     exists s, p, rest. repeat split; [exact Hin | exact Hargv | exact (Hsub p HV)].
@@ -287,7 +286,12 @@ Section Coverings.
 
   (** THEOREM 8a. The inductive `violates` is what backward enforcement rejects, at any trace
       length: the violating L is somewhere in the trace, every event before it is not an X, and
-      backward demands an X somewhere -- which is the contradiction, by induction on the trace. *)
+      backward demands an X somewhere -- which is the contradiction, by induction on the trace.
+
+      This is already "backward catches what forward cannot", at every length rather than one:
+      `violates_here e nil` IS the trace where L happened and X never did, so backward rejects
+      the very trace the forward rule can never reach -- the forward rule is only entered by
+      doing X. A rule enforced only at X has an escape BY CONSTRUCTION: enter the chain at L. *)
   Theorem violation_is_never_backward :
     forall t, violates t -> ~ backward t.
   Proof.
@@ -297,18 +301,6 @@ Section Coverings.
       destruct (Hb l (or_intror Hin) HLl) as [p [[Hpe | Hp] HX]].
       + subst p. exact (False_ind _ (HnotX HX)).
       + exists p. exact (conj Hp HX).
-  Qed.
-
-  (** THEOREM 8. Backward enforcement rejects the violation even when the forward rule never
-      ran -- because the forward rule is only reached by doing X, and the whole point of this
-      violation is that X never happened. A rule enforced only at X has an escape BY
-      CONSTRUCTION: enter the chain at L. *)
-  Theorem backward_catches_what_forward_cannot :
-    forall e, isL e -> (forall p, ~ isX p) -> ~ backward (e :: nil).
-  Proof.
-    intros e HL Hno Hback.
-    destruct (Hback e (or_introl eq_refl) HL) as [p [_ HX]].
-    exact (Hno p HX).
   Qed.
 
   (** COROLLARY (the escape is real, not hypothetical). Forward-only enforcement ACCEPTS that
@@ -347,12 +339,6 @@ Section Coverings.
       + exact (IH i H0 (link j Hdone)).
   Qed.
 
-  (** COROLLARY. A step is reachable only after the entire prefix -- stated as the property an
-      enforcement point can actually check, one link at a time. *)
-  Corollary no_step_without_its_prefix :
-    forall j, done j -> forall i, i <= j -> done i.
-  Proof. intros j Hd i Hle. exact (chain_composes j i Hle Hd). Qed.
-
 End Coverings.
 
 (* The honesty check the repository requires of any proof it publishes. *)
@@ -367,10 +353,8 @@ Print Assumptions nominal_monotone.
 Print Assumptions false_claim_always_rejected.
 Print Assumptions no_claim_is_not_a_pass.
 Print Assumptions violation_is_never_backward.
-Print Assumptions backward_catches_what_forward_cannot.
 Print Assumptions forward_only_admits_the_violation.
 Print Assumptions chain_composes.
-Print Assumptions no_step_without_its_prefix.
 (* Theorem 6 was DECLARED and never graded here. Nothing said so: the grading was a hand-kept
    list, so a result could be added without joining it -- the same hardcoded-list defect the
    Small-Tools review found. tools/check_coq.py now DERIVES the set from the file and refuses

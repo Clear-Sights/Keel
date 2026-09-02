@@ -30,17 +30,14 @@ from __future__ import annotations
 
 import itertools
 import json
-import os
 import re
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from tests.plant_support import PLUGIN, REPO, smoke_replace
+from tests.plant_support import PLUGIN, REPO, dispatch_event, smoke_replace
 from keel import clauses as C
-from keel.clauses import _base_predicate, load_default
+from keel.clauses import _base_predicate
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 # Beside MEASURED.tsv at the repository root, NOT inside `plugin/`: `plugin/` is what the
@@ -433,28 +430,20 @@ class OccasionAlgebra(unittest.TestCase):
 
     def _drive(self, command, session, state, tool="Bash"):
         """One PreToolUse event through the real dispatcher; return (denying id, quoted remedy)."""
-        event = json.dumps({"hook_event_name": "PreToolUse", "tool_name": tool,
-                            "session_id": session, "cwd": "/tmp",
-                            "tool_input": {"command": command} if tool == "Bash"
-                            else {"pattern": command}})
-        done = subprocess.run(
-            [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
-            env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
-                 "PYTHONPATH": str(PLUGIN)})
-        body = json.loads(done.stdout or "{}")
+        body = dispatch_event({"hook_event_name": "PreToolUse", "tool_name": tool,
+                               "session_id": session, "cwd": "/tmp",
+                               "tool_input": {"command": command} if tool == "Bash"
+                               else {"pattern": command}}, state)
         reason = (body.get("hookSpecificOutput") or {}).get("permissionDecisionReason") or ""
         denied = re.findall(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason)
         remedy = re.search(r"`([^`]+)`", reason)
         return denied, (remedy.group(1) if remedy else None)
 
     def _post(self, keel_effect: dict, session, state):
-        event = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Bash",
-                            "session_id": session, "cwd": "/tmp",
-                            "tool_input": {"command": "<observed>"}, "keel_effect": keel_effect})
-        subprocess.run(
-            [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
-            env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
-                 "PYTHONPATH": str(PLUGIN)})
+        dispatch_event({"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                        "session_id": session, "cwd": "/tmp",
+                        "tool_input": {"command": "<observed>"},
+                        "keel_effect": keel_effect}, state)
 
     def _sequences(self):
         """Per declared pair: put the shared observation to the dispatcher, then ask the next

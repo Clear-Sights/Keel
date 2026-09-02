@@ -23,16 +23,12 @@ from __future__ import annotations
 
 import ast
 import json
-import os
 import re
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from tests.plant_support import PLUGIN, REPO, smoke_replace
-from keel import clauses as C
+from tests.plant_support import PLUGIN, REPO, dispatch_event, record, smoke_replace
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 
@@ -123,37 +119,17 @@ def _mentions(body: str, field: str) -> bool:
 
 def _denying_clause(command: str, session: str, state: str) -> str | None:
     """The clause id that denied this command through the REAL dispatcher, or None."""
-    event = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
-                        "session_id": session, "cwd": "/tmp",
-                        "tool_input": {"command": command}})
-    done = subprocess.run(
-        [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
-        env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
-             "PYTHONPATH": str(PLUGIN)})
-    body = json.loads(done.stdout or "{}")
+    body = dispatch_event({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                           "session_id": session, "cwd": "/tmp",
+                           "tool_input": {"command": command}}, state)
     reason = (body.get("hookSpecificOutput") or {}).get("permissionDecisionReason") or ""
     found = re.search(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason)
     return found.group(1) if found else None
 
 
 
-def _record(**eff) -> dict:
-    """A full observation record, as the observer attaches it; an absent effect is NOT-EVALUABLE."""
-    from keel import effects
-    rec = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone",
-                          "pids_spawned") else False for n in effects.EFFECTS}
-    rec["remote_landed"] = None
-    rec.update(eff)
-    return rec
-
-
 def _drive_event(event: dict, session: str, state: str) -> dict:
-    payload = json.dumps({**event, "session_id": session, "cwd": "/tmp"})
-    done = subprocess.run(
-        [sys.executable, "-m", "keel.dispatch"], input=payload, text=True, capture_output=True,
-        env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
-             "PYTHONPATH": str(PLUGIN)})
-    return json.loads(done.stdout or "{}")
+    return dispatch_event({**event, "session_id": session, "cwd": "/tmp"}, state)
 
 
 def _clauses_at_stop(session: str, state: str, keel_effect: dict | None = None) -> set:
@@ -168,13 +144,7 @@ def _clauses_at_stop(session: str, state: str, keel_effect: dict | None = None) 
             "last_assistant_message": "done"}
     if keel_effect is not None:
         stop["keel_effect"] = keel_effect
-    event = json.dumps(stop)
-    done = subprocess.run(
-        [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
-        env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
-             "PYTHONPATH": str(PLUGIN)})
-    body = json.loads(done.stdout or "{}")
-    reason = body.get("reason") or ""
+    reason = dispatch_event(stop, state).get("reason") or ""
     return set(re.findall(r"\[([A-Z]\d\d(?:-[a-z-]+)?)\]", reason))
 
 
@@ -323,13 +293,13 @@ class ActivationIsOnlyDeclaredWhereItIsHonoured(unittest.TestCase):
         """
         moved = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
                  "tool_input": {"command": "git push origin main"},
-                 "keel_effect": _record(remote_ref_moved=["refs/remotes/origin/main"])}
+                 "keel_effect": record(remote_ref_moved=["refs/remotes/origin/main"])}
         unlanded = {"remote_ref_moved": ["main"], "remote_landed": False}
         quiet = {"remote_ref_moved": [], "remote_landed": True}
 
         with tempfile.TemporaryDirectory(prefix="keel-activation-") as state:
             _drive_event({"hook_event_name": "PostToolUse", "tool_name": "Bash",
-                          "tool_input": {"command": "echo hello"}, "keel_effect": _record()},
+                          "tool_input": {"command": "echo hello"}, "keel_effect": record()},
                          "activation-unarmed", state)
             unarmed = _clauses_at_stop("activation-unarmed", state, keel_effect=quiet)
             _drive_event(moved, "activation-armed", state)

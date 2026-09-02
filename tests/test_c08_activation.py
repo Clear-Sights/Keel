@@ -19,9 +19,8 @@ from __future__ import annotations
 import re
 import unittest
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN, record, smoke_replace
 from keel import clauses as C
-from keel import effects
 
 INVOCATIONS = [
     "python3 -m pytest -q tests/",
@@ -50,12 +49,8 @@ def c08() -> C.Clause:
 
 def passed(command: str) -> dict:
     """A PostToolUse event whose act printed a passing report, as the observer records it."""
-    record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone",
-                             "pids_spawned") else False for n in effects.EFFECTS}
-    record["remote_landed"] = None
-    record["report_pass"] = True
     return {"hook_event_name": "PostToolUse", "tool_name": "Bash",
-            "tool_input": {"command": command}, "keel_effect": record}
+            "tool_input": {"command": command}, "keel_effect": record(report_pass=True)}
 
 
 class OccasionIsAPrintedPass(unittest.TestCase):

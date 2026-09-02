@@ -25,14 +25,13 @@ import subprocess
 import unittest
 from tests.plant_support import REPO
 
-ROOT = REPO
 CLAUDE = "plugin/hooks/hooks.json"
 CODEX = "plugin/hooks/hooks.codex.json"
 SHIM = "dispatch.sh"
 
 
 def committed(path: str) -> dict:
-    shown = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=ROOT,
+    shown = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=REPO,
                            capture_output=True, text=True, check=True)
     return json.loads(shown.stdout)
 

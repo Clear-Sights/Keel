@@ -129,12 +129,18 @@ def derive_id(session: str, agent: str, clause_id: str, subject: str) -> str:
 
 @dataclass(frozen=True)
 class Demand:
-    id: str
+    """`id` is DERIVED, never carried: every caller filled it by calling `derive_id` on the four
+    fields below and handing the answer straight back -- one datum with two spellings, and
+    nothing checked that they agreed."""
     session: str
     agent: str
     clause_id: str
     subject: str
     reason: str
+
+    @property
+    def id(self) -> str:
+        return derive_id(self.session, self.agent, self.clause_id, self.subject)
 
 
 class Ledger:
@@ -150,31 +156,6 @@ class Ledger:
         self.root = pathlib.Path(root) if root else state_dir()
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / LEDGER_FILE
-
-    def _append(self, row: dict) -> None:
-        prev = self._tail_hash()
-        row = dict(row)
-        row["prev"] = prev
-        row["hash"] = _chain_hash(prev, row)
-        with self.path.open("a", encoding="utf-8") as fh:
-            # A torn write (ENOSPC/EIO, a row killed between buffer flushes) can leave the file
-            # ending mid-line. Appending straight onto that fragment merges two rows into one
-            # unparseable line, so a discharge that LANDED reads back as never having happened
-            # and Stop blocks on a false fact. Terminate the fragment first: the fragment stays
-            # a skipped malformed row, and this row stays readable.
-            fh.flush()
-            if fh.tell() > 0:
-                with self.path.open("rb") as tail:
-                    tail.seek(-1, os.SEEK_END)
-                    if tail.read(1) != b"\n":
-                        fh.write("\n")
-            fh.write(_canon(row) + "\n")
-
-    def _tail_hash(self) -> str:
-        last = ""
-        for row in self._rows():
-            last = row.get("hash", "")
-        return last
 
     def _rows(self):
         if not self.path.exists():
@@ -199,11 +180,56 @@ class Ledger:
                     continue
                 yield row
 
+    def scope(self, session: str, agent: str):
+        """ONE pass over the file, answering every question this ledger has: the OPEN demand rows
+        by id, the ids a guard call has DISCHARGED, and the chain head the next row links to.
+
+        DEMAND, DISCHARGE AND OPEN ARE NOT THREE CONCEPTS. They are one set difference,
+        `demanded - discharged`, taken here and nowhere else -- and a licence is membership in
+        the second set and NOTHING else. Deliberately not "absent from the first": a demand that
+        was never raised is also not open, and reading that as a licence would let the costly act
+        through on the strength of nothing ever having happened. `.get` throughout: a row missing
+        `id`, `session` or `kind` is malformed and skipped, not a KeyError. First demand row per
+        id wins; that IS the dedup. Three methods over three walks used to answer these.
+        """
+        demanded, closed, tail = {}, set(), ""
+        for row in self._rows():
+            tail = row.get("hash", "")
+            rid = row.get("id")
+            if rid is None or row.get("session") != session or row.get("agent") != agent:
+                continue
+            if row.get("kind") == "demand":
+                demanded.setdefault(rid, row)
+            elif row.get("kind") == "discharge":
+                closed.add(rid)
+        return {i: r for i, r in demanded.items() if i not in closed}, closed, tail
+
+    def _append(self, row: dict) -> None:
+        row = dict(row)
+        prev = ""
+        for r in self._rows():
+            prev = r.get("hash", "")
+        row["prev"] = prev
+        row["hash"] = _chain_hash(prev, row)
+        with self.path.open("a", encoding="utf-8") as fh:
+            # A torn write (ENOSPC/EIO, a row killed between buffer flushes) can leave the file
+            # ending mid-line. Appending straight onto that fragment merges two rows into one
+            # unparseable line, so a discharge that LANDED reads back as never having happened
+            # and Stop blocks on a false fact. Terminate the fragment first: the fragment stays
+            # a skipped malformed row, and this row stays readable.
+            fh.flush()
+            if fh.tell() > 0:
+                with self.path.open("rb") as tail:
+                    tail.seek(-1, os.SEEK_END)
+                    if tail.read(1) != b"\n":
+                        fh.write("\n")
+            fh.write(_canon(row) + "\n")
+
     def demand(self, d: Demand) -> bool:
         """Record a demand. Returns False if this exact demand is already open (idempotent)."""
         if d.id in self.open_ids(d.session, d.agent):
             return False
-        self._append({"kind": "demand", **asdict(d)})
+        self._append({"kind": "demand", "id": d.id, **asdict(d)})
         return True
 
     def discharge(self, session: str, agent: str, demand_id: str, how: str) -> None:
@@ -211,52 +237,20 @@ class Ledger:
         # the same scope changes nothing, so keeping every observation only makes every later
         # read scan duplicate history -- measured, 40 identical `git status` calls wrote 120
         # rows through the dispatcher, and reads are linear in what was written.
-        # The Rust dispatcher has always had this guard (`if self.licensed(..){return}`), so
-        # until now the two implementations disagreed about ledger state while agreeing on
-        # every verdict -- a divergence the equivalence gate cannot see, because it compares
-        # decisions and not what they wrote.
         if self.is_licensed(session, agent, demand_id):
             return
         self._append({"kind": "discharge", "session": session, "agent": agent,
                       "id": demand_id, "how": how})
 
     def is_licensed(self, session: str, agent: str, demand_id: str) -> bool:
-        """True once the guard call for this exact subject has been observed.
-
-        This is the whole point of the mechanism and it is deliberately NOT `demand_id not in
-        open_ids`: a demand that was never raised is also "not open", and treating that as a
-        licence would let the costly act through on the strength of nothing ever having happened.
-        Absence is not a licence; only an observed discharge is.
-        """
-        return any(
-            row.get("kind") == "discharge" and row.get("id") == demand_id
-            and row.get("session") == session and row.get("agent") == agent
-            for row in self._rows()
-        )
+        """True once the guard call for this exact subject has been observed (see `scope`)."""
+        return demand_id in self.scope(session, agent)[1]
 
     def open_ids(self, session: str, agent: str) -> set[str]:
-        opened, closed = set(), set()
-        for row in self._rows():
-            if row.get("session") != session or row.get("agent") != agent:
-                continue
-            rid = row.get("id")  # .get, like every other row access: a scoped demand row
-            if rid is None:      # missing "id" is a malformed row to skip, not a KeyError.
-                continue
-            if row.get("kind") == "demand":
-                opened.add(rid)
-            elif row.get("kind") == "discharge":
-                closed.add(rid)
-        return opened - closed
+        return set(self.scope(session, agent)[0])
 
     def open_demands(self, session: str, agent: str) -> list[dict]:
-        ids = self.open_ids(session, agent)  # a fresh set per call, so spending from it is safe
-        out = []
-        for row in self._rows():
-            rid = row.get("id")
-            if row.get("kind") == "demand" and rid in ids:
-                ids.discard(rid)  # first row per id wins; discarding it IS the dedup
-                out.append(row)
-        return out
+        return list(self.scope(session, agent)[0].values())
 
     def verify_chain(self) -> str | None:
         """Re-derive the chain. Returns the first divergent hash, or None. Advisory only."""

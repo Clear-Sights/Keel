@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import unittest
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN, record, smoke_replace
 
 SHIM = PLUGIN / "hooks" / "dispatch.sh"
 
@@ -38,10 +38,7 @@ class AnEndingIsAnEnding(unittest.TestCase):
         # Its own guard, under its own key, clears it -- the main thread's ledger is untouched.
         path = str(pathlib.Path(self.tmp, "state", "observed.json"))
         self._hook(hook_event_name="PreToolUse", tool_name="Read", agent_id="sub", tool_input={"file_path": path})
-        from keel import effects
-        record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned") else False for n in effects.EFFECTS}
-        record["remote_landed"] = None; record["observed_read"] = True
-        self._hook(hook_event_name="PostToolUse", tool_name="Read", agent_id="sub", tool_input={"file_path": path}, keel_effect=record)
+        self._hook(hook_event_name="PostToolUse", tool_name="Read", agent_id="sub", tool_input={"file_path": path}, keel_effect=record(observed_read=True))
         self.assertNotIn("T01", self._hook(hook_event_name="SubagentStop", agent_id="sub").get("reason", ""))
         self.assertIn("T01", self._hook(hook_event_name="Stop").get("reason", ""), "the main thread's ledger was paid by a subagent's read")
 

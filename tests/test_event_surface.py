@@ -23,15 +23,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import os
-import pathlib
-import subprocess
-import sys
 import tempfile
 import unittest
 
-REPO = pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "plugin"))
+from tests.plant_support import PLUGIN, run_dispatcher
 
 from keel import clauses as C          # noqa: E402
 from keel import dispatch              # noqa: E402
@@ -40,7 +35,7 @@ HOOK_FILES = ("hooks/hooks.json", "hooks/hooks.codex.json")
 
 
 def _registered(name: str) -> set[str]:
-    return set(json.loads((REPO / "plugin" / name).read_text())["hooks"].keys())
+    return set(json.loads((PLUGIN / name).read_text())["hooks"].keys())
 
 
 class EventSurface(unittest.TestCase):
@@ -133,12 +128,7 @@ class EventSurface(unittest.TestCase):
                                "cwd": "/tmp", "tool_name": "Bash",
                                "tool_input": {"command": "echo hello"},
                                "last_assistant_message": "done"}
-                    done = subprocess.run(
-                        [sys.executable, "-m", "keel.dispatch"], input=json.dumps(payload),
-                        text=True, capture_output=True, timeout=120,
-                        env={**os.environ, "KEEL_STATE_DIR": state,
-                             "CLAUDE_PLUGIN_ROOT": str(REPO / "plugin"),
-                             "PYTHONPATH": str(REPO / "plugin")})
+                    done = run_dispatcher(json.dumps(payload), state, timeout=120)
                     self.assertEqual(0, done.returncode,
                                      f"{event}: dispatcher exited {done.returncode}\n"
                                      f"{done.stderr[-800:]}")

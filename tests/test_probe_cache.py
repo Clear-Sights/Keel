@@ -16,7 +16,7 @@ from __future__ import annotations
 import unittest
 from tests.plant_support import PLUGIN, smoke_replace
 
-from keel import clauses as C, dispatch
+from keel import clauses as C
 
 PROBE = {"cmd": ["git", "status", "--porcelain"], "timeout_ms": 5000, "expect": "empty"}
 
