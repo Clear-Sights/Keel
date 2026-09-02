@@ -147,7 +147,7 @@ class TheObserverSeesTheWorld(Repo):
     def test_the_same_act_under_another_name_is_the_same_effect(self) -> None:
         """Theorem 8 on the ground: the observation does not depend on what removed the file."""
         for command in ("rm a.txt", "python3 -c \"import os; os.remove('a.txt')\"",
-                        "find . -name a.txt -delete"):
+                        "find . -name a.txt -delete", ": > a.txt", "truncate -s 0 a.txt"):
             git(self.repo, "checkout", "-q", "--", "a.txt")
             with self.subTest(command=command):
                 self.assertEqual(["a.txt"], self.observe(command)["files_removed"])

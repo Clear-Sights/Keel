@@ -132,4 +132,21 @@ raise SystemExit(0 if d["head_moved"] and not d["head_switched"] else 1)
 PY
 }
 
+emptied_is_removed() {  # K17: content loss by truncation is files_removed in both observers
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+from keel import effects
+w_before = {"a.txt": (4, 1), "b.txt": (0, 1)}; w_after = {"a.txt": (0, 2), "b.txt": (0, 1)}
+changed, removed = effects._walk_delta(w_before, w_after)
+ok = changed == [] and removed == ["a.txt"]
+import os, pathlib, subprocess, tempfile
+tmp = tempfile.mkdtemp(); repo = os.path.join(tmp, "repo"); state = pathlib.Path(tmp, "state"); os.mkdir(repo)
+git = lambda *a: subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True, text=True)
+git("init", "-q", "-b", "main"); git("config", "user.email", "k@x"); git("config", "user.name", "k")
+pathlib.Path(repo, "a.txt").write_text("one\n"); git("add", "-A"); git("commit", "-qm", "base")
+effects.snapshot(state, "s", "", repo); subprocess.run(": > a.txt", shell=True, cwd=repo)
+d = effects.delta(state, "s", "", {"tool_input": {"command": ": > a.txt"}, "tool_response": {"stdout": ""}})
+raise SystemExit(0 if ok and d["files_removed"] == ["a.txt"] and d["files_changed"] == [] else 1)
+PY
+}
+
 "$@"

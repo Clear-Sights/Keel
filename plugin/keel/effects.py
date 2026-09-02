@@ -38,7 +38,7 @@ from typing import Any
 # renderer and the README; a clause naming anything else is refused at load.
 EFFECTS: dict[str, str] = {
     "files_changed": "a file has different content after the act, or exists after it and did not before",
-    "files_removed": "a file that existed before the act does not exist after it",
+    "files_removed": "a file that had content before the act has none after it, or does not exist",
     "head_moved": "HEAD names a different commit after the act",
     "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit",
     "head_reset": "HEAD moved to an ancestor of where it was, and the worktree changed with it",
@@ -435,29 +435,40 @@ def _remember(slot: pathlib.Path, memory: dict[str, Any]) -> None:
         pass
 
 
+EMPTY_BLOB = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
 def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list | None, list | None]:
     if not before or not after:
         return None, None
     if before == after:
         return [], []
-    out = _git(root, "diff-tree", "-r", "--name-status", "--no-renames", before, after)
+    out = _git(root, "diff-tree", "-r", "--raw", "--no-renames", before, after)
     if out is None:
         return None, None
     changed, removed = [], []
     for line in out.splitlines():
-        status, _, path = line.partition("\t")
-        if status[:1] in ("M", "T", "A"):
-            changed.append(path)
-        elif status.startswith("D"):
+        meta, _, path = line.partition("\t")
+        fields = meta.split()  # :mode mode sha_before sha_after status
+        if len(fields) < 5:
+            continue
+        status, was, now = fields[4][:1], fields[2], fields[3]
+        # A file emptied is a file whose content is gone (K17): the same loss as a deletion,
+        # under a different name, so it is observed as one.
+        if status == "D" or (status in ("M", "T") and now == EMPTY_BLOB and was != EMPTY_BLOB):
             removed.append(path)
+        elif status in ("M", "T", "A"):
+            changed.append(path)
     return changed, removed
 
 
 def _walk_delta(before: dict | None, after: dict | None) -> tuple[list | None, list | None]:
     if before is None or after is None:
         return None, None
-    changed = sorted(p for p, sig in after.items() if p not in before or tuple(sig) != tuple(before[p]))
-    removed = sorted(p for p in before if p not in after)
+    emptied = {p for p, sig in after.items() if p in before and sig[0] == 0 and before[p][0] != 0}
+    changed = sorted(p for p, sig in after.items()
+                     if p not in emptied and (p not in before or tuple(sig) != tuple(before[p])))
+    removed = sorted(set(p for p in before if p not in after) | emptied)
     return changed, removed
 
 
