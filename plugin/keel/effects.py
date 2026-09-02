@@ -37,16 +37,16 @@ from typing import Any
 # name -> one sentence saying what the observation is. Closed. Read by the loader, the proof
 # renderer and the README; a clause naming anything else is refused at load.
 EFFECTS: dict[str, str] = {
-    "files_changed": "a file has different content after the act, or exists after it and did not before",
-    "files_removed": "a file that had content before the act has none after it, or does not exist",
+    "files_changed": "a file has different content after the act, or exists after it and did not before. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed",
+    "files_removed": "a file that had content before the act has none after it, or does not exist; a top-level gitignored entry that vanished is named too, by path only",
     "head_moved": "HEAD names a different commit after the act",
-    "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit",
-    "head_reset": "HEAD moved to an ancestor of where it was, and the worktree changed with it",
+    "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit; or the act recorded a checkout in HEAD's reflog and HEAD ended where it began",
+    "head_reset": "HEAD moved to an ancestor of where it was, and the worktree changed with it; or the act recorded a reset in HEAD's reflog, whatever it moved back to afterwards",
     "commit_signed": "the act created the commit HEAD now names, and that commit carries a signature",
     "remote_ref_moved": "a remote-tracking ref names a different commit after the act",
     "remote_landed": "every remote head this session moved is equal to a local ref (measured at the remote)",
     "pids_gone": "a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it",
-    "pids_spawned": "a process that did not exist before the act is still running after it, assigned to this session by lineage: in its tree, or in one of its process sessions",
+    "pids_spawned": "a process that did not exist before the act is still running after it (stated limit: a worker that exited before the act returned was never a process that outlived it, and is not observed), assigned to this session by lineage: in its tree, or in one of its process sessions",
     "pids_spawned_again": "pids_spawned, and this session had already spawned one before",
     "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act",
     "report_null": "the act printed a null datum, or nothing, while reading a structured file",
@@ -60,7 +60,7 @@ EFFECTS: dict[str, str] = {
     "named_paths": "the worktree paths that report named, in full: what a demand keyed on a changed path is paid by",
     "named_pids": "the live pids that report named: what a demand keyed on a gone pid is paid by",
     "report_pids": "the act printed at least two pids that were alive at the snapshot",
-    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself",
+    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself. The one effect whose datum is read from the command text, not the world: Theorem 8 covers a world-derived datum, so this side is stated, not proven, name-agnostic",
     "report_structured": "the act printed a JSON datum that is not null",
     "report_signature": "the act printed a signature block or a verified-signature datum",
     "report_nowarn": "report_pass, and the report carries no warning line",
@@ -337,8 +337,33 @@ def _slot(state: pathlib.Path, session: str, agent: str) -> pathlib.Path:
     return state / f"effects-{key}"
 
 
+def _before_path(slot: pathlib.Path, act: str | None) -> pathlib.Path:
+    """The pre-image of ONE act. Keyed by the host's tool_use_id when it sends one: two acts
+    whose PreToolUse hooks both ran before either PostToolUse used to share a slot, so the
+    second snapshot overwrote the first, the first act was charged with the second's
+    effects, and the second found no snapshot at all (DL-06)."""
+    if act:
+        return slot / f"before-{hashlib.sha256(act.encode()).hexdigest()[:16]}.json"
+    return slot / "before.json"
+
+
+def _ignored(root: str) -> list[str] | None:
+    """Top-level gitignored entries, by name: the tree observer honours .gitignore, so their
+    content is unobserved, but their removal need not be."""
+    out = _git(root, "ls-files", "-o", "-i", "--exclude-standard", "--directory")
+    return sorted(line for line in out.splitlines() if line) if out is not None else None
+
+
+def _reflog_count(root: str) -> int | None:
+    out = _git(root, "rev-list", "-g", "--count", "HEAD")
+    try:
+        return int(out.strip()) if out is not None else None
+    except ValueError:
+        return None
+
+
 def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
-             opens_act: bool = True) -> dict[str, Any]:
+             opens_act: bool = True, act: str | None = None) -> dict[str, Any]:
     """Record the world before the act. Written under the state dir for `delta` to read.
 
     `opens_act=False` is the session start: the SAME measurement, written for the operator to
@@ -361,7 +386,7 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
         _remember(slot, memory)
     net_now = net_active_opens()
     net_after = memory.get("net_after")
-    snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root,
+    snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root, "session": session,
                             "tree": None, "walk": None, "refs": None, "session_root": session_root(),
                             "pids": None, "sids": None, "alive": None, "net": net_now,
                             "net_ambient": (net_after is not None and net_now is not None
@@ -369,6 +394,8 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
     if root:
         snap["tree"] = worktree_tree(root, slot / "index")
         snap["refs"] = refs(root)
+        snap["ignored"] = _ignored(root)
+        snap["reflog"] = _reflog_count(root)
     elif os.path.isdir(cwd):
         snap["walk"] = walk_tree(cwd)
     table = proc_table()
@@ -387,7 +414,7 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
         snap["sids"] = sorted(x for x in sids if x)
         snap["alive"] = sorted(table)
     if opens_act:
-        (slot / "before.json").write_text(json.dumps(snap), encoding="utf-8")
+        _before_path(slot, act).write_text(json.dumps(snap), encoding="utf-8")
     write_observed(state, root, snap)
     return snap
 
@@ -476,7 +503,36 @@ def _is_structured(stripped: str) -> bool:
         return False
 
 
-_SEGMENT_SPLIT = re.compile(r"\|\||&&|[|;\n]")
+def _segments(command: str) -> list[str]:
+    """The command's segments, split on control operators OUTSIDE quotes. A mention is one
+    segment: `echo 'ps aux | grep x'` must not yield `grep x'` (MATH-10: the theory's
+    scanner sees a mention as one segment, and the old regex split inside the quotes)."""
+    segs, buf, quote, i = [], [], None, 0
+    while i < len(command):
+        ch = command[i]
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = None
+            elif ch == "\\" and quote == '"' and i + 1 < len(command):
+                i += 1
+                buf.append(command[i])
+        elif ch in "'\"":
+            quote = ch
+            buf.append(ch)
+        elif ch == "\\" and i + 1 < len(command):
+            i += 1
+            buf.append(ch + command[i])
+        elif ch in "|;&\n":
+            if buf:
+                segs.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+        i += 1
+    if buf:
+        segs.append("".join(buf))
+    return segs
 
 
 def _lists_itself(text: str, command: Any) -> bool:
@@ -489,7 +545,7 @@ def _lists_itself(text: str, command: Any) -> bool:
     """
     if not isinstance(command, str) or not text:
         return False
-    for segment in _SEGMENT_SPLIT.split(command):
+    for segment in _segments(command):
         segment = segment.strip()
         if len(segment) >= 3 and segment in text:
             return True
@@ -581,7 +637,8 @@ def observe_remote(state: pathlib.Path, root: str) -> dict[str, Any] | None:
 
 def write_observed(state: pathlib.Path, root: str | None, snap: dict[str, Any]) -> None:
     """Keel's own worktree measurement, written for the operator to Read (A01/A02/T01's datum)."""
-    doc: dict[str, Any] = {"root": root, "t": snap.get("t"), "head": None, "branch": None,
+    doc: dict[str, Any] = {"root": root, "session": snap.get("session"), "t": snap.get("t"),
+                           "head": None, "branch": None,
                            "tree": snap.get("tree"), "dirty": None, "paths": None,
                            "refs": snap.get("refs"),
                            "pids": sorted(int(p) for p in (snap.get("pids") or {}))}
@@ -607,6 +664,13 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
     path = tool_input.get("file_path")
     if not isinstance(path, str) or not path:
         return False
+    # A Read that RETURNED NOTHING observed nothing: a host error (file too large, EACCES)
+    # arrives as a response carrying `error` or an error string (EFF-06).
+    response = event.get("tool_response")
+    if isinstance(response, dict) and "error" in response:
+        return False
+    if isinstance(response, str) and (response.startswith("Error") or "exceeds maximum" in response):
+        return False
     target = state / name
     try:
         if pathlib.Path(path).resolve() != target.resolve() or not target.is_file():
@@ -614,9 +678,23 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
         doc = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
+    if not isinstance(doc, dict):
+        return False
+    # THE DATUM MUST BE THIS SESSION'S AND THIS WORKTREE'S. One file serves every session in a
+    # state directory, so a second window's SessionStart rewrote it for another repository and
+    # the first window's Read paid its guards with a measurement of the wrong tree (DL-11).
+    # Stated limit: two concurrent sessions in one state directory contend for the file and
+    # the loser is refused until its next act rewrites it -- fail closed, never a pass.
+    cwd = event.get("cwd")
+    root = _repo_root(cwd) if isinstance(cwd, str) and os.path.isdir(cwd) else None
+    if root and doc.get("root") and doc["root"] != root:
+        return False
     if name == REMOTE:
         return isinstance(doc.get("tips"), dict)
-    return isinstance(doc, dict) and "head" in doc
+    sid = event.get("session_id")
+    if isinstance(sid, str) and sid and doc.get("session") not in (None, sid):
+        return False
+    return "head" in doc
 
 
 def read_delta(state: pathlib.Path, event: dict[str, Any]) -> dict[str, Any]:
@@ -637,13 +715,17 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
     response = event.get("tool_response") if isinstance(event.get("tool_response"), dict) else {}
     out.update(report_effects(response.get("stdout"), tool_input.get("command")))
+    act = event.get("tool_use_id")
+    pre = _before_path(slot, act if isinstance(act, str) else None)
+    if not pre.exists():
+        pre = slot / "before.json"
     try:
-        before = json.loads((slot / "before.json").read_text(encoding="utf-8"))
+        before = json.loads(pre.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         out["not_evaluable"] = "no pre-act snapshot"
         return out
     try:
-        (slot / "before.json").unlink()
+        pre.unlink()
     except OSError:
         pass
     memory = _memory(slot)
@@ -660,6 +742,8 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
             out["remote_ref_moved"] = sorted(
                 name for name in set(before_refs) | set(after_refs)
                 if name.startswith("refs/remotes/") and before_refs.get(name) != after_refs.get(name))
+            if out["remote_ref_moved"]:
+                memory["remote_moved"] = True  # the ending asks the remote whatever the counter said
             out["head_reset"] = False
             out["commit_signed"] = False
             out["head_switched"] = False
@@ -677,6 +761,21 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
                               for tip in set(before_refs.values()) if tip)
                 out["head_switched"] = existed
                 out["commit_signed"] = (not existed) and "\ngpgsig " in body
+            # WHAT HAPPENED IN BETWEEN. A commit-then-reset, or a checkout out and back, leaves
+            # HEAD where it started and the before/after comparison sees nothing (EFF-09). The
+            # reflog records every move HEAD made during the act; the new entries are read.
+            then_n, now_n = before.get("reflog"), _reflog_count(root)
+            if isinstance(then_n, int) and isinstance(now_n, int) and now_n > then_n:
+                moves = (_git(root, "reflog", "show", "--format=%gs", "HEAD") or "").splitlines()[:now_n - then_n]
+                if any(m.startswith("reset:") for m in moves):
+                    out["head_reset"] = True
+                if any(m.startswith("checkout:") for m in moves) and not out["head_moved"]:
+                    out["head_switched"] = True
+        if removed is not None and before.get("ignored") is not None:
+            now_ignored = _ignored(root)
+            if now_ignored is not None:
+                gone = [p for p in before["ignored"] if p not in set(now_ignored)]
+                removed = sorted(set(removed) | set(gone))
     else:
         changed, removed = _walk_delta(before.get("walk"), walk_tree(before["cwd"])
                                        if os.path.isdir(before.get("cwd", "")) else None)
@@ -751,8 +850,10 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     slot = _slot(state, session, agent)
     memory = _memory(slot)
     out: dict[str, Any] = {"remote_ref_moved": None, "remote_landed": None}
-    if memory.get("net_out") is False:
-        # Measured: no act of this session transmitted, so no remote ref can have moved.
+    if memory.get("net_out") is False and not memory.get("remote_moved"):
+        # Measured: no act of this session transmitted over the host's counter and no
+        # remote-tracking ref moved, so no remote ref can have moved. A push over a local path
+        # moves the tracking ref without a TCP open (EFF-11), so the ref is the second witness.
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
     # Transmitted, or could not tell: ask the remote rather than assume.
@@ -765,19 +866,25 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
     local = refs(root)
-    listing = _git(root, "ls-remote", "--heads", "origin")
-    if local is None or listing is None:
+    if local is None:
         out["not_evaluable"] = "the remote could not be listed"
         return out
     local_shas = set(local.values())
     moved, unlanded = [], []
-    for line in listing.splitlines():
-        sha, _, name = line.partition("\t")
-        tracking = local.get("refs/remotes/origin/" + name.removeprefix("refs/heads/"))
-        if tracking is not None and tracking != sha:
-            moved.append(name)
-            if sha not in local_shas:
-                unlanded.append(name)
+    # EVERY remote, not only origin: a push to `upstream` moves that tracking ref and origin
+    # says nothing about it.
+    for remote in (remotes or "").split():
+        listing = _git(root, "ls-remote", "--heads", remote)
+        if listing is None:
+            out["not_evaluable"] = f"the remote {remote} could not be listed"
+            return out
+        for line in listing.splitlines():
+            sha, _, name = line.partition("\t")
+            tracking = local.get(f"refs/remotes/{remote}/" + name.removeprefix("refs/heads/"))
+            if tracking is not None and tracking != sha:
+                moved.append(f"{remote}:{name}" if remote != "origin" else name)
+                if sha not in local_shas:
+                    unlanded.append(name)
     out["remote_ref_moved"] = moved
     out["remote_landed"] = not unlanded
     return out

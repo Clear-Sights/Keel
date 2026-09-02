@@ -102,7 +102,7 @@ def _marker_name(session: str) -> str:
 # This sits ABOVE the hook bound rather than at it, and `tests/test_bounds.py` requires that
 # relation, so raising a hook timeout past it goes red instead of silently stealing live claims.
 # On exhaustion the marker is taken over and the claim is re-run.
-_STALE_CLAIM_SECONDS = 60
+_STALE_CLAIM_SECONDS = 120  # strictly above the 60 s hook timeout in hooks.json (tests/test_bounds joins them)
 
 
 def _committed(marker: pathlib.Path) -> bool:

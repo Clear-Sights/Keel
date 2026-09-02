@@ -41,7 +41,15 @@ PROOFS = REPO / "proofs"
 THEORY = PROOFS / "Coverings.v"
 INSTANCE = PROOFS / "Clauses.v"
 TABLE = REPO / "plugin" / "keel" / "clauses.json"
-IDENTITY = re.compile(r"Proof\.\s*(?:intros?[^.]*\.\s*)?split;\s*intro\s+\w+;\s*exact\s+\w+\.\s*Qed\.")
+# NAMED SHAPES, not the class: "this result states nothing" is undecidable in general, so the
+# grader refuses the spellings that have been seen -- split-then-exact, `iff_refl`, an identity
+# lambda, and a bare `conj` of two hypotheses (MATH-04) -- and says so here rather than claim more.
+IDENTITY = re.compile(r"Proof\.\s*(?:intros?[^.]*\.\s*)?(?:"
+                      r"split;\s*intro\s+\w+;\s*exact\s+\w+"
+                      r"|(?:apply|exact)\s+iff_refl"
+                      r"|split;\s*\[\s*exact\s*\(fun\s+\w+\s*=>\s*\w+\)\s*\|\s*exact\s*\(fun\s+\w+\s*=>\s*\w+\)\s*\]"
+                      r"|exact\s*\(conj\s+\w+\s+\w+\)"
+                      r")\.\s*Qed\.")
 EMPTY_BY_DESIGN = {"always", "tool-enum"}
 
 

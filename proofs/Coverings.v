@@ -166,6 +166,10 @@ Section Coverings.
 
   Theorem effect_is_name_agnostic :
     forall (Delta : Type) (E : Delta -> Prop) (d : Delta), name_agnostic (effect E d).
+  (* Unfolds to `iff_refl`: name-agnosticism holds BY CONSTRUCTION of `effect`, which reads
+     no segment. The content is therefore RELATIVE to the datum `d` being world-derived; an
+     observer that computes `d` from the command text (Keel's `report_self`) is outside this
+     theorem, and says so at its definition rather than borrowing the certificate. MATH-07 *)
   Proof. intros Delta E d r segs. unfold effect. apply iff_refl. Qed.
 
   Theorem effect_separates_same_segments :
@@ -275,14 +279,18 @@ Section Coverings.
   Variable Event : Type.
   Variable isX isL : Event -> Prop.
 
-  (* `L occurred with no preceding X` -- the thing the order forbids, stated over a trace. *)
+  (* A trace is CHRONOLOGICAL, head first. `L occurred with no preceding X` -- the thing the
+     order forbids, stated over a trace: the L is reached with only non-X events before it.
+     (An earlier form required that no X exist ANYWHERE, and `backward` asked only that an X be
+     somewhere in the trace, so the out-of-order trace [L; X] was neither a violation nor
+     rejected -- the ordering the section exists to enforce was not in it. MATH-06.) *)
   Inductive violates : list Event -> Prop :=
-  | violates_here  : forall e rest, isL e -> (forall p, ~ (isX p)) -> violates (e :: rest)
+  | violates_here  : forall e rest, isL e -> violates (e :: rest)
   | violates_later : forall e rest, ~ isX e -> violates rest -> violates (e :: rest).
 
-  (* Backward enforcement: at every L, demand that an X already happened. *)
+  (* Backward enforcement: at every L, demand that an X already happened BEFORE it. *)
   Definition backward (t : list Event) : Prop :=
-    forall e, In e t -> isL e -> exists p, In p t /\ isX p.
+    forall pre e post, t = pre ++ e :: post -> isL e -> exists p, In p pre /\ isX p.
 
   (** THEOREM 8a. The inductive `violates` is what backward enforcement rejects, at any trace
       length: the violating L is somewhere in the trace, every event before it is not an X, and
@@ -295,13 +303,19 @@ Section Coverings.
   Theorem violation_is_never_backward :
     forall t, violates t -> ~ backward t.
   Proof.
-    intros t Hv. induction Hv as [e rest HL Hno | e rest HnotX Hv IH]; intros Hb.
-    - destruct (Hb e (or_introl eq_refl) HL) as [p [_ HX]]. exact (Hno p HX).
-    - apply IH. intros l Hin HLl.
-      destruct (Hb l (or_intror Hin) HLl) as [p [[Hpe | Hp] HX]].
+    intros t Hv. induction Hv as [e rest HL | e rest HnotX Hv IH]; intros Hb.
+    - destruct (Hb nil e rest eq_refl HL) as [p [Hin _]]. exact Hin.
+    - apply IH. intros pre l post Heq HLl.
+      destruct (Hb (e :: pre) l post (f_equal (cons e) Heq) HLl) as [p [[Hpe | Hp] HX]].
       + subst p. exact (False_ind _ (HnotX HX)).
       + exists p. exact (conj Hp HX).
   Qed.
+
+  (** The out-of-order trace itself, as a check that can fail: [L; X] is a violation, and
+      backward rejects it. Under the earlier definitions this trace was accepted. *)
+  Corollary out_of_order_is_rejected :
+    forall l x, isL l -> isX x -> ~ backward (l :: x :: nil).
+  Proof. intros l x HL _. exact (violation_is_never_backward _ (violates_here l _ HL)). Qed.
 
   (** COROLLARY (the escape is real, not hypothetical). Forward-only enforcement ACCEPTS that
       same trace: it quantifies over the X events, and there are none, so it holds vacuously.
@@ -353,6 +367,7 @@ Print Assumptions nominal_monotone.
 Print Assumptions false_claim_always_rejected.
 Print Assumptions no_claim_is_not_a_pass.
 Print Assumptions violation_is_never_backward.
+Print Assumptions out_of_order_is_rejected.
 Print Assumptions forward_only_admits_the_violation.
 Print Assumptions chain_composes.
 (* Theorem 6 was DECLARED and never graded here. Nothing said so: the grading was a hand-kept

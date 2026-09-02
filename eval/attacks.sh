@@ -152,4 +152,185 @@ PY
 constant_payload_pays_no_keyed_demand() {  # AG-10: a look at another target pays nothing for a rewrite
   cd "$REPO" && PYTHONPATH=plugin python3 -m unittest -q tests.test_keyed_effects.ALookPaysOnlyWhatItNames.test_TEETH_a_read_of_another_file_pays_nothing tests.test_keyed_effects.ALookPaysOnlyWhatItNames.test_TEETH_a_listing_that_names_another_path_pays_nothing >/dev/null 2>&1; }
 
+stop_hook_active_rearms() {  # DL-04: the Stop after our own block is evaluated again, not waved through
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib; sys.path.insert(0, ".")
+from tests.plant_support import record, hook_decision
+st = pathlib.Path(tempfile.mkdtemp())
+hook_decision({"session_id":"s","cwd":"/tmp","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"rm f"},"tool_response":{"stdout":""},"keel_effect":record(files_removed=["f"])}, st)
+out = hook_decision({"session_id":"s","cwd":"/tmp","hook_event_name":"Stop","stop_hook_active":True}, st)
+raise SystemExit(0 if out.get("decision") == "block" and "U20" in out.get("reason","") else 1)
+PY
+}
+keyed_pre_image() {  # DL-06: two PreToolUse before either PostToolUse: each act reads its OWN pre-image
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib, subprocess, os; sys.path.insert(0, ".")
+from keel import effects
+w = tempfile.mkdtemp(); st = pathlib.Path(tempfile.mkdtemp())
+subprocess.run("git init -q && git config user.email a@b && git config user.name a && echo 1>f1 && echo 2>f2 && git add -A && git commit -qm i", shell=True, cwd=w, check=True)
+effects.snapshot(st, "s", "", w, act="tA"); effects.snapshot(st, "s", "", w, act="tB")
+os.remove(w + "/f1")
+a = effects.delta(st, "s", "", {"tool_use_id":"tA","tool_input":{"command":"echo"},"tool_response":{"stdout":""}})
+b = effects.delta(st, "s", "", {"tool_use_id":"tB","tool_input":{"command":"rm f1"},"tool_response":{"stdout":""}})
+raise SystemExit(0 if a.get("not_evaluable") is None and b.get("not_evaluable") is None and b["files_removed"] == ["f1"] else 1)
+PY
+}
+empty_envelope_is_loud() {  # DL-08: a closed stdin is an unreadable event, with a message and a fault row
+  cd "$REPO" && st=$(mktemp -d) && out=$(printf '' | KEEL_STATE_DIR="$st" CLAUDE_PLUGIN_ROOT="$REPO/plugin" bash plugin/hooks/dispatch.sh) \
+    && printf '%s' "$out" | grep -q systemMessage && grep -q '"fault"' "$st/decisions.jsonl"
+}
+unknown_event_pays_nothing() {  # DL-13: an event no handler knows discharges no demand
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib; sys.path.insert(0, ".")
+from tests.plant_support import hook_decision
+from keel.ledger import Ledger
+st = pathlib.Path(tempfile.mkdtemp())
+hook_decision({"session_id":"e","cwd":"/tmp","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push"}}, st)
+before = len(Ledger(st).open_ids("e", ""))
+out = hook_decision({"session_id":"e","cwd":"/tmp","hook_event_name":"TotallyMadeUpEvent","tool_name":"Glob","tool_input":{"pattern":"*"}}, st)
+raise SystemExit(0 if before == 3 == len(Ledger(st).open_ids("e", "")) and "systemMessage" in out else 1)
+PY
+}
+foreign_datum_pays_nothing() {  # DL-11: a Read of a measurement another session took of another tree pays no guard
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib, subprocess; sys.path.insert(0, ".")
+from tests.plant_support import hook_decision
+from keel.ledger import Ledger
+st = pathlib.Path(tempfile.mkdtemp()); wa, wb = tempfile.mkdtemp(), tempfile.mkdtemp()
+for w in (wa, wb):
+    subprocess.run("git init -q && git config user.email a@b && git config user.name a && echo 1>f && git add -A && git commit -qm i", shell=True, cwd=w, check=True)
+hook_decision({"session_id":"A","cwd":wa,"hook_event_name":"SessionStart"}, st)
+hook_decision({"session_id":"A","cwd":wa,"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push --force"}}, st)
+hook_decision({"session_id":"B","cwd":wb,"hook_event_name":"SessionStart"}, st)  # rewrites the one file for B's tree
+hook_decision({"session_id":"A","cwd":wa,"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":str(st/"observed.json")},"tool_response":{}}, st)
+raise SystemExit(0 if len(Ledger(st).open_ids("A", "")) == 3 else 1)
+PY
+}
+errored_read_pays_nothing() {  # EFF-06: a Read the host answered with an error returned no datum
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import json, tempfile, pathlib
+from keel import effects
+st = pathlib.Path(tempfile.mkdtemp()); (st/"observed.json").write_text(json.dumps({"root":None,"session":"s","head":"abc"}))
+ev = {"session_id":"s","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":str(st/"observed.json")},"tool_response":{"error":"exceeds maximum"}}
+raise SystemExit(0 if effects.read_delta(st, ev)["observed_read"] is False else 1)
+PY
+}
+killed_hook_is_named() {  # DL-09: a hook the host killed mid-evaluation is named at the ending, with a fault row
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib, json, time; sys.path.insert(0, ".")
+from tests.plant_support import hook_decision
+st = pathlib.Path(tempfile.mkdtemp()); (st/"pending").mkdir()
+(st/"pending"/"s-999999.json").write_text(json.dumps({"event":"PostToolUse","tool":"Bash","act":"rm -f x","t":time.time()}))
+out = hook_decision({"session_id":"s","cwd":"/tmp","hook_event_name":"Stop"}, st)
+raise SystemExit(0 if out.get("decision") == "block" and "never completed" in out.get("reason","") and "hook_killed" in (st/"decisions.jsonl").read_text() else 1)
+PY
+}
+ledger_compacts() {  # DL-10: a session start drops the rows of sessions that owe nothing; the dirty one stays
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib, json; sys.path.insert(0, ".")
+from tests.plant_support import hook_decision
+st = pathlib.Path(tempfile.mkdtemp())
+with (st/"obligations.jsonl").open("w") as f:
+    for i in range(20000):
+        f.write(json.dumps({"kind":"demand","id":f"x{i}","session":"other","agent":"","clause_id":"ZZ","subject":"s","reason":"r","prev":"","hash":"h"})+"\n")
+        f.write(json.dumps({"kind":"discharge","id":f"x{i}","session":"other","agent":"","how":"g","prev":"","hash":"g"})+"\n")
+    f.write(json.dumps({"kind":"demand","id":"open1","session":"dirty","agent":"","clause_id":"ZZ","subject":"s","reason":"r","prev":"","hash":"q"})+"\n")
+hook_decision({"session_id":"L","cwd":"/tmp","hook_event_name":"SessionStart"}, st)
+rows = [json.loads(l) for l in (st/"obligations.jsonl").read_text().splitlines()]
+raise SystemExit(0 if len(rows) < 100 and any(r["session"] == "dirty" for r in rows) else 1)
+PY
+}
+reflog_move_is_observed() {  # EFF-09: commit-then-reset inside one act leaves HEAD where it was; the reflog says what happened
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import tempfile, pathlib, subprocess
+from keel import effects
+w = tempfile.mkdtemp(); st = pathlib.Path(tempfile.mkdtemp())
+subprocess.run("git init -q -b main && git config user.email a@b && git config user.name a && echo 1>a && git add -A && git commit -qm i", shell=True, cwd=w, check=True)
+effects.snapshot(st, "s", "", w)
+subprocess.run("printf two > a && git add -A && git commit -qm x && git reset -q --hard HEAD~1", shell=True, cwd=w, check=True)
+d = effects.delta(st, "s", "", {"tool_input":{"command":"x"},"tool_response":{"stdout":""}})
+effects.snapshot(st, "s", "", w)
+subprocess.run("git checkout -q -b tmpb && git checkout -q main", shell=True, cwd=w, check=True)
+e = effects.delta(st, "s", "", {"tool_input":{"command":"y"},"tool_response":{"stdout":""}})
+raise SystemExit(0 if d["head_reset"] is True and e["head_switched"] is True else 1)
+PY
+}
+local_push_asks_the_remote() {  # EFF-11: a push over a local path opens no connection; the ending still asks the remote
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import tempfile, pathlib, subprocess
+from keel import effects
+base = tempfile.mkdtemp(); st = pathlib.Path(tempfile.mkdtemp())
+subprocess.run(f"git init -q --bare origin.git && git clone -q origin.git w && git clone -q origin.git other && cd w && git config user.email a@b && git config user.name a && echo 1>a && git add -A && git commit -qm i && git push -q origin HEAD:main", shell=True, cwd=base, check=True)
+w = base + "/w"
+effects.snapshot(st, "s", "", w)
+subprocess.run("git push -q origin HEAD:refs/heads/side", shell=True, cwd=w, check=True)
+d = effects.delta(st, "s", "", {"tool_input":{"command":"git push"},"tool_response":{"stdout":""}})
+subprocess.run("git config user.email a@b && git config user.name a && git pull -q origin main && echo 2>b && git add -A && git commit -qm foreign && git push -q origin HEAD:main", shell=True, cwd=base + "/other", check=True)
+s = effects.at_stop(st, "s", "", w)
+raise SystemExit(0 if d["remote_ref_moved"] and s["remote_landed"] is False else 1)
+PY
+}
+act_is_not_its_own_canary() {  # EFF-12: a quiet connection raises U06; it cannot pay the demand it just raised
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib; sys.path.insert(0, ".")
+from tests.plant_support import record, hook_decision
+from keel.ledger import Ledger
+st = pathlib.Path(tempfile.mkdtemp())
+hook_decision({"session_id":"q","cwd":"/tmp","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"python3 -c 'import socket'"},"tool_response":{"stdout":""},"keel_effect":record(net_out=True, net_read=True)}, st)
+raise SystemExit(0 if "U06" in {r["clause_id"] for r in Ledger(st).open_demands("q", "")} else 1)
+PY
+}
+mention_is_one_segment() {  # MATH-10: the observer's scanner sees a quoted mention as one segment, as the theory assumes
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+from keel import effects
+one = effects._segments("echo 'ps aux | grep x'") == ["echo 'ps aux | grep x'"]
+mention = effects._lists_itself("ps aux | grep x\n", "echo 'ps aux | grep x'") is False
+real = effects._lists_itself("root 1 sh -c ps aux | grep x\nroot 2 grep x\n", "ps aux | grep x") is True
+raise SystemExit(0 if one and mention and real else 1)
+PY
+}
+non_acts_pass_open_demands() {  # DL-14/P-23: a refused push does not refuse the question that would resolve it
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib; sys.path.insert(0, ".")
+from tests.plant_support import hook_decision
+st = pathlib.Path(tempfile.mkdtemp())
+hook_decision({"session_id":"n","cwd":"/tmp","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git push"}}, st)
+ask = hook_decision({"session_id":"n","cwd":"/tmp","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[]}}, st)
+task = hook_decision({"session_id":"n","cwd":"/tmp","hook_event_name":"PreToolUse","tool_name":"Task","tool_input":{"prompt":"x"}}, st)
+raise SystemExit(0 if ask == {} and task.get("hookSpecificOutput", {}).get("permissionDecision") == "deny" else 1)
+PY
+}
+unkeyable_subject_is_not_a_pass() {  # L2: an occasion whose extractor finds no operand still fires, session-wide
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import sys, tempfile, pathlib, dataclasses; sys.path.insert(0, ".")
+from keel import clauses as C, dispatch
+from keel.ledger import Ledger
+st = pathlib.Path(tempfile.mkdtemp())
+u10 = next(c for c in C.load_default() if c.id == "U10")
+row = dataclasses.replace(u10, fingerprint={"kind": "regex", "on": "tool_name", "pattern": "^Bash$"}, event="PreToolUse", tools=["Bash"])
+out = dispatch.pre_tool_use([row], Ledger(st), {"session_id":"k","cwd":"/tmp","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"true"}})
+raise SystemExit(0 if "U10" in str(out) else 1)
+PY
+}
+coq_identity_shapes() {  # MATH-04: iff_refl, an identity lambda pair, and a bare conj of hypotheses are refused as results
+  for shape in 'apply iff_refl' 'exact (conj H1 H2)' 'split; [ exact (fun h => h) | exact (fun h => h) ]'; do
+    W=$(copy); python3 - "$W/proofs/Coverings.v" "$shape" <<'PY'
+import pathlib, sys
+p, shape = pathlib.Path(sys.argv[1]), sys.argv[2]; t = p.read_text()
+stmt = "forall (P : Covering) c, P c -> ~ P c -> P c /\\ ~ P c" if "conj" in shape else "forall (P : Covering) c, P c <-> P c"
+intro = "intros P c H1 H2." if "conj" in shape else "intros P c."
+t = t.replace("End Coverings.", f"\n  Theorem vac : {stmt}.\n  Proof. {intro} {shape}. Qed.\n\nEnd Coverings.")
+p.write_text(t.replace("Print Assumptions textual_never_immune.", "Print Assumptions vac.\nPrint Assumptions textual_never_immune."))
+PY
+    gate_red "$W" || return 1
+  done; }
+coq_out_of_order_trace() {  # MATH-06: [L; X] is a violation and backward rejects it (the earlier definitions accepted it)
+  W=$(copy); cat > "$W/proofs/Break_order.v" <<'V'
+Require Import List Bool. Import ListNotations. Require Import Coverings.
+Definition isX (e:bool) : Prop := e = true.
+Definition isL (e:bool) : Prop := e = false.
+Theorem rejected : ~ backward bool isX isL [false; true].
+Proof. exact (out_of_order_is_rejected bool isX isL false true eq_refl eq_refl). Qed.
+V
+  (cd "$W/proofs" && coqc -q -Q . "" Coverings.v >/dev/null 2>&1 && coqc -q -Q . "" Break_order.v >/dev/null 2>&1); }
 "$@"

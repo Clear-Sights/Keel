@@ -14,5 +14,41 @@
  ],
  "dispatcher": [
   "discharge"
+ ],
+ "reconcile": [
+  "reconcile"
+ ],
+ "snapshot": [
+  "snapshot"
+ ],
+ "main": [
+  "main"
+ ],
+ "_artifact_read": [
+  "_artifact_read"
+ ],
+ "compact": [
+  "compact"
+ ],
+ "delta": [
+  "delta"
+ ],
+ "at_stop": [
+  "at_stop"
+ ],
+ "post_tool_use": [
+  "post_tool_use"
+ ],
+ "_segments": [
+  "_segments"
+ ],
+ "_open_effect_denial": [
+  "_open_effect_denial"
+ ],
+ "pre_tool_use": [
+  "pre_tool_use"
+ ],
+ "Coverings.v": [
+  "Coverings.v"
  ]
 }

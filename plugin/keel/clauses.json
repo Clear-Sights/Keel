@@ -852,7 +852,7 @@
       ],
       "key_from": {
         "on": "tool_input.command",
-        "pattern": "^(?:[\\s\\S]*[;&|\\n])?\\s*(?:[A-Za-z_]\\w*=\\S*(?:\\s+|$))*(?:python[0-9.]*\\s+(?:-m\\s+)?)?([^\\s=;&|]+)(?=[\\s;&|]|$)",
+        "pattern": "^(?:[\\s\\S]*[;&|\\n])?\\s*(?:[A-Za-z_]\\w*=\\S*(?:\\s+|$))*(?:(?:sh|bash)\\s+(?:-c|-lc)\\s+['\\\"])?(?:python[0-9.]*\\s+(?:-m\\s+)?)?((?:npm|yarn|pnpm|uv|make|poetry|pipenv|cargo|go|bundle|rake|gem|composer|gradle|mvn)\\s+[^\\s;&|'\\\"]+|[^\\s=;&|]+)(?=[\\s;&|]|$)",
         "group": 1
       }
     },
@@ -917,7 +917,7 @@
       ],
       "key_from": {
         "on": "tool_input.command",
-        "pattern": "^(?:[\\s\\S]*[;&|\\n])?\\s*(?:[A-Za-z_]\\w*=\\S*(?:\\s+|$))*(?:python[0-9.]*\\s+(?:-m\\s+)?)?([^\\s=;&|]+)(?=[\\s;&|]|$)",
+        "pattern": "^(?:[\\s\\S]*[;&|\\n])?\\s*(?:[A-Za-z_]\\w*=\\S*(?:\\s+|$))*(?:(?:sh|bash)\\s+(?:-c|-lc)\\s+['\\\"])?(?:python[0-9.]*\\s+(?:-m\\s+)?)?((?:npm|yarn|pnpm|uv|make|poetry|pipenv|cargo|go|bundle|rake|gem|composer|gradle|mvn)\\s+[^\\s;&|'\\\"]+|[^\\s=;&|]+)(?=[\\s;&|]|$)",
         "group": 1
       }
     },

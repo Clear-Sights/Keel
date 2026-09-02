@@ -252,6 +252,46 @@ class Ledger:
     def open_demands(self, session: str, agent: str) -> list[dict]:
         return list(self.scope(session, agent)[0].values())
 
+    COMPACT_AT = 1 << 20  # bytes; below this a full read is cheap and a rewrite is not worth its race
+
+    def compact(self, keep_session: str) -> int:
+        """Drop every row of a session that owes nothing, re-chaining what stays; rows dropped.
+
+        The file is append-only and shared by every session in a state directory, so every
+        read walked every session that ever ran (DL-10: ~5 s per hook at 100k rows, killed at
+        the host's timeout past 400k, i.e. Keel silently off). A session with no open demand
+        has nothing this ledger can ever be asked about again. Run at SessionStart only, and
+        only past COMPACT_AT: the rewrite races a concurrent session's append, and that window
+        is taken once per session start, never per event.
+        """
+        try:
+            if self.path.stat().st_size < self.COMPACT_AT:
+                return 0
+        except OSError:
+            return 0
+        rows = list(self._rows())
+        owing: dict = {}
+        for r in rows:
+            ids = owing.setdefault(r.get("session"), set())
+            if r.get("kind") == "demand":
+                ids.add(r.get("id"))
+            elif r.get("kind") == "discharge":
+                ids.discard(r.get("id"))
+        keep = {s for s, ids in owing.items() if ids} | {keep_session}
+        kept = [r for r in rows if r.get("session") in keep]
+        if len(kept) == len(rows):
+            return 0
+        prev, lines = "", []
+        for r in kept:
+            body = {k: v for k, v in r.items() if k not in ("hash", "prev")}
+            body["prev"] = prev
+            body["hash"] = prev = _chain_hash(prev, body)
+            lines.append(_canon(body))
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        tmp.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
+        os.replace(tmp, self.path)
+        return len(rows) - len(kept)
+
     def verify_chain(self) -> str | None:
         """Re-derive the chain. Returns the first divergent hash, or None. Advisory only."""
         prev = ""
