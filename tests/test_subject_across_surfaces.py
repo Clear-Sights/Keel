@@ -72,8 +72,12 @@ class SubjectCrossesSurfaces(unittest.TestCase):
 
     def traverse(self, session: str) -> None:
         """The opening debt every session pays, then a traversal that printed null."""
-        self.bash("git status", session)
-        self.bash("git fetch origin", session)
+        self.send({"hook_event_name": "SessionStart"}, session)
+        for name in ("observed.json", "remote.json"):
+            path = os.path.join(self.state, name)
+            self.send(self.read(path), session)
+            self.send({"hook_event_name": "PostToolUse", "tool_name": "Read",
+                       "tool_input": {"file_path": path}}, session)
         self.bash("jq '.items[0].name' response.json", session, report_null=True)
 
     NEXT = {"tool_name": "Bash", "tool_input": {"command": "echo next"}}
@@ -91,14 +95,16 @@ class SubjectCrossesSurfaces(unittest.TestCase):
 
     def test_TEETH_a_host_read_of_the_same_file_licenses_the_traversal(self) -> None:
         self.traverse("s2")
-        self.assertFalse(self.denied(self.send(self.read("response.json"), "s2")),
+        self.assertFalse(self.denied(self.send(self.read("response.json"), "s2")))
+        self.assertFalse(self.denied(self.send(self.NEXT, "s2")),
                          "reading the file IS looking at its structure")
-        self.assertFalse(self.denied(self.send(self.NEXT, "s2")))
 
     def test_TEETH_a_read_of_another_file_does_not_license(self) -> None:
-        """Separates a subject that crossed surfaces from a guard that went vacuous."""
+        """Separates a subject that crossed surfaces from a guard that went vacuous. The Read
+        itself is never refused -- a host read cannot be the act -- but it pays nothing, so the
+        next act is refused exactly as before."""
         self.traverse("s3")
-        self.assertTrue(self.denied(self.send(self.read("other.json"), "s3")))
+        self.assertFalse(self.denied(self.send(self.read("other.json"), "s3")))
         self.assertTrue(self.denied(self.send(self.NEXT, "s3")))
 
     def test_TEETH_writing_the_file_is_not_looking_at_it(self) -> None:
@@ -108,10 +114,18 @@ class SubjectCrossesSurfaces(unittest.TestCase):
             "s4")))
 
     def test_TEETH_the_original_jq_guard_still_discharges(self) -> None:
-        """Composition must not cost the covering it composed with."""
+        """Composition must not cost the covering it composed with: a query that printed a
+        non-null JSON datum from the same file pays, committed and checked by its effect."""
         self.traverse("s5")
-        self.assertFalse(self.denied(self.bash("jq 'keys' response.json", "s5")))
+        self.assertFalse(self.denied(self.bash("# keel-guard: U10\njq 'keys' response.json", "s5",
+                                               report_structured=True)))
         self.assertFalse(self.denied(self.send(self.NEXT, "s5")))
+
+    def test_TEETH_a_committed_query_that_printed_nothing_structured_pays_nothing(self) -> None:
+        self.traverse("s6")
+        self.assertFalse(self.denied(self.bash("# keel-guard: U10\njq .name response.json", "s6",
+                                               report_null=True)))
+        self.assertTrue(self.denied(self.send(self.NEXT, "s6")), "a broken commitment spent nothing")
 
     def test_the_subject_reading_has_exactly_one_owner(self) -> None:
         """`subject.on` is interpreted in one place. Three call sites needed it and each was a

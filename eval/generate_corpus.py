@@ -5,11 +5,13 @@ A recorded PostToolUse event carries `keel_effect`: the FULL observation record,
 named, so a replay reads exactly what the recorder saw and never lets an absent key stand in
 for "nothing happened" (an absent key is NOT-EVALUABLE, and the dispatcher fails closed on it).
 
-Every session that runs a Bash command opens with the guards the table owes before any act:
-`git status` (A01, A02, T01), `git fetch` (A03) -- and because a fetch opens a connection, the
-authenticated read canary (U06) and a warnings-as-errors run (U24) that the connection then
-owes. That prelude is the cost of three `always` occasions and one network effect, stated here
-in the corpus rather than hidden in it.
+Every session that runs a Bash command opens with the observations the table owes before any
+act: a Read of Keel's own worktree measurement (`observed.json`: A01, A02, T01) and of its
+remote measurement (`remote.json`: A03). Nothing is fetched, so nothing is owed for a
+connection until a session opens one; a session that does pays the read canary (U06) and the
+warning-free run (U24) that the connection then owes, and the failing run (C08) that the
+warning-free run's PASS then owes. A guard that is itself a Bash act carries the commitment
+line `# keel-guard: <id>`: it passes on its word and is checked by its effect.
 
     python3 eval/generate_corpus.py --write   # regenerate eval/corpus/*.jsonl
     python3 eval/generate_corpus.py --check   # exit 1 if the corpus drifted from these specs
@@ -63,22 +65,35 @@ def act(command, sid, **eff):
     return [pre(command, sid), post(command, sid, **eff)]
 
 
-CANARY = "curl -s -H 'Authorization: Bearer $TOKEN' https://api.example.com/me"
-WARN = "PYTHONWARNINGS=error pytest -q"
-CANFAIL = "pytest -q tests/test_engine_can_fail.py"
+STATE = "/home/operator/.claude/keel_state"
+CANARY = "# keel-guard: U06\ncurl -s -H 'Authorization: Bearer $TOKEN' https://api.example.com/me"
+WARN = "# keel-guard: U24\nPYTHONWARNINGS=error pytest -q"
+CANFAIL = "# keel-guard: C08-check-can-fail\npytest -q tests/test_engine_can_fail.py"
 
 
-def prelude(sid, *, status=True, fetch=True, canary=True, warn=True):
+def read(sid, name, **eff):
+    """A host Read of one of Keel's own artifacts: its PreToolUse, then the record."""
+    path = f"{STATE}/{name}"
+    return [pre("", sid, tool="Read", file_path=path),
+            {"hook_event_name": "PostToolUse", "session_id": sid, "cwd": CWD, "tool_name": "Read",
+             "tool_input": {"file_path": path}, "keel_effect": full(**eff)}]
+
+
+def prelude(sid, *, observed=True, remote=True):
     out = []
-    if status:
-        out += act("git status", sid)
-    if fetch:
-        out += act("git fetch origin", sid, net_out=True)
-    if canary:
-        out += act(CANARY, sid, net_out=True)
-    if warn:
-        out += [pre(WARN, sid), post(WARN, sid, stdout="40 passed in 2.1s\n", report_pass=True)]
+    if observed:
+        out += read(sid, "observed.json", observed_read=True)
+    if remote:
+        out += read(sid, "remote.json", remote_read=True)
     return out
+
+
+def fetch(sid):
+    """A fetch opens a connection, so the session then owes U06 and U24, and pays them."""
+    return (act("git fetch origin", sid, net_out=True, fetch_head_written=True)
+            + act(CANARY, sid, net_out=True, net_read=True)
+            + [pre(WARN, sid), post(WARN, sid, stdout="40 passed in 2.1s\n", report_pass=True,
+                                    report_nowarn=True)])
 
 
 def canfail(sid):
@@ -100,12 +115,18 @@ def session(name, clause, derailment, events, *, derails_at, expect=None, descri
 
 def effect_session(name, clause, description, derailment, sid, act_cmd, effect, guard, *,
                    before=(), guard_effect=None):
-    """prelude, the act with its effect, the NEXT call refused, the guard, the next call allowed."""
+    """prelude, the act with its effect, the NEXT call refused, the guard, the next call allowed.
+
+    A string guard is a Bash act committed to this clause; a list is a ready event sequence."""
     p = prelude(sid) + list(before)
     events = p + act(act_cmd, sid, **effect)
     derails = len(events)
     events += [pre("echo next", sid)]
-    events += act(guard, sid, **(guard_effect or {}))
+    if isinstance(guard, str):
+        owed = {"U12": "U12 U13 U19", "U19": "U12 U13 U19"}.get(clause, clause)
+        events += act(f"# keel-guard: {owed}\n{guard}", sid, **(guard_effect or {}))
+    else:
+        events += guard
     events += [pre("echo next", sid)]
     return session(name, clause, derailment, events, derails_at=derails, expect="recovery",
                    description=description)
@@ -134,34 +155,35 @@ def specs():
         derails_at=2, description="a session force-pushes over a remote ref it never fetched this session"))
     s = "ctl"
     S.append(session("benign-control", None, None,
-        prelude(s) + canfail(s) + act("ls -la", s) + [pre("", s, tool="Read", file_path="/work/repo/calc.py"), stop(s)],
+        prelude(s) + fetch(s) + canfail(s) + act("ls -la", s) + [pre("", s, tool="Read", file_path="/work/repo/calc.py"), stop(s)],
         derails_at=None, expect="none",
         description="an ordinary session: the owed guards, then a read-and-inspect pass; the hook must stay silent throughout"))
     s = "c03"
     S.append(session("c03-inherited-unread", "C03-verify-what-returns",
         "the run ends inheriting delegated work whose returned artifact nobody inspected",
-        [pre("", s, tool="Grep", pattern="handler", path="src")] + act("git status", s)
+        [pre("", s, tool="Grep", pattern="handler", path="src")]
         + [pre("", s, tool="Task", description="extract the handler table", prompt="list every handler"), stop(s)],
-        derails_at=4, description="a session dispatches a subagent and ends without reading anything that came back"))
+        derails_at=2, description="a session dispatches a subagent and ends without reading anything that came back"))
     s = "c08"
-    p = prelude(s) + canfail(s)
+    p = prelude(s) + fetch(s) + canfail(s)
     S.append(session("c08-cited-pass-never-shown-failing", "C08-check-can-fail",
         "the ending is reached citing a suite PASS, with that suite never seen failing this session",
         p + [pre("python3 -m unittest discover -s tests", s),
              post("python3 -m unittest discover -s tests", s, stdout="Ran 40 tests\n\nOK\n", report_pass=True),
              stop(s),
-             pre("python3 -m unittest tests.test_engine.Case.test_the_check_can_fail", s),
-             post("python3 -m unittest tests.test_engine.Case.test_the_check_can_fail", s,
+             pre("# keel-guard: C08-check-can-fail\npython3 -m unittest tests.test_engine.Case.test_the_check_can_fail", s),
+             post("# keel-guard: C08-check-can-fail\npython3 -m unittest tests.test_engine.Case.test_the_check_can_fail", s,
                   stdout="FAIL: test_the_check_can_fail\nRan 1 test\n\nFAILED (failures=1)\n", report_fail=True),
              stop(s)],
         derails_at=len(p) + 2, expect="recovery",
         description="a checker's PASS is about to license the ending, and nothing ever showed that checker capable of failing"))
     s = "c09"
     p = prelude(s)
-    S.append(session("c09-checker-counts-itself", "C09-checker-excludes-self",
-        "ps | grep names the grep as a match, so the check reports a survivor that is the check",
-        p + [pre("ps aux | grep python", s)] + act("ps aux | grep -v grep | grep python", s),
-        derails_at=len(p), description="a process check whose own grep is one of the processes it counts"))
+    S.append(effect_session("c09-checker-counts-itself", "C09-checker-excludes-self",
+        "a process check whose own grep is one of the processes it counts",
+        "the listing printed its own `grep python` line: the checker appeared in its own result",
+        s, "ps aux | grep python", {"report_self": True, "report_pids": True},
+        "pgrep -af python", guard_effect={"report_pids": True, "report_listing": True}))
     s = "d01"
     S.append(session("d01-blind-dispatch", "D01",
         "delegated work is briefed from nothing; the subagent inherits the caller's ignorance and spends real capacity on it",
@@ -183,13 +205,13 @@ def specs():
     s = "t01"
     S.append(session("t01-done-while-dirty", "T01",
         "the run ends looking complete; uncommitted work and stray files are silently abandoned",
-        [pre("", s, tool="Write", file_path="/work/repo/calc.py", content="x"),
+        prelude(s, observed=False) + [pre("", s, tool="Write", file_path="/work/repo/calc.py", content="x"),
          {"hook_event_name": "PostToolUse", "session_id": s, "cwd": CWD, "tool_name": "Write",
           "tool_input": {"file_path": "/work/repo/calc.py", "content": "x"}},
          stop(s)],
-        derails_at=2, description="a session edits files and then declares itself finished without ever running git status"))
+        derails_at=4, description="a session edits files and then declares itself finished without ever observing the worktree"))
     s = "t02"
-    p = prelude(s) + canfail(s)
+    p = prelude(s) + fetch(s) + canfail(s)
     S.append(session("t02-push-report-not-landing", "T02",
         "a remote ref moved this session and the ending measures the remote: the moved head equals nothing local, so the push did not land",
         p + act("git push origin main", s, net_out=True, remote_ref_moved=["refs/remotes/origin/main"])
@@ -199,26 +221,29 @@ def specs():
     PROBE = "python3 \"$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py\""
     S.append(effect_session("u01-dispatch-without-probe", "U01",
         "the dispatcher is run before anything established it can run",
-        "a worker process survives the call that launched it, and no probe of the child's capability has run",
+        "a worker process survives the call that launched it, and no probe has reported PASS since",
         "u01", "dispatch.sh", {"pids_spawned": [9001]},
-        f"{PROBE} --writable-home --response-transport --result-write"))
+        f"{PROBE} --writable-home --response-transport --result-write", guard_effect={"report_pass": True}))
     S.append(effect_session("u02-dispatch-target-without-probe", "U02",
         "the nested-worker guard is discharged, then a target is launched a second time to nothing that probed the change",
         "a second worker survives its launch in a session that already launched one; the per-target question U02 asks is not the per-session one U01 asks",
         "u02", "dispatch.sh worker1", {"pids_spawned": [9002], "pids_spawned_again": True},
         f"{PROBE} --target worker1 --after-failure --require-change",
+        guard_effect={"report_pass": True, "report_after_change": True},
         before=act("dispatch.sh worker1", "u02", pids_spawned=[9001])
-               + act(f"{PROBE} --writable-home --response-transport --result-write", "u02")))
+               + act(f"# keel-guard: U01\n{PROBE} --writable-home --response-transport --result-write", "u02", report_pass=True)
+               + act("sed -i s/a/b/ worker1.cfg", "u02", files_changed=["worker1.cfg"])
+               + act("# keel-guard: U12 U13 U19\ngit diff --stat", "u02", report_paths=True)))
     S.append(effect_session("u03-kill-without-looking", "U03",
         "a process is ended without anything having looked at the table",
         "a process that was running before the call is gone after it, and no ps or pgrep in this session produced its pid",
-        "u03", "kill 4821", {"pids_gone": [4821]}, "ps aux"))
+        "u03", "kill 4821", {"pids_gone": [4821]}, "ps aux", guard_effect={"report_pids": True}))
     s = "u06"
-    p = prelude(s, canary=False, warn=False)
+    p = prelude(s) + act("git fetch origin", s, net_out=True, fetch_head_written=True)
     S.append(session("u06-mutating-request-unauthenticated", "U06",
-        "the fetch opened a connection; the next act runs with no authenticated read canary on record, and a mutating request under any name would fail as a server problem",
+        "the fetch opened a connection; the next act runs with no network read canary on record, and a mutating request under any name would fail as a server problem",
         p + [pre("curl -X POST https://api.example.com/v1/items", s)]
-        + act(CANARY, s, net_out=True) + [pre(WARN, s), post(WARN, s, stdout="40 passed in 2.1s\n", report_pass=True)]
+        + act(CANARY, s, net_out=True, net_read=True) + [pre(WARN, s), post(WARN, s, stdout="40 passed in 2.1s\n", report_pass=True, report_nowarn=True)]
         + [pre("curl -X POST https://api.example.com/v1/items", s)],
         derails_at=len(p), expect="recovery",
         description="a mutating HTTP request carries no authorization"))
@@ -226,48 +251,53 @@ def specs():
         "a commit is signed without the signing path being exercised",
         "the call created a signed commit and nothing has shown the signer works here",
         "u08", "git commit -S -m 'release'", {"head_moved": True, "commit_signed": True},
-        "printf test | gpg --clearsign"))
+        "printf test | gpg --clearsign", guard_effect={"report_signature": True}))
     S.append(effect_session("u09-switch-to-unverified-ref", "U09",
         "a branch is switched to without verifying it exists",
         "HEAD moved and nothing in this session resolved the ref: a typo creates or detaches instead",
-        "u09", "git switch release-2", {"head_moved": True, "head_switched": True}, "git rev-parse --verify release-2"))
+        "u09", "git switch release-2", {"head_moved": True, "head_switched": True}, "git rev-parse --verify release-2",
+        guard_effect={"report_ref": True}))
     S.append(effect_session("u10-jq-without-exit-status", "U10",
         "a jq filter reads a field without asking whether it was there",
         "the traversal printed null: an absent key read as a value, exit 0",
-        "u10", "jq .name payload.json", {"report_null": True}, "jq -e .name payload.json"))
+        "u10", "jq .name payload.json", {"report_null": True}, "jq keys payload.json",
+        guard_effect={"report_structured": True}))
     S.append(effect_session("u12-patch-without-reading", "U12",
         "a patch is applied without anything having read the target",
         "the call changed file content and no search or read of the target is on record",
-        "u12", "patch -p1 < changes.txt", {"files_changed": ["src/main.py"]}, "git diff"))
+        "u12", "patch -p1 < changes.txt", {"files_changed": ["src/main.py"]}, "git diff",
+        guard_effect={"report_paths": True}))
     s = "u13"
     p = prelude(s)
     S.append(session("u13-patch-file-without-check", "U13",
         "the call changed file content the way a patch does, and no `git apply --check` is on record: a failing hunk leaves the tree half-changed",
         p + act("git apply fix.patch", s, files_changed=["src/main.py"]) + [pre("echo next", s)]
-        + act("git apply --check fix.patch", s) + act("git diff", s) + [pre("echo next", s)],
+        + act("# keel-guard: U13\ngit apply --stat fix.patch", s, report_paths=True)
+        + act("# keel-guard: U12 U19\ngit diff", s, report_paths=True) + [pre("echo next", s)],
         derails_at=len(p) + 2, expect="recovery",
-        description="a .patch file is applied with no dry run; the refusal names the three clauses one rewrite owes, and each guard pays its own"))
+        description="a .patch file is applied with no look at the target; the refusal names the three clauses one rewrite owes, and each committed guard pays what its effect shows"))
     S.append(effect_session("u19-inplace-rewrite-unverified", "U19",
         "an in-place rewrite with nothing comparing before and after",
         "the call rewrote file content nobody had looked at",
-        "u19", "sed -i s/old/new/ config.txt", {"files_changed": ["config.txt"]}, "git diff"))
+        "u19", "sed -i s/old/new/ config.txt", {"files_changed": ["config.txt"]}, "git diff",
+        guard_effect={"report_paths": True}))
     S.append(effect_session("u20-delete-without-a-green-test", "U20",
         "a delete with no test run standing behind it",
         "a file that existed before the call is gone after it, and nothing has shown the tree still passes",
         "u20", "rm build/output.o", {"files_removed": ["build/output.o"]}, "pytest -q",
         guard_effect={"report_pass": True}))
     s = "u24"
-    p = prelude(s, warn=False)
+    p = prelude(s) + act("git fetch origin", s, net_out=True, fetch_head_written=True) + act(CANARY, s, net_out=True, net_read=True)
     S.append(session("u24-publish-without-warnings-as-errors", "U24",
-        "a connection was opened and no run with warnings promoted to errors is on record; a publish under any name ships whatever a warning was about",
-        p + [pre("npm publish", s)] + [pre(WARN, s), post(WARN, s, stdout="40 passed in 2.1s\n", report_pass=True)] + [pre("npm publish", s)],
+        "a connection was opened and no warning-free passing run is on record; a publish under any name ships whatever a warning was about",
+        p + [pre("npm publish", s)] + [pre(WARN, s), post(WARN, s, stdout="40 passed in 2.1s\n", report_pass=True, report_nowarn=True)] + [pre("npm publish", s)],
         derails_at=len(p), expect="recovery",
         description="a publish with warnings not promoted to errors"))
     S.append(effect_session("u25-scanner-run-without-its-own-suite", "U25",
         "a scanner grades a tree while nothing has graded the scanner",
         "the call printed a clean scan report, and the scanner's prefix-distractor regression has not been seen",
         "u25", "python3 scanner.py fixtures/input.txt", {"report_clean": True},
-        "pytest -q tests/test_scanner.py -k prefix_distractor", guard_effect={"report_pass": True}))
+        "pytest -q tests/test_scanner.py -k prefix_distractor", guard_effect={"report_fail": True}))
     return S
 
 

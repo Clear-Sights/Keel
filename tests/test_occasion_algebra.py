@@ -377,14 +377,20 @@ class OccasionAlgebra(unittest.TestCase):
         A02 used to name `rm`, `find`, `truncate` and `git clean`, and two of its three declared
         occasions were allowed by the shipped plugin. It now fires on the first act of a session
         that has listed nothing, because before the act nothing but the name told a bulk delete
-        from `ls`; so every first act is denied, naming A02, and its guard is not."""
+        from `ls`; so every first act is denied, naming A02, and its guard -- a host Glob, or a
+        Read of Keel's own listing -- is not."""
         with tempfile.TemporaryDirectory(prefix="keel-a02-") as state:
             for command in ("rm -rf build/", "git clean -fd", "echo hello", "python3 x.py"):
                 denied, _ = self._drive(command, f"a02-{abs(hash(command))}", state)
                 self.assertIn("A02", denied,
                               f"{command!r} is a first act and the dispatcher answered {denied!r}")
-            allowed, _ = self._drive("ls -la build/", "a02-guard", state)
-            self.assertNotIn("A02", allowed, "A02's own guard was refused by A02")
+            # The guard is a host Glob: it lists a set through the closed tool enum, so it
+            # licenses A02 before the first act -- and is itself refused by nothing.
+            allowed, _ = self._drive("build/**", "a02-guard", state, tool="Glob")
+            self.assertEqual([], allowed, "A02's own guard was refused")
+            denied, _ = self._drive("rm -rf build/", "a02-guard", state)
+            self.assertNotIn("A02", denied, "the listing did not license A02")
+            self.assertIn("A01", denied, "the listing licensed more than A02")
 
     def test_every_relation_is_declared(self):
         declared = {(a, b) for a, _, b, _, _ in ledger_rows()}
@@ -422,11 +428,12 @@ class OccasionAlgebra(unittest.TestCase):
                     f"OVERLAPS.tsv witness for {a}/{b} is no longer matched by {clause_id}: "
                     f"{witness!r}")
 
-    def _drive(self, command, session, state):
+    def _drive(self, command, session, state, tool="Bash"):
         """One PreToolUse event through the real dispatcher; return (denying id, quoted remedy)."""
-        event = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+        event = json.dumps({"hook_event_name": "PreToolUse", "tool_name": tool,
                             "session_id": session, "cwd": "/tmp",
-                            "tool_input": {"command": command}})
+                            "tool_input": {"command": command} if tool == "Bash"
+                            else {"pattern": command}})
         done = subprocess.run(
             [sys.executable, "-m", "keel.dispatch"], input=event, text=True, capture_output=True,
             env={**os.environ, "KEEL_STATE_DIR": state, "CLAUDE_PLUGIN_ROOT": str(PLUGIN),

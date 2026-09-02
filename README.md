@@ -145,6 +145,12 @@ command supplies for itself. A marker in a heredoc body, inside a quoted string,
 segment, or on a trailing comment is payload, and payload does not exempt anything. `//` and `--`
 are not comment introducers here; the field is a shell command.
 
+The same header carries a **commitment**, which is not a bypass: `# keel-guard: U20` names an
+open demand the call will pay. The call passes, and after it ran its effect record is what pays
+— a committed call that paid nothing is recorded as a broken commitment and the demand stays
+open. Without the line, a Bash call under an open demand is refused, because before it runs it
+cannot be told from the act the demand guards against.
+
 ## Honest limitations
 
 Limits before capability claims — read these before the clause table below.
@@ -155,24 +161,39 @@ Limits before capability claims — read these before the clause table below.
 - **A licence is scoped to its clause and session** — one observed guard licenses later
   matching calls for that clause anywhere in the same session, not just against the same file,
   branch, or command.
-- **A discharge records that the guard was invoked, not that it succeeded.** Discharge
-  predicates match the guard's invocation at `PreToolUse`/`PostToolUse` — a guard command that
-  fails, or names a tool this repository does not have, still discharges. `C08-check-can-fail`
-  is discharged by running the checker under a plant, not by observing the plant fail.
+- **A discharge records what the guard act did, never what it was called.** A guard is a
+  host tool call (`Read`, `Grep`, `Glob`, `AskUserQuestion` — the closed `tool_name` enum) or an
+  observed **effect** of the guard act. Where a trace exists the effect is a datum checked
+  against it — a printed ref the ref snapshot holds, a printed path the worktree snapshot holds,
+  printed pids that were alive, a JSON datum that parses — and a mention changes nothing in the
+  trace, so it pays nothing. Where no trace exists (`report_pass`, `report_fail`,
+  `report_signature`, a warning-free report) the effect is a report shape, and a claim that
+  agrees with the shape is accepted: that is the stated bound of a report effect. The loader
+  refuses a guard that names a program (`CLAUSE-GUARD-NOMINAL`), with no field to argue an
+  exception and no waiver.
+- **The first guards are observations of Keel's own measurement.** Before the first act nothing
+  agnostic separates a push from anything else (Theorem 3), so `A01`, `A02` and `A03` are paid
+  by a host `Read` of `observed.json` (branch, HEAD, dirty paths, the session's processes,
+  written before every act and at session start) and of `remote.json` (the remote's heads,
+  listed once per session; not written when the remote cannot be listed, so the demand stays
+  owed), under Keel's state directory. `Glob` also lists a set for `A02`.
+- **A guard that is itself a Bash act passes on a commitment and is checked by its effect.**
+  Before it runs, a Bash call cannot be told from the act it would guard, so under an open
+  demand it passes only with a leading `# keel-guard: <clause id>` line naming the demand it
+  will pay; after it ran, its effect record either paid the demand or did not. A committed call
+  that paid nothing is a `broken_commitment` in the journal and the demand stays open, so the
+  next act is refused again. Host reads (`Read`, `Grep`, `Glob`) are never refused by an open
+  demand: they cannot be the act, and they are how most guards are paid.
 - **No occasion reads a program's name.** Before the act, the name is the only thing that
   distinguishes one command from another (`proofs/Coverings.v`, Theorem 3), so an occasion that
   read it would miss the same act spelled differently, with its guard removed. Every occasion is
-  therefore one of: `always` (three clauses fire on the first act of a session and are paid by
-  `git status` and `git fetch`), a host tool enum, a pipe topology, or an **effect** — what the
-  act did to the worktree, the refs, the process table, the network or its own output, observed
-  by the hook before and after the call (`keel/effects.py`, Theorem 8). An effect occasion is
-  enforced after the act: the demand it raises refuses the *next* call until the guard is seen,
-  and the snapshot retains the pre-image of anything the act changed or removed. The loader
-  refuses a nominal occasion (`CLAUSE-OCCASION-NOMINAL`).
-- **Guards still name programs, and that direction fails closed** (Theorem 5): a guard spelled
-  under an unlisted name is an undischarged demand, never a missed act. Which guard sides are
-  nominal is derived from the table and instantiated in the generated `proofs/Clauses.v` — there
-  is no field in which to argue an exception, and no waiver.
+  therefore one of: `always` (three clauses fire on the first act of a session), a host tool
+  enum, or an **effect** — what the act did to the worktree, the refs, the process table, the
+  network or its own output, observed by the hook before and after the call
+  (`keel/effects.py`, Theorem 8). An effect occasion is enforced after the act: the demand it
+  raises refuses the *next* act until the guard is seen, and the snapshot retains the pre-image
+  of anything the act changed or removed. The loader refuses a nominal occasion
+  (`CLAUSE-OCCASION-NOMINAL`).
 - **An observation is the act's only if it is assigned to it, by one rule.** A process is
   assigned by lineage (the session's tree, its process sessions, or a process session born
   during the act); the host's connection counter has no lineage and is assigned by the idle
@@ -234,30 +255,30 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
 | ID | Costly fate | Guard | Construction |
 | --- | --- | --- | --- |
-| `A01` | push without knowing what is staged or which branch is current | run `git status` first | [POINTS.md#a01](plugin/POINTS.md#a01) |
-| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first (`ls`, `find` without -delete, or `git status`) | [POINTS.md#a02](plugin/POINTS.md#a02) |
-| `A03` | overwrite remote history that was never read, discarding commits with no local copy | fetch the ref first (`git fetch`) | [POINTS.md#a03](plugin/POINTS.md#a03) |
+| `A01` | push without knowing what is staged or which branch is current | Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`): the branch, HEAD and dirty paths Keel measured before the act | [POINTS.md#a01](plugin/POINTS.md#a01) |
+| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first: the host Glob tool, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths | [POINTS.md#a02](plugin/POINTS.md#a02) |
+| `A03` | overwrite remote history that was never read, discarding commits with no local copy | see the remote tips first: Read Keel's `remote.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`); Keel lists the remote once per session and writes it there, and writes nothing when the remote cannot be listed | [POINTS.md#a03](plugin/POINTS.md#a03) |
 | `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](plugin/POINTS.md#c03-verify-what-returns) |
-| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault -- its own `*_can_fail` cell, a `--self-test`, or meta_test against it -- so its failure is observed, not assumed | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
-| `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | run a process listing filtered by the shell or checker PID before trusting the match | [POINTS.md#c09-checker-excludes-self](plugin/POINTS.md#c09-checker-excludes-self) |
+| `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault and see it FAIL: a failing report from the checker is the observation | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
+| `C09-checker-excludes-self` | count or trust a grep-shaped process match without excluding the observer identity | produce a listing that excludes the observer: the output holds live pids and none of the act's own command text | [POINTS.md#c09-checker-excludes-self](plugin/POINTS.md#c09-checker-excludes-self) |
 | `D01` | fan out work with nothing probed first | probe the ground first with a read or a search, so the brief describes what is there | [POINTS.md#d01](plugin/POINTS.md#d01) |
 | `P01` | adopt a plan built on nothing read | read something first, so the plan describes this repository and not a remembered one | [POINTS.md#p01](plugin/POINTS.md#p01) |
 | `P02` | adopt a plan built on a guessed reading of the request | ask one question about the ambiguity before the plan is fixed | [POINTS.md#p01](plugin/POINTS.md#p01) |
-| `T01` | declare the run finished without ever asking the tree whether it is | run `git status` at least once this session | [POINTS.md#t01](plugin/POINTS.md#t01) |
+| `T01` | declare the run finished without ever asking the tree whether it is | Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), at least once this session | [POINTS.md#t01](plugin/POINTS.md#t01) |
 | `T02` | end the run treating a push report as a landing | let the ending measure the remote: every remote head that moved this session must equal a local ref (a push that landed); Keel lists the remote itself at Stop | [POINTS.md#t02](plugin/POINTS.md#t02) |
-| `U01` | launch a nested worker | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --writable-home --response-transport --result-write` | [POINTS.md#u01](plugin/POINTS.md#u01) |
-| `U02` | re-launch a nested-worker target | run `python3 "$CLAUDE_PLUGIN_ROOT/tools/probe_child_capability.py" --target TARGET --after-failure --require-change` | [POINTS.md#u02](plugin/POINTS.md#u02) |
-| `U03` | use a PID in a signal operation | run `ps`, `pgrep`, or an equivalent observer-namespace process listing | [POINTS.md#u03](plugin/POINTS.md#u03) |
-| `U06` | send a mutating request to an external service | run an authenticated read canary such as `curl ... -H 'Authorization: ...'` | [POINTS.md#u06](plugin/POINTS.md#u06) |
-| `U08` | create a signed git commit | run a signer canary such as `printf test \| gpg --clearsign` | [POINTS.md#u08](plugin/POINTS.md#u08) |
-| `U09` | switch or check out a git ref | know the ref exists: `git rev-parse --verify REF`, or have created it yourself with `git checkout -b/-B REF` or `git branch REF` | [POINTS.md#u09](plugin/POINTS.md#u09) |
-| `U10` | traverse structured JSON data | look at the structure first: `jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`, or any jq structure assertion on the same file | [POINTS.md#u10](plugin/POINTS.md#u10) |
-| `U12` | apply a patch | run `rg`/`grep` for the patch context and read the target immediately before applying | [POINTS.md#u12](plugin/POINTS.md#u12) |
-| `U13` | apply a generated patch | run `git apply --check PATCH` first | [POINTS.md#u13](plugin/POINTS.md#u13) |
-| `U19` | perform an in-place text rewrite | look at the text you are about to rewrite: `rg`/`grep` for the pattern, or `cmp`/checksum the file | [POINTS.md#u19](plugin/POINTS.md#u19) |
-| `U20` | make a destructive behavior-changing mutation | run an independent behavior observer such as the relevant test or probe first | [POINTS.md#u20](plugin/POINTS.md#u20) |
-| `U24` | publish or release an artifact after runtime testing | run the suite with warnings promoted to errors on a supported runtime | [POINTS.md#u24](plugin/POINTS.md#u24) |
-| `U25` | run a scanner as an acceptance check | run its prefix-distractor regression test first | [POINTS.md#u25](plugin/POINTS.md#u25) |
+| `U01` | launch a nested worker | run a capability probe of the worker after the launch and see it report PASS -- Keel's own `tools/probe_child_capability.py`, or any probe printing a report | [POINTS.md#u01](plugin/POINTS.md#u01) |
+| `U02` | re-launch a nested-worker target | after a failure, change something, then run the target's probe and see it report PASS | [POINTS.md#u02](plugin/POINTS.md#u02) |
+| `U03` | use a PID in a signal operation | produce a process listing: an output that holds at least two live pids, from whatever program, or Read Keel's `observed.json`, which lists the session's processes | [POINTS.md#u03](plugin/POINTS.md#u03) |
+| `U06` | send a mutating request to an external service | run a read of the network that changes nothing and reports no failure -- an authenticated read canary | [POINTS.md#u06](plugin/POINTS.md#u06) |
+| `U08` | create a signed git commit | produce a signature datum: sign something and see the signature block, or verify one | [POINTS.md#u08](plugin/POINTS.md#u08) |
+| `U09` | switch or check out a git ref | know the ref: a quiet act that prints the ref name or commit id the ref snapshot holds (`git rev-parse --verify REF`, `git branch`, `git show-ref`, or any listing of refs), or Read Keel's `observed.json`, which carries the refs | [POINTS.md#u09](plugin/POINTS.md#u09) |
+| `U10` | traverse structured JSON data | look at the structure first: a query on the same file that prints a non-null JSON datum (`jq 'keys'`, `jq 'type'`, `jq -e 'has(...)'`), or Read the file | [POINTS.md#u10](plugin/POINTS.md#u10) |
+| `U12` | apply a patch | look at the target before applying: Grep or Read it, or print its path from the worktree (`git diff`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds) | [POINTS.md#u12](plugin/POINTS.md#u12) |
+| `U13` | apply a generated patch | look at what the patch touches first: Read the target, or print its path from the worktree (`git diff`, `git apply --stat`) | [POINTS.md#u13](plugin/POINTS.md#u13) |
+| `U19` | perform an in-place text rewrite | look at the text you are about to rewrite: Grep or Read it, or print its path from the worktree (`git diff`, `cmp`, `rg`/`grep` -- any quiet act whose output names a path the snapshot holds) | [POINTS.md#u19](plugin/POINTS.md#u19) |
+| `U20` | make a destructive behavior-changing mutation | run an independent behavior observer first: any verifier that prints a report, PASS or FAIL | [POINTS.md#u20](plugin/POINTS.md#u20) |
+| `U24` | publish or release an artifact after runtime testing | run the suite so that a warning would have failed it: a passing report with no warning line | [POINTS.md#u24](plugin/POINTS.md#u24) |
+| `U25` | run a scanner as an acceptance check | see the scanner find something: run it against its prefix-distractor regression so a report with findings is observed | [POINTS.md#u25](plugin/POINTS.md#u25) |
 
 <!-- END GENERATED: clause-routes -->
 
@@ -283,17 +304,19 @@ only, and succeeds iff every session meets its expectation.
 The sessions are generated from `eval/generate_corpus.py` (`--check` is a gate), so every
 recorded effect is explicit: a `PostToolUse` event carries the full observation record, and an
 absent effect is NOT-EVALUABLE rather than "did not happen". Every session that runs a command
-opens with the guards the table owes before any act — `git status`, `git fetch`, and because the
-fetch opened a connection, the authenticated read canary and a warnings-as-errors run — which is
-the cost of three `always` occasions and one network effect, shown in the corpus rather than
-hidden by it.
+opens with the observations the table owes before any act — a `Read` of `observed.json` and of
+`remote.json` — which is the cost of three `always` occasions; a session that opens a connection
+then pays the read canary and the warning-free run the connection owes, and the failing run the
+PASS then owes, each as a committed Bash act whose record shows the effect. Shown in the corpus
+rather than hidden by it.
 
 ## The proof, applied to the table
 
 `proofs/Coverings.v` proves, relative to a scanner with two stated properties and with zero
 axioms, what each class of covering can be: a covering over the raw command text is never
 mention-immune (Theorem 1); one over a segment's leading program is, provided its vocabulary
-excludes the quoting program (Theorem 2), and is monotone in that vocabulary (Theorem 5); a
+excludes the quoting program (Theorem 2), and is monotone in that vocabulary (Theorem 5) — which
+is why no side of the table is one; a
 covering over the pipe topology is name-agnostic (Theorem 4); a positive obligation that compares
 the run's own datum has an empty evasion set (Theorem 7); a covering over what the act did reads
 no segment, so it is name-agnostic and separates byte-identical commands by their effects
@@ -302,9 +325,8 @@ describes (Theorem 8a).
 
 The theory is not cited over the table; it is applied to it. `keel/clauses.py` reads the class of
 every side from its shape (`classify_side`) and refuses what the class forbids — a textual side,
-a side with no class, an occasion that selects by program name, an effect the observer does not
-measure, a row carrying `why_no_program`, `guard_vocabulary` or `waiver`, and a named program or
-remedy path the bundle does not ship.
+a side with no class, an occasion or a guard that selects by program name, an effect the
+observer does not measure, and a row carrying `why_no_program`, `guard_vocabulary` or `waiver`.
 `tools/render_coverings.py` instantiates the licensed theorems on all 51 sides of the 24 clauses
 in the generated `proofs/Clauses.v`; `tools/check_coq.py` compiles both files and grades every
 result for axioms, refuses a result proved by the identity, and refuses an instance that covers

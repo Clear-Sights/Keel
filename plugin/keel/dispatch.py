@@ -69,6 +69,29 @@ ALLOW = re.compile(r"^#\s*keel-allow:\s*(\S.*)$")
 ALLOW_LEGACY = re.compile(r"^#\s*gyroscope-allow:\s*(\S.*)$")
 
 
+# A COMMITMENT, not an exemption. A guard that is itself a Bash act cannot be recognised before
+# it runs -- its effect is what discharges, and the effect exists only after. So under an open
+# demand a Bash call passes on a leading `# keel-guard: <clause ids>` line naming what it will
+# pay, and is CHECKED after it ran: a committed call whose effect did not pay is a broken
+# commitment, recorded in the journal, and the demand stays open. The marker names a clause,
+# never a program; what it claims is verified by the observer, so a mention cannot spend it.
+GUARD = re.compile(r"^#\s*keel-guard:\s*([A-Za-z0-9_,\s-]+)$")
+
+
+def _guard_marker(command: str) -> set[str]:
+    """The clause ids a Bash call commits to pay, from its leading comment header."""
+    for line in command.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("#"):
+            return set()
+        found = GUARD.match(stripped)
+        if found:
+            return {p for p in re.split(r"[,\s]+", found.group(1)) if p}
+    return set()
+
+
 def _allow_marker(command: str):
     """`(spelling, reason)` from the command's leading comment header, or None.
 
@@ -137,12 +160,6 @@ def _subject(clause, event: dict) -> str:
             if isinstance(candidate, str) and candidate:
                 raw = candidate
                 break
-        # A segment-scoped predicate matched ONE segment; the subject must be extracted
-        # from that segment, not the whole string, or a two-command line keys the wrong
-        # operand and the deny names something the guard cannot discharge.
-        scoped = C.matching_segment(clause.fingerprint, event)
-        if scoped is not None:
-            raw = scoped
         if not isinstance(raw, str):
             return ""
         m = re.search(spec.get("pattern") or "", raw)
@@ -216,29 +233,6 @@ def _construction(clause) -> str:
     return f" Construction: {anchor}."
 
 
-def _first_index(clause, event: dict, predicate, command: str) -> int:
-    """Index of the first segment satisfying `predicate`, or -1.
-
-    Whole-string matching cannot order a guard against the act it guards, which is how
-    `git push origin main && git status` licensed its own push: `discharges()` was true of the
-    string, so the push never reached the demand. Order is the entire question, so the answer has
-    to be computed per segment.
-    """
-    # `C.segments` directly: the wrapper that used to stand here returned it unchanged and
-    # carried a second copy of the segmentation rules in its docstring -- a copy that had already
-    # gone stale, since it still listed `;` `&&` `||` `|` after a newline became a separator too.
-    # One implementation, one description of it.
-    for index, segment in enumerate(C.segments(command)):
-        probe = dict(event)
-        probe["tool_input"] = {**(event.get("tool_input") or {}), "command": segment}
-        try:
-            if predicate(clause, probe):
-                return index
-        except Exception:
-            continue
-    return -1
-
-
 def _block(reason: str) -> dict:
     return {"decision": "block", "reason": f"{_PREFIX}: {reason}"}
 
@@ -300,6 +294,10 @@ def _effect_record(ledger: Ledger, event: dict, moment: str) -> None:
         elif moment == "after":
             if event.get("tool_name") == "Bash":
                 event["keel_effect"] = effects.delta(ledger.root, session, agent, event)
+            elif event.get("tool_name") == "Read":
+                # A Read does nothing to the world; what it can do is observe Keel's own
+                # measurement, and that observation is the datum three guards are paid by.
+                event["keel_effect"] = effects.read_delta(ledger.root, event)
         elif moment == "stop":
             event["keel_effect"] = effects.at_stop(ledger.root, session, agent, cwd)
     except Exception as exc:
@@ -320,9 +318,17 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
         return None, False
     by_id = {cl.id: cl for cl in table}
     owed, progress = [], False
+    command = _get(event, "tool_input.command")
+    committed = _guard_marker(command) if isinstance(command, str) else set()
     for row in open_rows:
         cl = by_id.get(row.get("clause_id"))
-        if cl is None or C.classify_side(cl.fingerprint) != "effect":
+        # A terminal clause's debt is settled at the ending, by `reconcile`; it does not
+        # refuse the acts before it, or a checker's PASS would refuse the failing run that
+        # pays for it.
+        if cl is None or cl.event in ("Stop", "SubagentStop"):
+            continue
+        if cl.id in committed:
+            progress = True
             continue
         # The guard must name what the demand is keyed on: a Read of `other.json` does not pay
         # for the traversal of `payload.json`. Session-wide subjects agree trivially.
@@ -337,7 +343,18 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
     # session learns the whole debt in one interruption rather than one clause per attempt.
     if not owed or progress:
         return None, progress
-    return _deny("; ".join(owed)), progress
+    # A HOST READ IS NEVER THE ACT. An open demand refuses the next act; a Read, Grep or Glob
+    # cannot change the world, and a Read is how the observation-shaped guards are paid --
+    # its effect record exists only after it ran. Refusing the read would refuse the guard.
+    if event.get("tool_name") in HOST_READS:
+        return None, progress
+    return _deny("; ".join(owed) + COMMIT_HINT), progress
+
+
+# The host tools that read and cannot act. Closed by the host, listed here once.
+HOST_READS = frozenset({"Read", "Grep", "Glob"})
+COMMIT_HINT = (" -- a guard that is itself a Bash act passes on a leading `# keel-guard: <clause id>` "
+               "line and is checked by its effect after it runs")
 
 
 def _applicable(table, event: dict):
@@ -373,30 +390,25 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     if held is not None:
         return held
     _effect_record(ledger, event, "before")
-    command = _get(event, "tool_input.command")
     denials = []
-    for cl in _applicable(table, event):
+    applicable = {id(cl) for cl in _applicable(table, event)}
+    for cl in table:
         try:
-            if C.discharges(cl, event):
-                # A guard only licenses acts that come AFTER it. When one string carries both, the
-                # segment order decides: guard-then-act discharges, act-then-guard does not, and
-                # `git push && git status` is the second. Handling it exactly as the match below
-                # does is what turns the self-licence back into a deny.
-                act_at = guard_at = -1
-                if isinstance(command, str):
-                    act_at = _first_index(cl, event, C.match, command)
-                    guard_at = _first_index(cl, event, C.discharges, command)
+            # A GUARD IS READ ON EVERY EVENT, whatever event the clause fires on: a Glob licenses
+            # A02 before the first act although A02 fires on Bash, exactly as a Read pays U12
+            # after a rewrite although U12 fires at PostToolUse. Terminal clauses are watched
+            # by `_watch_standing`, under their own subject.
+            if cl.event not in ("Stop", "SubagentStop") and C.discharges(cl, event):
                 subject = _subject(cl, event)
                 did = derive_id(session, agent, cl.id, subject)
-                if act_at != -1 and guard_at > act_at:
-                    if not ledger.is_licensed(session, agent, did):
-                        ledger.demand(Demand(id=did, session=session, agent=agent,
-                                             clause_id=cl.id, subject=subject,
-                                             reason=cl.deny_reason))
-                        return _deny(_keyed_reason(cl, subject))
-                    continue
-                ledger.discharge(session, agent, did, "guard call observed")
-                progress = True
+                # An effect clause is discharged only against a demand its effect raised (the
+                # rule `post_tool_use` states); a pre-act clause is licensed in advance.
+                if (C.classify_side(cl.fingerprint) != "effect"
+                        or did in ledger.open_ids(session, agent)):
+                    ledger.discharge(session, agent, did, "guard call observed")
+                    progress = True
+                continue
+            if id(cl) not in applicable:
                 continue
             if C.match(cl, event):
                 subject = _subject(cl, event)
@@ -440,10 +452,15 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
     session, agent = _ids(event)
     _effect_record(ledger, event, "after")
     _watch_standing(table, ledger, event, session, agent)
-    for cl in _applicable(table, event):
+    applicable = {id(cl) for cl in _applicable(table, event)}
+    for cl in table:
         try:
             after_the_act = C.classify_side(cl.fingerprint) == "effect"
-            if C.discharges(cl, event):
+            # EVERY GUARD IS READ OFF THE RECORD, whatever event the clause itself fires on:
+            # a guard is an observed effect of the guard act, and the act's record exists
+            # only here. So A01's guard (a Read of the worktree measurement) pays A01's
+            # PreToolUse demand from this event, and T01's standing guard the same.
+            if cl.event not in ("Stop", "SubagentStop") and C.discharges(cl, event):
                 did = derive_id(session, agent, cl.id, _subject(cl, event))
                 # AN EFFECT'S GUARD IS "LOOK AT WHAT YOU JUST DID", and that cannot be done
                 # in advance. A pre-act clause is licensed by a guard seen before the act; an
@@ -453,6 +470,8 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
                 # run earlier in the session.
                 if not after_the_act or did in ledger.open_ids(session, agent):
                     ledger.discharge(session, agent, did, "guard call completed")
+                continue
+            if id(cl) not in applicable:
                 continue
             # AN EFFECT IS THE OCCASION, OBSERVED AFTER THE ACT. The demand is raised here and
             # the next call pays it (`_open_effect_denial`); this event itself cannot be
@@ -466,6 +485,19 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
                                          reason=cl.deny_reason))
         except Exception:
             continue
+    command = _get(event, "tool_input.command")
+    committed = _guard_marker(command) if isinstance(command, str) else set()
+    if committed:
+        still = {row["clause_id"] for row in ledger.open_demands(session, agent)}
+        broken = sorted(committed & still)
+        if broken:
+            # The call passed on its word and its effect did not pay. Recorded where the
+            # unevaluated events are, because it is the same fact: a decision that rested on
+            # something the observer did not see. The demand is still open, so the next act
+            # is refused again; nothing was spent.
+            journal.note_fault(event, "broken_commitment", ",".join(broken), failed_closed=True,
+                               root=ledger.root)
+            print(f"keel: committed guard for {broken} paid nothing -- still owed", file=sys.stderr)
     return {}
 
 
@@ -587,6 +619,13 @@ def session_start(table, ledger: Ledger, event: dict) -> dict:
     actually sees it. Neither costs a deny.
     """
     try:
+        # The artifacts the first guards are paid by exist before the first act, so the
+        # operator can observe the worktree and the remote without first being refused.
+        session, agent = _ids(event)
+        try:
+            effects.observe(ledger.root, session, agent, str(event.get("cwd") or os.getcwd()))
+        except Exception:
+            pass
         rows = " | ".join(f"{c.id}: {c.guard}" for c in table)
         event_name = event.get("hook_event_name", "SessionStart")
         stranded = legacy_state()

@@ -157,57 +157,35 @@ jobs:
           plant "body overruns its budget"    "seq -f 'padding line %g of the budget plant' 500 >> $D/SKILL.md"
           plant "construction block mistagged" "sed -i '0,/\`\`\`sh/s//\`\`\`python/' $D/POINTS.md"
 
-          # A comment line in front of a command used to turn the entire fence off, because a
-          # newline did not separate segments and thirty-seven predicates spell "where a command
-          # starts" by hand. This plant asks the question the way the suite asks it -- of the
-          # table's own fixtures -- so a predicate spelled a fourth way is judged too.
-          # A SCRIPT, NOT AN INLINE `sed`. This plant has to survive YAML quoting, shell quoting
-          # and `eval`, and the pattern it edits is made mostly of the characters all three of
-          # those layers care about. The first attempt reached the file and changed nothing, which
-          # the harness caught and reported -- the failure mode a plant is supposed to have, but
-          # not one worth re-earning on every edit. It asserts its own seam, so a plant that has
-          # gone stale says so instead of quietly narrowing what it tests -- AND IT DID. Migrating
-          # the command coverings to invocations retired the `(^|&&|;|\||\n)` spelling entirely,
-          # so this plant began failing on main with "plant seam changed", which is exactly the
-          # report it was built to make. The seam is gone because the DEFECT is gone: a clause
-          # matching a leading argv cannot re-implement the splitter's job in a pattern.
+          # RE-AIMED A SECOND TIME, and again its own assert demanded it. This plant has
+          # followed "where is the command decided" through two migrations: first a separator
+          # alternation inside clauses.json, then `_scan`'s separator class in clauses.py once
+          # the textual coverings were retired. #33 retired the segmenter itself: no guard and
+          # no occasion reads the command string any more, so there is no separator class to
+          # narrow and the plant reported "plant seam changed" on main, exactly as built.
           #
-          # So the requirement is now stated as the property rather than as a fixed list: EVERY
-          # spelling still present in the table must be narrowable and caught, and AT LEAST ONE
-          # must be present. A retired spelling is no longer an error; a table with none of them
-          # left, or one whose narrowing goes unnoticed, still is. Deleting the plant instead
-          # would have been the quiet narrowing this comment warns against.
-          # RE-AIMED, and this plant's own assert is what demanded it. It used to widen a
-          # separator alternation inside clauses.json, because that is where "where does a
-          # command start" was decided. It is not decided there any more: every textual
-          # covering was retired, and the surviving `[;&|\n]` spellings live only in `unless`
-          # exclusions and `key_from` extractors, where narrowing changes no verdict. So the
-          # plant reached the file and left the suite green -- exactly the VACUOUS CHECK this
-          # harness exists to catch. It caught mine, rather than my noticing it.
-          #
-          # The rule now lives in ONE place, `_scan`'s separator class, so the plant follows it
-          # there and `keel/clauses.py` joins PAGES: backed up, digested, and held to the same
-          # byte-exact restore as every other plant. Added to THIS job only -- the missing-input
-          # job below asserts an absent INPUT is loud, and clauses.py is code, not an input.
-          #
-          # Witnessed before being trusted, not after: planted, `unittest discover -s tests`
-          # reports `FAILED (failures=8)` exit 1, against a clean baseline of `Ran 227 tests OK`.
-          cat > /tmp/narrow-separators.py <<'PLANT'
+          # The rule that decides now is the loader law: a guard is a host tool call or an
+          # observed effect, never a spelling, refused as CLAUSE-GUARD-NOMINAL. So the plant
+          # disarms THAT line. With the refusal gone, `tests/test_derived_closure` plants a
+          # nominal guard and expects the refusal; the suite must go red. Witnessed before being
+          # trusted: planted, `unittest discover -s tests` exits 1 against a clean baseline.
+          # `keel/clauses.py` stays in PAGES: backed up, digested, restored byte-exact.
+          cat > /tmp/disarm-guard-law.py <<'PLANT'
           import pathlib
           import sys
           path = pathlib.Path(sys.argv[1])
           text = path.read_text()
-          old = '        elif ch in ";|&\\n":'
-          new = '        elif ch in ";|&":'
+          old = '        if name == "discharged_by" and classify_side(predicate) not in AGNOSTIC_CLASSES:'
+          new = '        if False:'
           assert text.count(old) == 1, (
-              "plant seam changed: the separator class is no longer spelled this way, so this "
-              "plant now tests nothing -- re-aim it at the rule that decides where a command "
-              "starts, or retire it with its reason")
+              "plant seam changed: the guard law is no longer spelled this way, so this plant "
+              "tests nothing -- re-aim it at the line that refuses a nominal guard, or retire it "
+              "with its reason")
           path.write_text(text.replace(old, new))
           PLANT
-          sed -i 's/^          //' /tmp/narrow-separators.py
+          sed -i 's/^          //' /tmp/disarm-guard-law.py
 
-          plant "a separator stops seeing newlines" "python3 /tmp/narrow-separators.py $D/keel/clauses.py"
+          plant "the guard law stops refusing a nominal guard" "python3 /tmp/disarm-guard-law.py $D/keel/clauses.py"
           plant "a hook file names the old package" "jq '. + {_provenance: {recompute_with: \"python3 -m gyroscope.generate\"}}' $D/hooks/hooks.json > /tmp/hj.json && mv /tmp/hj.json $D/hooks/hooks.json"
           # No `${CLAUDE_PLUGIN_ROOT}` in the planted value: under `set -u` the eval would expand
           # it and abort on an unbound variable before reaching the file. A bare relative path

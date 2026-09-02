@@ -79,6 +79,20 @@ class TheChainComposesThroughTheRealHook(unittest.TestCase):
             payload["keel_effect"] = record
         return self._hook(**payload)
 
+    def _read(self, name: str, **eff) -> dict:
+        """A host Read of one of Keel's artifacts: its PreToolUse verdict, then its record."""
+        path = f"/home/operator/.claude/keel_state/{name}"
+        out = self._hook(hook_event_name="PreToolUse", tool_name="Read",
+                         tool_input={"file_path": path})
+        from keel import effects
+        record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
+                                 "pids_gone", "pids_spawned") else False for n in effects.EFFECTS}
+        record["remote_landed"] = None
+        record.update(eff)
+        self._hook(hook_event_name="PostToolUse", tool_name="Read",
+                   tool_input={"file_path": path}, keel_effect=record)
+        return out
+
     def test_the_whole_chain_end_to_end(self) -> None:
         deny = self._bash("PreToolUse", "git push")
         reason = deny.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
@@ -93,17 +107,15 @@ class TheChainComposesThroughTheRealHook(unittest.TestCase):
         self.assertIn("A01", blocked.get("reason", ""),
                       "the PreToolUse clause's demand never reached Stop -- the two directions "
                       "are not sharing one ledger")
-        self.assertEqual(self._bash("PreToolUse", "git status"), {},
+        self.assertEqual(self._read("observed.json", observed_read=True), {},
                          "a guard call was refused by the occasions it does not pay")
-        self._bash("PostToolUse", "git status")
         after = self._hook(hook_event_name="Stop")
         self.assertEqual(after.get("decision"), "block",
                          "one act cleared every obligation -- the remaining link vanished")
         self.assertNotIn("A01", after.get("reason", ""), "A01 did not discharge")
         self.assertIn("A03", after.get("reason", ""),
                       "COMPOSING: the next link did not surface once its predecessors cleared")
-        self.assertEqual(self._bash("PreToolUse", "git fetch origin"), {})
-        self._bash("PostToolUse", "git fetch origin")
+        self.assertEqual(self._read("remote.json", remote_read=True), {})
         self.assertEqual(self._bash("PreToolUse", "git push"), {},
                          "the act stayed refused after its predecessors were satisfied")
         self._bash("PostToolUse", "git push")
