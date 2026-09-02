@@ -38,7 +38,7 @@ from typing import Any
 # name -> one sentence saying what the observation is. Closed. Read by the loader, the proof
 # renderer and the README; a clause naming anything else is refused at load.
 EFFECTS: dict[str, str] = {
-    "files_changed": "a file that existed before the act has different content after it",
+    "files_changed": "a file has different content after the act, or exists after it and did not before",
     "files_removed": "a file that existed before the act does not exist after it",
     "head_moved": "HEAD names a different commit after the act",
     "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit",
@@ -47,7 +47,7 @@ EFFECTS: dict[str, str] = {
     "remote_ref_moved": "a remote-tracking ref names a different commit after the act",
     "remote_landed": "every remote head this session moved is equal to a local ref (measured at the remote)",
     "pids_gone": "a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it",
-    "pids_spawned": "a process that did not exist before the act is still running after it, assigned to this session: in its tree, in one of its process sessions, or in a process session born during the act",
+    "pids_spawned": "a process that did not exist before the act is still running after it, assigned to this session by lineage: in its tree, or in one of its process sessions",
     "pids_spawned_again": "pids_spawned, and this session had already spawned one before",
     "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act",
     "report_null": "the act printed a null datum, or nothing, while reading a structured file",
@@ -63,7 +63,6 @@ EFFECTS: dict[str, str] = {
     "report_structured": "the act printed a JSON datum that is not null",
     "report_signature": "the act printed a signature block or a verified-signature datum",
     "report_nowarn": "report_pass, and the report carries no warning line",
-    "fetch_head_written": "the repository's FETCH_HEAD changed, or a remote-tracking ref moved: a fetch, by whatever program",
     "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network",
     "report_after_change": "report_pass on an act that ran after a file changed since the last spawn",
     "report_listing": "report_pids, and the output holds no segment of the act's own command: a listing that excluded the observer",
@@ -135,17 +134,6 @@ def _git(cwd: str, *args: str, env: dict | None = None) -> str | None:
 
 
 # ---- the world, in pieces ---------------------------------------------------------------------
-
-def _fetch_head(root: str) -> str | None:
-    located = _git(root, "rev-parse", "--git-path", "FETCH_HEAD")
-    if not located:
-        return None
-    path = pathlib.Path(root, located.strip())
-    try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError:
-        return ""  # no FETCH_HEAD yet: a fetch will create it
-
 
 def _repo_root(cwd: str) -> str | None:
     out = _git(cwd, "rev-parse", "--show-toplevel")
@@ -346,8 +334,7 @@ def assigned_process(pid: int, before: dict[str, Any], in_tree: dict[int, str]) 
     sid = process_session(pid)
     if not sid:  # kernel threads carry session 0: no lineage, never this session's
         return False
-    alive = set(before.get("alive") or [])
-    return sid in set(before.get("sids") or []) or (bool(alive) and sid not in alive)
+    return sid in set(before.get("sids") or [])
 
 
 def assigned_counter(before: dict[str, Any], now: int | None) -> bool | None:
@@ -391,7 +378,6 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
     if root:
         snap["tree"] = worktree_tree(root, slot / "index.before")
         snap["refs"] = refs(root)
-        snap["fetch_head"] = _fetch_head(root)
     elif os.path.isdir(cwd):
         snap["walk"] = walk_tree(cwd)
     table = pids(snap["session_root"])
@@ -462,7 +448,7 @@ def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list 
     changed, removed = [], []
     for line in out.splitlines():
         status, _, path = line.partition("\t")
-        if status.startswith("M") or status.startswith("T"):
+        if status[:1] in ("M", "T", "A"):
             changed.append(path)
         elif status.startswith("D"):
             removed.append(path)
@@ -472,7 +458,7 @@ def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list 
 def _walk_delta(before: dict | None, after: dict | None) -> tuple[list | None, list | None]:
     if before is None or after is None:
         return None, None
-    changed = sorted(p for p, sig in before.items() if p in after and after[p] != tuple(sig))
+    changed = sorted(p for p, sig in after.items() if p not in before or tuple(sig) != tuple(before[p]))
     removed = sorted(p for p in before if p not in after)
     return changed, removed
 
@@ -720,19 +706,16 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     memory["net_after"] = net_now  # the next idle gap starts here
     # THE GUARD SIDE, read from the same trace. A quiet act changed nothing and left nothing.
     spawned = out.get("pids_spawned") or []
-    # A LOOK IS AN ACT THAT CHANGED NOTHING IT COULD HAVE PRINTED: no file, no ref, no
-    # surviving process. The network is not in that set -- a connection changes nothing the
-    # worktree or the refs hold, and the host's counter is the one channel that moves on its
-    # own (measured: a runner's `git diff` beside a runner connection is still a look).
-    still = changed == [] and removed == [] and not out.get("head_moved") and not spawned
+    # A LOOK IS AN ACT THAT CHANGED NOTHING IT COULD HAVE PRINTED: no file, no ref. The
+    # network is not in that set -- a connection changes nothing the worktree or the refs hold,
+    # and the host's counter is the one channel that moves on its own. Neither is a spawned
+    # process: the printed datum is cross-checked against files and refs, and a process born
+    # in the session tree during the act is as often a sibling's (a runner worker, a
+    # concurrent agent) as the act's own. Measured: `git diff` beside a sibling spawn read as
+    # loud on 3 of 15 CI jobs, while the spawn itself fires U01 on its own effect.
+    still = changed == [] and removed == [] and not out.get("head_moved")
     out.update(trace_effects(response.get("stdout") if isinstance(response.get("stdout"), str) else "",
                              dict(before, command=tool_input.get("command")), root, still))
-    if root:
-        out["fetch_head_written"] = (before.get("fetch_head") is not None
-                                     and _fetch_head(root) != before.get("fetch_head")
-                                     ) or bool(out.get("remote_ref_moved"))
-    else:
-        out["fetch_head_written"] = False
     out["net_read"] = (None if out["net_out"] is None else
                        bool(out["net_out"]) and still and not out["report_fail"])
     out["report_after_change"] = bool(out["report_pass"]) and bool(memory.get("changed_since_spawn"))

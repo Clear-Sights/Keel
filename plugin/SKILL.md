@@ -27,7 +27,8 @@ on record, so forgetting produces the safe outcome instead of the unhealing one.
 Read the other way, the same sentence finds **benefit that arrives with no author**: an advantage
 that, once set up, arrives on every later turn while nobody attends it. This page and the pages
 beside it read it that way and **construct**: for each denied moment, what to build so the
-guard's outcome is a property of the path and the deny never fires again.
+guard's outcome is a property of the path and the deny never fires again — wherever the
+construction's own effect is one Keel observes; two are not, and their pages say so (C08, U25).
 
 The deny buys one session. The construction retires the payment.
 
@@ -97,7 +98,7 @@ this page cannot quietly lag the table it describes.
 | ID | Costly fate | Guard | Construction |
 | --- | --- | --- | --- |
 | `A01` | push without knowing what is staged or which branch is current | Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`): the branch, HEAD and dirty paths Keel measured before the act | [POINTS.md#a01](POINTS.md#a01) |
-| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first: the host Glob tool, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths | [POINTS.md#a02](POINTS.md#a02) |
+| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first: the host Glob tool, an act whose output names paths the worktree holds, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths | [POINTS.md#a02](POINTS.md#a02) |
 | `A03` | overwrite remote history that was never read, discarding commits with no local copy | see the remote tips first: Read Keel's `remote.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`); Keel lists the remote once per session and writes it there, and writes nothing when the remote cannot be listed | [POINTS.md#a03](POINTS.md#a03) |
 | `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](POINTS.md#c03-verify-what-returns) |
 | `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault and see it FAIL: a failing report from the checker is the observation | [POINTS.md#c08-check-can-fail](POINTS.md#c08-check-can-fail) |

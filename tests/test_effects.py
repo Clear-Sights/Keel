@@ -295,15 +295,6 @@ class TheObserverSeesTheWorld(Repo):
         self.assertFalse(self.observe("echo null")["report_structured"])
         self.assertFalse(self.observe("echo '{\"a\": 1}' > /dev/null")["report_structured"])
 
-    def test_a_fetch_is_seen_by_the_ref_store_not_by_its_name(self) -> None:
-        bare = os.path.join(self.tmp, "remote.git")
-        git(self.repo, "init", "-q", "--bare", bare)
-        git(self.repo, "remote", "add", "origin", bare)
-        git(self.repo, "push", "-q", "origin", "main")
-        self.assertTrue(self.observe("git fetch origin")["fetch_head_written"])
-        self.assertFalse(self.observe("echo 'git fetch origin'")["fetch_head_written"])
-        self.assertFalse(self.observe("git status")["fetch_head_written"])
-
     def test_a_connection_that_changed_nothing_is_a_read(self) -> None:
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
