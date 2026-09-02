@@ -10,3 +10,6 @@
 {"angle": "sibling-spawn-makes-a-look-loud", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: tree observers do not read processes"}
 {"angle": "sibling-spawn-makes-a-look-loud", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "bash eval/attacks.sh look_survives_sibling_spawn", "cwd": "..", "found_as": "CI 3/15 jobs; EF-06/K22"}
 {"angle": "file-mutation-covered-on-one-surface", "layer": "surface", "target": "hooks.json+occasion-tools", "expect": "green", "reproducer": "bash eval/attacks.sh write_surface_is_observed", "cwd": "..", "found_as": "K03 30/31, H7, POSTURE-08"}
+{"angle": "unmeasured-transmission-reads-as-landed", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "bash eval/attacks.sh unmeasured_network_asks_the_remote", "cwd": "..", "found_as": "K14 25/30"}
+{"angle": "unmeasured-transmission-reads-as-landed", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: tree observers read no network"}
+{"angle": "stop-clause-unreconciled-at-subagent-ending", "layer": "surface", "target": "hooks.json+occasion-tools", "expect": "green", "reproducer": "bash eval/attacks.sh subagent_ending_is_reconciled", "cwd": "..", "found_as": "K20 30/31"}

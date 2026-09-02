@@ -594,8 +594,14 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
         # read files was blocked demanding `git status` and `git fetch` under its own agent_id.
         # A clause that fires where it did not declare is the false-block that gets a gate switched
         # off, and a switched-off gate has zero coverage.
-        if cl.event != event_name:
-            continue
+        # An ending is an ending: a clause declaring Stop is reconciled at SubagentStop too, under
+        # that agent's OWN ledger key (its guards were recorded there, its artifacts are its own).
+        # The earlier scoping to the exact event let a subagent push and end unreconciled (30 of
+        # 31 targets under that angle); the false block it was written against was T02 demanding a
+        # fetch of a session that never pushed, which is now excluded below by its occasion.
+        if cl.event not in ("Stop", "SubagentStop") or event_name not in ("Stop", "SubagentStop"):
+            if cl.event != event_name:
+                continue
         # Keyed activations materialize their own per-key demand rows as the occasions arrive.
         # They need no synthetic session-wide standing row; open_demands above reconciles them.
         if cl.activated_by is not None and cl.activated_by.get("key_from") is not None:

@@ -80,4 +80,22 @@ raise SystemExit(0 if ok and clauses._predicate(u19.fingerprint, ev) is True els
 PY
 }
 
+unmeasured_network_asks_the_remote() {  # a session whose network could not be measured does not end as "landed"
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import json, pathlib, subprocess, tempfile
+from keel import effects
+d = tempfile.mkdtemp(); repo = pathlib.Path(d, "repo"); repo.mkdir()
+g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, check=True)
+g("init", "-q", "-b", "main"); g("remote", "add", "origin", str(pathlib.Path(d, "no-such-remote")))
+state = pathlib.Path(d, "state"); slot = effects._slot(state, "s", ""); slot.mkdir(parents=True)
+(slot / "session.json").write_text(json.dumps({"spawns": 0, "net_out": None}))
+unknown = effects.at_stop(state, "s", "", str(repo))
+(slot / "session.json").write_text(json.dumps({"spawns": 0, "net_out": False}))
+measured = effects.at_stop(state, "s", "", str(repo))
+raise SystemExit(0 if unknown["remote_landed"] is None and measured["remote_landed"] is True else 1)
+PY
+}
+subagent_ending_is_reconciled() {  # a clause declaring Stop is reconciled at SubagentStop under that agent's ledger
+  cd "$REPO" && W=$(mktemp -d) && out=$(printf '%s' '{"hook_event_name":"SubagentStop","session_id":"s","agent_id":"sub","cwd":"'"$W"'"}' | KEEL_STATE_DIR="$W/state" CLAUDE_PLUGIN_ROOT="$REPO/plugin" bash plugin/hooks/dispatch.sh) && printf '%s' "$out" | grep -q '"decision": *"block"' && printf '%s' "$out" | grep -q 'T01'; }
+
 "$@"
