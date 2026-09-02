@@ -90,7 +90,7 @@ def prelude(sid, *, observed=True, remote=True):
 
 def fetch(sid):
     """A fetch opens a connection, so the session then owes U06 and U24, and pays them."""
-    return (act("git fetch origin", sid, net_out=True, fetch_head_written=True)
+    return (act("git fetch origin", sid, net_out=True)
             + act(CANARY, sid, net_out=True, net_read=True)
             + [pre(WARN, sid), post(WARN, sid, stdout="40 passed in 2.1s\n", report_pass=True,
                                     report_nowarn=True)])
@@ -239,7 +239,7 @@ def specs():
         "a process that was running before the call is gone after it, and no ps or pgrep in this session produced its pid",
         "u03", "kill 4821", {"pids_gone": [4821]}, "ps aux", guard_effect={"report_pids": True}))
     s = "u06"
-    p = prelude(s) + act("git fetch origin", s, net_out=True, fetch_head_written=True)
+    p = prelude(s) + act("git fetch origin", s, net_out=True)
     S.append(session("u06-mutating-request-unauthenticated", "U06",
         "the fetch opened a connection; the next act runs with no network read canary on record, and a mutating request under any name would fail as a server problem",
         p + [pre("curl -X POST https://api.example.com/v1/items", s)]
@@ -287,7 +287,7 @@ def specs():
         "u20", "rm build/output.o", {"files_removed": ["build/output.o"]}, "pytest -q",
         guard_effect={"report_pass": True}))
     s = "u24"
-    p = prelude(s) + act("git fetch origin", s, net_out=True, fetch_head_written=True) + act(CANARY, s, net_out=True, net_read=True)
+    p = prelude(s) + act("git fetch origin", s, net_out=True) + act(CANARY, s, net_out=True, net_read=True)
     S.append(session("u24-publish-without-warnings-as-errors", "U24",
         "a connection was opened and no warning-free passing run is on record; a publish under any name ships whatever a warning was about",
         p + [pre("npm publish", s)] + [pre(WARN, s), post(WARN, s, stdout="40 passed in 2.1s\n", report_pass=True, report_nowarn=True)] + [pre("npm publish", s)],

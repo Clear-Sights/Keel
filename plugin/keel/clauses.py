@@ -273,7 +273,11 @@ def _regex_predicate(predicate: dict[str, Any], value: str) -> bool:
 
 
 def _predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool | None:
-    if predicate.get("kind") == "effect" and _unmeasured(predicate, event):
+    # NOT-EVALUABLE IS LIVE FOR A COMPOSED SIDE TOO. This read only the predicate's own kind, so
+    # a top-level `any_of` (which has none) let an unmeasured branch fall through as False: U20's
+    # `head_reset` under a snapshot that could not see refs was "did not fire". Every effect leaf
+    # is asked, so one branch the observer could not measure makes the side unmeasured.
+    if any(leaf.get("kind") == "effect" and _unmeasured(leaf, event) for leaf in _leaves(predicate)):
         return None
     # The cheap event fingerprint is the mandatory first gate. In particular, a missing field or
     # mismatch must not pay the process cost and must not let a failing probe affect this event.

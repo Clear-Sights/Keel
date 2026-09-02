@@ -110,6 +110,9 @@ Construction numbers refer to [SKILL.md](SKILL.md): **1** data dependency, **2**
   under-counts; compare shas after restoring rather than trusting the subtraction.
 - **Also plant absence, not only corruption.** Delete the input and require red. A fence that passes
   when its input is gone is not a fence.
+- **Limit:** this construction removes the harm, not this session's demand. A resident failing case
+  passes on every run, and a PASS is not the FAIL this guard reads, so the once-per-session act
+  under a planted fault is still owed. Measured through the dispatcher; stated rather than hidden.
 
 ## C09-checker-excludes-self
 **A `ps` pipeline that can match its own checker.**
@@ -386,3 +389,6 @@ wanted. Splitting by which ground is missing describes the same failure twice.
   refusal wants to be a permanent resident rather than an act somebody performs.
 - **Then:** a pattern that silently widens — the substring match that matches a whole document
   instead of a table row — goes red on the next run rather than on the next incident.
+- **Limit:** this construction removes the harm, not this session's demand. A resident failing case
+  passes on every run, and a PASS is not the FAIL this guard reads, so the once-per-session act
+  under a planted fault is still owed. Measured through the dispatcher; stated rather than hidden.

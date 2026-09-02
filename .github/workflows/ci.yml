@@ -27,7 +27,10 @@
 name: CI
 
 on:
+  # ONE run per change. `push` and `pull_request` both fired on a branch push, so every
+  # PR head ran twice; the pull_request run is the one the PR reads, and main gets `push`.
   push:
+    branches: [main]
   pull_request:
   # A run that dies before any job starts -- runner loss, a queue fault, `startup_failure` --
   # cannot be retried through the API: GitHub refuses `rerun` with "this workflow run cannot be
@@ -98,6 +101,9 @@ jobs:
       # that quietly makes a planted check vacuous fails the build instead of reporting coverage
       # it lost. Restore is by copy, never by byte arithmetic, and verified by sha.
       - name: The fence must be able to fail
+        # The plants edit pages and one clause file; nothing about them depends on the
+        # interpreter, so the sweep (~20 full suite runs) runs once, not three times.
+        if: matrix.python-version == '3.11'
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
@@ -201,6 +207,9 @@ jobs:
       # `docs/img/*.svg` renders to the PNGs the README shows. Same discipline, its own step
       # because the files it plants live outside the page set restored above.
       - name: A stale rendering must be loud
+        # The plants edit pages and one clause file; nothing about them depends on the
+        # interpreter, so the sweep (~20 full suite runs) runs once, not three times.
+        if: matrix.python-version == '3.11'
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin
@@ -235,6 +244,9 @@ jobs:
       # Absence is a failure, never a skip: with an input gone the fence has nothing to check,
       # and reporting that as a pass is the exact shape this repository exists to refuse.
       - name: A missing input must be loud
+        # The plants edit pages and one clause file; nothing about them depends on the
+        # interpreter, so the sweep (~20 full suite runs) runs once, not three times.
+        if: matrix.python-version == '3.11'
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: plugin

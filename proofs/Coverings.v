@@ -11,7 +11,12 @@
     NOTHING IS ASSUMED GLOBALLY. The scanner and the embedding are Section Variables and their
     behaviour is Hypotheses, so each theorem is explicitly RELATIVE to a scanner with the
     stated properties, and `Print Assumptions` reports the development closed under the global
-    context -- zero axioms. The adequacy of that scanner against a real shell is empirical and
+    context -- zero axioms, RELATIVE TO the Section parameters named on the next line, which
+    tools/check_coq.py requires to equal the `var` entries of coqc's own index (a hypothesis
+    added inside the Section is not an axiom to `Print Assumptions`, so it is declared here or
+    the gate is red).
+    PARAMETERS: Text Program scan mention infix mention_preserves quoting_program scan_mention_single Datum claimed observed Event isX isL done link *)
+(** The adequacy of that scanner against a real shell is empirical and
     is NOT claimed here. But it is now ONE obligation about ONE object, instead of one
     unbounded obligation per covering. That reduction is the result. *)
 

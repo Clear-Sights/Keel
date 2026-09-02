@@ -1,0 +1,12 @@
+{
+ "gate": [
+  "check_coq"
+ ],
+ "loader": [
+  "_predicate"
+ ],
+ "effects": [
+  "_tree_delta+_walk_delta",
+  "EFFECTS"
+ ]
+}

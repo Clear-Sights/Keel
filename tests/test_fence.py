@@ -714,9 +714,9 @@ SPELLED_TOTAL_RX = re.compile(
 # computes. They are named here rather than left in a printed residue nobody reads, so a genuinely
 # unbacked total cannot hide among them.
 UNJOINABLE_TOTALS = (
-    "POINTS.md:173 'the one thing this'",   # "...which is the one thing this mechanism refuses"
-    "POINTS.md:179 'the two rows'",         # "the two rows above key on" -- a back-reference
-    "SKILL.md:129 'The one test defines'",  # "do not define. The one test defines."
+    "POINTS.md:176 'the one thing this'",   # "...which is the one thing this mechanism refuses"
+    "POINTS.md:182 'the two rows'",         # "the two rows above key on" -- a back-reference
+    "SKILL.md:130 'The one test defines'",  # "do not define. The one test defines."
 )
 
 

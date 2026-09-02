@@ -1,0 +1,9 @@
+{"angle": "grader-counts-markers-not-proofs", "layer": "gate", "target": "check_coq", "expect": "green", "reproducer": "bash eval/attacks.sh coq_comments_only", "cwd": "..", "found_as": "MATH-01"}
+{"angle": "assumption-hidden-in-section", "layer": "gate", "target": "check_coq", "expect": "green", "reproducer": "bash eval/attacks.sh coq_section_hypothesis", "cwd": "..", "found_as": "MATH-02"}
+{"angle": "declaration-escapes-line-anchored-regex", "layer": "gate", "target": "check_coq", "expect": "green", "reproducer": "bash eval/attacks.sh coq_axiom_behind_attribute", "cwd": "..", "found_as": "MATH-03"}
+{"angle": "admitted-result-graded-closed", "layer": "gate", "target": "check_coq", "expect": "green", "reproducer": "bash eval/attacks.sh coq_admitted", "cwd": "..", "found_as": "MATH-03b"}
+{"angle": "unmeasured-branch-falls-to-false", "layer": "loader", "target": "_predicate", "expect": "green", "reproducer": "bash eval/attacks.sh composed_side_unmeasured_is_live", "cwd": "..", "found_as": "K16"}
+{"angle": "creation-outside-the-space", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "green", "reproducer": "bash eval/attacks.sh creation_is_a_change", "cwd": "..", "found_as": "B6/K18"}
+{"angle": "effect-named-by-no-clause", "layer": "effects", "target": "EFFECTS", "expect": "green", "reproducer": "bash eval/attacks.sh dead_effect_is_gone", "cwd": "..", "found_as": "K27/EFF-01"}
+{"angle": "creation-outside-the-space", "layer": "effects", "target": "EFFECTS", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: the vocabulary entry is the sentence the observers are held to; the observers are the cells"}
+{"angle": "effect-named-by-no-clause", "layer": "effects", "target": "_tree_delta+_walk_delta", "expect": "none", "reproducer": "", "cwd": "..", "note": "no counterpart: observers compute effects, they do not name them"}

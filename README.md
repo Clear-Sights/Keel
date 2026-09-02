@@ -38,7 +38,8 @@ or is not.
 
 The repricing buys one session at a time. The pages shipped beside the clause table carry the
 other half: for each denied moment, the authored **construction** that makes the guard's outcome
-a property of the path — so on a path built right, the deny stops firing at all. Every clause row
+a property of the path — so on a path built right, the deny stops firing at all, wherever the
+construction's own effect is one Keel observes (two are not, and say so: C08 and U25). Every clause row
 anchors its construction, and the fence refuses a pairing that does not resolve.
 
 ## Why a keel
@@ -256,7 +257,7 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 | ID | Costly fate | Guard | Construction |
 | --- | --- | --- | --- |
 | `A01` | push without knowing what is staged or which branch is current | Read Keel's worktree measurement, `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`): the branch, HEAD and dirty paths Keel measured before the act | [POINTS.md#a01](plugin/POINTS.md#a01) |
-| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first: the host Glob tool, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths | [POINTS.md#a02](plugin/POINTS.md#a02) |
+| `A02` | delete a set whose members were never listed, so the loss leaves no record of what it was | list the set first: the host Glob tool, an act whose output names paths the worktree holds, or Read Keel's `observed.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`), which carries the measured paths | [POINTS.md#a02](plugin/POINTS.md#a02) |
 | `A03` | overwrite remote history that was never read, discarding commits with no local copy | see the remote tips first: Read Keel's `remote.json` under Keel's state directory (`$KEEL_STATE_DIR`, default `~/.claude/keel_state`); Keel lists the remote once per session and writes it there, and writes nothing when the remote cannot be listed | [POINTS.md#a03](plugin/POINTS.md#a03) |
 | `C03-verify-what-returns` | end the run by inheriting delegated work without inspecting what came back | read a returned artifact after dispatch and before stopping | [POINTS.md#c03-verify-what-returns](plugin/POINTS.md#c03-verify-what-returns) |
 | `C08-check-can-fail` | accepting a checker PASS that has never demonstrated it can reject an invalid or absent input | run this same checker under a planted fault and see it FAIL: a failing report from the checker is the observation | [POINTS.md#c08-check-can-fail](plugin/POINTS.md#c08-check-can-fail) |
