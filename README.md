@@ -173,13 +173,17 @@ Limits before capability claims — read these before the clause table below.
   under an unlisted name is an undischarged demand, never a missed act. Which guard sides are
   nominal is derived from the table and instantiated in the generated `proofs/Clauses.v` — there
   is no field in which to argue an exception, and no waiver.
-- **The observer's rate on benign input is stated, not hidden.** A network effect is any
-  outbound connection, so the first `git fetch` of a session raises `U06` and `U24` once; a
-  process effect is any pre-existing process ending during a call; a report effect is a closed
-  set of PASS/FAIL/clean datum shapes read off stdout. Each costs at most one interruption per
-  session, because a licence is session-scoped. An effect the observer could not measure — no
-  snapshot, no repository, `git` timing out — is NOT-EVALUABLE and the occasion is treated as
-  live.
+- **An observation is the act's only if it is assigned to it, by one rule.** A process is
+  assigned by lineage (the session's tree, its process sessions, or a process session born
+  during the act); the host's connection counter has no lineage and is assigned by the idle
+  gap — if it moved while no act of this session was running, its movement across the act is
+  NOT-EVALUABLE, never the act's. A network effect is any assigned outbound connection, so the
+  first `git fetch` of a session raises `U06` and `U24` once; on a host that opens connections
+  by itself they are raised once as NOT-EVALUABLE. A process effect is a pre-existing process
+  of this session ending during a call; a report effect is a closed set of PASS/FAIL/clean
+  datum shapes read off stdout. Each costs at most one interruption per session, because a
+  licence is session-scoped. An effect the observer could not measure — no snapshot, no
+  repository, `git` timing out — is NOT-EVALUABLE and the occasion is treated as live.
 - **It does not judge prose.** Every fingerprint is an exact predicate over command, tool, or
   path identity; a clause that would need to infer intent from a command string is not admitted.
 - **The denial is verified; the behaviour change is not.** "Prevented" here means exactly one

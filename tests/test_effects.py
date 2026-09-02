@@ -25,16 +25,19 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import socket
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 from tests.plant_support import PLUGIN, smoke_replace
 from keel import clauses as C
 from keel import effects
+from keel.ledger import Ledger
 
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 SHIM = PLUGIN / "hooks" / "dispatch.sh"
@@ -206,27 +209,56 @@ class TheObserverSeesTheWorld(Repo):
         d = effects.delta(self.state, "s", "", {})
         self.assertEqual(sorted(ended), sorted(set(d["pids_gone"]) & set(ended)))
 
-    def test_an_outbound_connection_is_seen_and_a_local_command_is_not(self) -> None:
+    def _gap(self, moved: bool) -> None:
+        """Plant the idle gap: the counter the previous act ended on, equal to now (quiet) or
+        behind it (the host moved on its own while nothing of this session ran)."""
+        slot = effects._slot(self.state, "s", "")
+        slot.mkdir(parents=True, exist_ok=True)
+        now = effects.net_active_opens()
+        self.assertIsNotNone(now, "no counter on this host: the channel is NOT-EVALUABLE")
+        (slot / "session.json").write_text(json.dumps({"net_after": now - (1 if moved else 0)}),
+                                           encoding="utf-8")
+
+    def test_a_connection_is_assigned_by_the_idle_gap(self) -> None:
+        """One rule, both directions. A counter that moved while nothing of this session ran
+        cannot assign its movement to the act: NOT-EVALUABLE, not the act's, not clean."""
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
         self.addCleanup(listener.close)
-        port = listener.getsockname()[1]
-        # The negative half needs a host that opens no connections of its own while a local
-        # command runs. A CI runner is not one -- measured, its counters moved during `git
-        # status` -- and the observer counts the host's connections as the act's (stated on the
-        # effect). So the half is reported NOT-EVALUABLE on such a host, never asserted false.
-        quiet = self.observe("git status")
-        if quiet["net_out"]:
-            ambient = effects.net_active_opens()
-            time.sleep(1.0)
-            if effects.net_active_opens() != ambient:
-                self.skipTest("this host opens connections on its own; the negative half is "
-                              "NOT-EVALUABLE here, not passed")
-            quiet = self.observe("git status")
-        self.assertFalse(quiet["net_out"])
-        self.assertTrue(self.observe(
-            f"python3 -c \"import socket; socket.create_connection(('127.0.0.1', {port}))\"")["net_out"])
+        connect = (f"python3 -c \"import socket; "
+                   f"socket.create_connection(('127.0.0.1', {listener.getsockname()[1]}))\"")
+        self._gap(moved=True)
+        self.assertIsNone(self.observe(connect)["net_out"])
+        self._gap(moved=False)
+        self.assertTrue(self.observe(connect)["net_out"])
+        # The quiet half of the rule, on a scripted counter so the host cannot vote: the
+        # counter the act started on is the counter it ended on.
+        with unittest.mock.patch.object(effects, "net_active_opens", return_value=1000):
+            self._gap(moved=False)
+            self.assertFalse(self.observe("git status")["net_out"])
+
+    def test_a_process_of_another_lineage_is_not_assigned(self) -> None:
+        """Born DURING the act, alive after it, and not this session's: a child of a process
+        session this session never held. Newness alone would admit it; lineage refuses it."""
+        # A process session of its own, OUTSIDE the tree before the snapshot (its launcher
+        # exits at once, so it is reparented away), that starts a worker during the act.
+        pidfile = pathlib.Path(self.tmp, "foreign.pid")
+        subprocess.run(["sh", "-c", f"setsid sh -c 'echo $$ > {pidfile}; sleep 0.3; "
+                                    f"sleep 60 & exit 0' & exit 0"])
+        for _ in range(50):
+            if pidfile.exists() and pidfile.read_text().strip():
+                break
+            time.sleep(0.02)
+        foreign = int(pidfile.read_text())
+        self.addCleanup(lambda: subprocess.run(["pkill", "-9", "-s", str(foreign)]))
+        time.sleep(0.1)
+        effects.snapshot(self.state, "s", "", self.repo)
+        time.sleep(0.6)  # the act; the foreign session starts its worker meanwhile
+        d = effects.delta(self.state, "s", "", {})
+        born = [p for p in effects.pids() or {} if effects.process_session(p) == foreign]
+        self.assertTrue(born, "the foreign session left nothing alive to judge")
+        self.assertFalse(set(born) & set(d["pids_spawned"]), f"assigned a foreign lineage: {born}")
 
     def test_report_shapes(self) -> None:
         self.assertTrue(self.observe("true", "== 40 passed in 1.2s ==")["report_pass"])
@@ -264,52 +296,67 @@ class TheDispatcherEnforcesAnEffect(Repo):
                               text=True, env=env, timeout=60)
         return json.loads(done.stdout.strip() or "{}")
 
-    def _act(self, command: str, run: bool = True, live: bool = True) -> tuple[dict, dict]:
-        """A Bash call through the hook. `live` measures the world around it; otherwise the
-        PostToolUse event carries an explicit empty record, because on a shared host the
-        world moves on its own (a CI runner opened connections during `git status`) and only
-        the act under test is meant to be observed."""
+    def _act(self, command: str, run: bool = True) -> tuple[dict, dict]:
+        """A Bash call through the hook, the world observed live around it."""
         before = self._hook(hook_event_name="PreToolUse", tool_name="Bash",
                             tool_input={"command": command})
         if run and not before:
             subprocess.run(command, shell=True, cwd=self.repo, capture_output=True)
-        post = dict(hook_event_name="PostToolUse", tool_name="Bash",
-                    tool_input={"command": command}, tool_response={"stdout": ""})
-        if not live:
-            record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
-                                     "pids_gone", "pids_spawned") else False
-                      for n in effects.EFFECTS}
-            record["remote_landed"] = None
-            post["keel_effect"] = record
-        after = self._hook(**post)
+        after = self._hook(hook_event_name="PostToolUse", tool_name="Bash",
+                           tool_input={"command": command}, tool_response={"stdout": ""})
         return before, after
 
     @staticmethod
-    def denied(out: dict) -> str:
-        return (out.get("hookSpecificOutput") or {}).get("permissionDecisionReason", "")
+    def denied(out: dict) -> set[str]:
+        reason = (out.get("hookSpecificOutput") or {}).get("permissionDecisionReason", "")
+        return set(re.findall(r"\[([A-Z]\d\d[\w-]*)\]", reason))
+
+    def owed(self) -> set[str]:
+        """What the ledger holds open for this session: the one source the denial must equal."""
+        return {row["clause_id"] for row in Ledger(self.state).open_demands("fx", "")}
+
+    def refusal_matches_the_ledger(self) -> set[str]:
+        owed = self.owed()
+        refused = self.denied(self._hook(hook_event_name="PreToolUse", tool_name="Bash",
+                                         tool_input={"command": "echo next"}))
+        self.assertEqual(owed, refused, "the refusal names exactly what the ledger holds open")
+        return owed
+
+    def pay(self) -> None:
+        """Discharge whatever is owed, by the TABLE: each open clause's own first discharge
+        fixture, driven through the hook. What is owed on a given host is whatever its world
+        did around the calls -- the ledger says which, the table says how it is paid."""
+        table = {c.id: c for c in C.load_default()}
+        for _ in range(len(table) + 1):
+            owed = self.owed()
+            if not owed:
+                return
+            fixture = table[sorted(owed)[0]].fixtures_discharge[0]
+            event = (dict(fixture) if isinstance(fixture, dict) else
+                     {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                      "tool_input": {"command": fixture}})
+            self.assertEqual({}, self._hook(**event), f"the guard for {sorted(owed)[0]} was refused")
+            self._hook(hook_event_name="PostToolUse", tool_name=event["tool_name"],
+                       tool_input=event["tool_input"], tool_response={"stdout": ""})
+        self.fail(f"still owed after paying every clause once: {self.owed()}")
 
     def test_a_rewrite_nobody_looked_at_refuses_the_next_call_until_the_diff_is_seen(self) -> None:
-        # The session's opening debt, paid the way any session pays it.
-        self.assertEqual({}, self._act("git status", live=False)[0])
-        self.assertEqual({}, self._act("git fetch origin", run=False, live=False)[0])
+        # The session's opening debt, paid the way any session pays it -- and whatever else
+        # this host's world charged around those calls, paid by the table.
+        self.assertEqual({}, self._act("git status")[0])
+        self.assertEqual({}, self._act("git fetch origin", run=False)[0])
+        self.pay()
         # The act itself is not refused: nothing before it could tell it from `cat`.
         before, _ = self._act("printf changed > a.txt")
         self.assertEqual({}, before)
         self.assertEqual("changed", pathlib.Path(self.repo, "a.txt").read_text())
-        # The NEXT call is, naming every clause the rewrite owes.
-        refused = self.denied(self._hook(hook_event_name="PreToolUse", tool_name="Bash",
-                                         tool_input={"command": "echo next"}))
-        for owed in ("U12", "U13", "U19"):
-            self.assertIn(owed, refused)
-        # The guard passes, and pays. What may still be refused afterwards is whatever the HOST
-        # did around this test -- on a CI runner the network counters move on their own, and a
-        # connection nobody in this test opened is still an observed effect (U06, U24). The
-        # claim here is about the rewrite: after the diff, none of its three clauses is owed.
-        self.assertEqual({}, self._act("git diff", live=False)[0])
-        after = self.denied(self._hook(hook_event_name="PreToolUse", tool_name="Bash",
-                                       tool_input={"command": "echo next"}))
-        for paid in ("U12", "U13", "U19"):
-            self.assertNotIn(paid, after, f"{paid} was not paid by the diff: {after}")
+        # The NEXT call is: the refusal equals the ledger, and the ledger holds the rewrite.
+        owed = self.refusal_matches_the_ledger()
+        self.assertLessEqual({"U12", "U13", "U19"}, owed)
+        # The guard passes and pays the rewrite; the refusal still equals the ledger.
+        self.assertEqual({}, self._act("git diff")[0])
+        owed = self.refusal_matches_the_ledger()
+        self.assertFalse({"U12", "U13", "U19"} & owed, f"not paid by the diff: {owed}")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Stop attaching the delta after the act: no effect is ever observed, no demand is

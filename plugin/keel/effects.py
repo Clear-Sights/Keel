@@ -47,9 +47,9 @@ EFFECTS: dict[str, str] = {
     "remote_ref_moved": "a remote-tracking ref names a different commit after the act",
     "remote_landed": "every remote head this session moved is equal to a local ref (measured at the remote)",
     "pids_gone": "a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it",
-    "pids_spawned": "a process that did not exist before the act is still running after it: in this session's tree, or orphaned and started during the act",
+    "pids_spawned": "a process that did not exist before the act is still running after it, assigned to this session: in its tree, in one of its process sessions, or in a process session born during the act",
     "pids_spawned_again": "pids_spawned, and this session had already spawned one before",
-    "net_out": "the act opened an outbound connection",
+    "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act",
     "report_null": "the act printed a null datum, or nothing, while reading a structured file",
     "report_pass": "the act printed a test-report datum with no failures",
     "report_clean": "the act printed a scanner-report datum with no findings",
@@ -82,6 +82,10 @@ GIT_TIMEOUT = 5.0
 # In /proc/<pid>/stat, after the ')' that closes comm, the start-time field is the 20th
 # (field 22 of the whole line). A reused pid with a different start time is a new process.
 _STARTTIME_AFTER_COMM = 19
+# Same line, the process session id is the 4th field after the ')' (field 6 of the whole
+# line: state, ppid, pgrp, session). It is what a daemonized worker keeps after it is reparented
+# out of this session's tree, so it is the lineage that assigns such a worker to the session.
+_SID_AFTER_COMM = 3
 # Ancestors walked before giving up on a pid: a process tree deeper than this is a cycle in a
 # stale /proc read, not a real ancestry, so the walk stops rather than spinning.
 _ANCESTRY_CAP = 64
@@ -171,6 +175,15 @@ def _stat_fields(pid: int) -> list[str] | None:
         return None
     # the comm field may contain spaces and parentheses, so split after the LAST ')'.
     return stat.rsplit(")", 1)[-1].split()
+
+
+def process_session(pid: int) -> int | None:
+    """The process session (setsid group) a pid belongs to -- the lineage a daemonized worker
+    keeps after it is reparented away from this session's tree."""
+    fields = _stat_fields(pid)
+    if not fields or len(fields) <= _SID_AFTER_COMM or not fields[_SID_AFTER_COMM].isdigit():
+        return None
+    return int(fields[_SID_AFTER_COMM])
 
 
 def session_root() -> int:
@@ -267,6 +280,41 @@ def net_active_opens() -> int | None:
     return None
 
 
+# ---- assignment ------------------------------------------------------------------------------
+#
+# AN OBSERVATION IS THE ACT'S ONLY IF IT IS ASSIGNED TO THE ACT. Every channel below assigns by
+# one rule, and the tests derive their expectations from the same rule rather than carving out
+# the host's behaviour case by case (three such carve-outs landed in one afternoon before this
+# existed, one per red CI run, each defined where it was noticed and owned by nothing).
+#
+#   * A process is assigned by lineage: it is in the session's process tree, or it belongs to
+#     a process session the tree held before the act, or to a process session born during the
+#     act (a worker that called setsid). A process of another lineage is not this act's, even
+#     if it started during it -- on a shared host, something always did.
+#   * A counter with no lineage (the host's TCP ActiveOpens) is assigned by the IDLE GAP: the
+#     stretch between the previous act's end and this act's start, during which nothing of this
+#     session ran. A counter that moved in that gap moves on its own, so its movement across the
+#     act cannot be assigned, and the effect is NOT-EVALUABLE -- which Keel treats as live, so the
+#     cost of a host that opens connections by itself is one demand per session, never a miss.
+
+
+def assigned_process(pid: int, before: dict[str, Any], in_tree: dict[int, str]) -> bool:
+    if pid in in_tree:
+        return True
+    sid = process_session(pid)
+    if not sid:  # kernel threads carry session 0: no lineage, never this session's
+        return False
+    alive = set(before.get("alive") or [])
+    return sid in set(before.get("sids") or []) or (bool(alive) and sid not in alive)
+
+
+def assigned_counter(before: dict[str, Any], now: int | None) -> bool | None:
+    then = before.get("net")
+    if before.get("net_ambient") or then is None or now is None:
+        return None
+    return now > then
+
+
 # ---- snapshot and delta -----------------------------------------------------------------------
 
 def _slot(state: pathlib.Path, session: str, agent: str) -> pathlib.Path:
@@ -280,10 +328,15 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
     slot.mkdir(parents=True, exist_ok=True)
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
     own_fields = _stat_fields(os.getpid()) or []
+    memory = _memory(slot)
+    net_now = net_active_opens()
+    net_after = memory.get("net_after")
     snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root,
                             "tree": None, "walk": None, "refs": None, "session_root": session_root(),
                             "tick": own_fields[_STARTTIME_AFTER_COMM] if len(own_fields) > _STARTTIME_AFTER_COMM else None,
-                            "pids": None, "net": net_active_opens()}
+                            "pids": None, "sids": None, "alive": None, "net": net_now,
+                            "net_ambient": (net_after is not None and net_now is not None
+                                            and net_now != net_after)}
     if root:
         snap["tree"] = worktree_tree(root, slot / "index.before")
         snap["refs"] = refs(root)
@@ -297,9 +350,12 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
         # leaves the tree) stay this session's processes: remembered when spawned, watched
         # while they live.
         everyone = pids()
-        for pid, start in (_memory(slot).get("spawned") or {}).items():
+        for pid, start in (memory.get("spawned") or {}).items():
             if everyone is not None and everyone.get(int(pid)) == start:
                 snap["pids"][pid] = start
+        sids = {process_session(p) for p in table} | {process_session(snap["session_root"])}
+        snap["sids"] = sorted(s for s in sids if s is not None)
+        snap["alive"] = sorted(everyone) if everyone is not None else None
     (slot / "before.json").write_text(json.dumps(snap), encoding="utf-8")
     return snap
 
@@ -412,16 +468,15 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     if everyone is not None and then is not None:
         own = _own_chain()
         in_tree = pids(before.get("session_root")) or {}
-        tick = before.get("tick")
         out["pids_gone"] = sorted(int(p) for p, s in then.items()
                                   if everyone.get(int(p)) != s)
-        # New and still alive: in the session's tree, or anywhere if it started after the
-        # act began -- that is a worker the act daemonized. Ambient starts elsewhere on the
-        # host during the act are counted too; the cost is one demand per session.
+        # New on the HOST (not merely absent from the tree's snapshot), alive, and assigned.
+        alive_then = set(before.get("alive") or [])
         spawned = sorted(
             p for p, s in everyone.items()
-            if p not in own and then.get(str(p)) != s
-            and (p in in_tree or (tick is not None and s.isdigit() and int(s) > int(tick))))
+            if p not in own
+            and (p not in alive_then or (str(p) in then and then[str(p)] != s))
+            and assigned_process(p, before, in_tree))
         out["pids_spawned"] = spawned
         out["pids_spawned_again"] = bool(spawned) and memory.get("spawns", 0) > 0
         if spawned:
@@ -430,11 +485,11 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
             for p in spawned:
                 remembered[str(p)] = everyone[p]
             memory["spawned"] = remembered
-    net_then, net_now = before.get("net"), net_active_opens()
-    if net_then is not None and net_now is not None:
-        out["net_out"] = net_now > net_then
-        if out["net_out"]:
-            memory["net_out"] = True
+    net_now = net_active_opens()
+    out["net_out"] = assigned_counter(before, net_now)
+    if out["net_out"]:
+        memory["net_out"] = True
+    memory["net_after"] = net_now  # the next idle gap starts here
     _remember(slot, memory)
     return out
 
