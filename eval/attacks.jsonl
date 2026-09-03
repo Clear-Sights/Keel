@@ -36,3 +36,8 @@
 {"angle": "subject-regex-is-a-covering", "layer": "pre_tool_use", "target": "pre_tool_use", "expect": "green", "reproducer": "bash eval/attacks.sh unkeyable_subject_is_not_a_pass", "cwd": "..", "found_as": "L2"}
 {"angle": "identity-proof-evades-the-regex", "layer": "gate", "target": "check_coq", "expect": "green", "reproducer": "bash eval/attacks.sh coq_identity_shapes", "cwd": "..", "found_as": "MATH-04"}
 {"angle": "backward-ignores-order", "layer": "Coverings.v", "target": "Coverings.v", "expect": "green", "reproducer": "bash eval/attacks.sh coq_out_of_order_trace", "cwd": "..", "found_as": "MATH-06"}
+{"angle": "blind-observer-passes-the-corpus", "layer": "replay", "target": "replay", "expect": "green", "reproducer": "bash eval/attacks.sh replay_sees_a_blind_observer", "cwd": "..", "found_as": "EV-01"}
+{"angle": "dead-dispatcher-passes-the-control", "layer": "replay", "target": "replay", "expect": "green", "reproducer": "bash eval/attacks.sh replay_refuses_a_dead_dispatcher", "cwd": "..", "found_as": "EV-10"}
+{"angle": "right-name-wrong-document", "layer": "_artifact_read", "target": "_artifact_read", "expect": "green", "reproducer": "bash eval/attacks.sh artifact_read_refuses_a_document_that_is_not_a_measurement", "cwd": "..", "found_as": "EV-08"}
+{"angle": "malformed-artifact-raises", "layer": "_artifact_read", "target": "_artifact_read", "expect": "green", "reproducer": "bash eval/attacks.sh artifact_read_survives_a_malformed_artifact", "cwd": "..", "found_as": "EV-08"}
+{"angle": "closed-port-is-a-network-read", "layer": "delta", "target": "delta", "expect": "green", "reproducer": "bash eval/attacks.sh net_read_counts_a_closed_port", "cwd": "..", "found_as": "K13"}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import subprocess
 import unittest
 
@@ -24,6 +25,20 @@ class TheAttackLedgerHolds(unittest.TestCase):
             have = {c["target"] for c in CELLS if c["angle"] == angle and c["layer"] == layer}
             self.assertIn(layer, CLASSES, f"{angle}: layer {layer} is not declared")
             self.assertEqual(set(CLASSES[layer]), have, f"{angle}/{layer}: a target has no verdict")
+
+    def test_every_cell_the_readme_names_is_a_cell(self) -> None:
+        """A page that cites a cell by name is citing evidence; the citation has to resolve.
+
+        README's stated limits point at the cells that re-measure them (`... re-measured by the
+        `net_read_counts_a_closed_port` cell`). A name that no longer resolves is a limit whose
+        evidence has quietly gone, printed as though it were still there.
+        """
+        readme = (EVAL.parent / "README.md").read_text(encoding="utf-8")
+        functions = {c["reproducer"].rsplit(" ", 1)[-1] for c in CELLS}
+        cited = set(re.findall(r"`([a-z][a-z0-9_]{6,})` cell", readme))
+        self.assertTrue(cited, "the README cites no cell by name; this check has no subject")
+        self.assertEqual(set(), cited - functions,
+                         "the README names a cell that eval/attacks.jsonl does not carry")
 
     def test_every_colour_re_runs_as_recorded(self) -> None:
         for c in CELLS:

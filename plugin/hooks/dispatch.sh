@@ -49,9 +49,11 @@ command -v "$python" >/dev/null 2>&1 || fail_open "interpreter not found: $pytho
 # The blanket `|| fail_open` is not restored: it would rewrite a DELIBERATE closed result as
 # exit 0 + {}, which on the wire is an allow. Exit 2 is therefore forwarded rather than swallowed.
 #
-# Nothing emits it today -- dispatch.main() expresses a closed decision as the event's JSON wire
-# and falls back to carriage when it cannot, so this branch is currently unreachable. It is kept
-# because exit 2 is the ONLY closed signal that survives a payload the host refuses to parse
+# No SHIPPED dispatcher path emits it -- dispatch.main() expresses a closed decision as the
+# event's JSON wire and falls back to carriage when it cannot -- but the suite reaches this
+# branch through the KEEL_PYTHON seam (tests/test_shim_visibility.py), standing in for a
+# hypothetical child that dies after writing exit 2 with no output. It is kept because exit 2 is
+# the ONLY closed signal that survives a payload the host refuses to parse
 # ("exit 0 with a parsed object that fails schema validation is a non-blocking error: the action
 # proceeds"), so a future decision path that cannot serialize has somewhere to go.
 # THE OUTPUT IS CAPTURED, and the reason is that a hook speaks by writing one JSON object. The

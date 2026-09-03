@@ -207,7 +207,17 @@ class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
         out = self._submit("/compact")
         context = out.get("hookSpecificOutput", {}).get("additionalContext", "")
         self.assertIn("Preserve verbatim", context, f"the cut got no preserve list: {out}")
-        self.assertEqual(dispatch._preserve_list(), context,
+        # THE VENDORED BYTES, READ HERE, not `dispatch._preserve_list()` -- which is the function
+        # that produced `context` in the first place. That comparison was the function against
+        # itself: MEASURED, with `return doc["preserve"]` changed to `return doc["preserve"][:40]`
+        # the hook delivered 40 of the list's 475 bytes and the whole suite returned OK, because
+        # both sides of the assertion had been truncated together. `_provenance.sha256` did not
+        # catch it either: it pins compaction.json's `preserve` field against a digest of itself,
+        # which is the file's internal consistency and says nothing about what is delivered.
+        # Nothing in the repository pinned the compaction feature's actual output. This does.
+        vendored = json.loads(
+            (PLUGIN / "keel" / "compaction.json").read_text(encoding="utf-8"))["preserve"]
+        self.assertEqual(vendored, context,
                          "the injected text is not the vendored list, byte for byte")
 
     def test_TEETH_an_authored_preserve_list_is_never_overridden(self) -> None:
@@ -259,6 +269,20 @@ class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
                       "tests.test_bypass.TheCutGetsItsPreserveListWithoutBeingAsked."
                       "test_TEETH_a_bare_compact_receives_the_preserve_list",
                       "the cut got no preserve list")
+
+    def test_the_delivered_bytes_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
+        """Truncate the list AT DELIVERY, and the byte-for-byte assertion must go red.
+
+        This is the plant the old assertion could not carry: it compared the hook's output to
+        `dispatch._preserve_list()`, so this exact mutation moved both sides together and the
+        suite stayed green with 40 of 475 bytes reaching the model.
+        """
+        smoke_replace(self, PLUGIN / "keel" / "dispatch.py",
+                      b'    return doc["preserve"]',
+                      b'    return doc["preserve"][:40]',
+                      "tests.test_bypass.TheCutGetsItsPreserveListWithoutBeingAsked."
+                      "test_TEETH_a_bare_compact_receives_the_preserve_list",
+                      "the injected text is not the vendored list, byte for byte")
 
 
 class ThereIsExactlyOneExemptionSpelling(unittest.TestCase):

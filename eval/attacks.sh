@@ -333,4 +333,90 @@ Theorem rejected : ~ backward bool isX isL [false; true].
 Proof. exact (out_of_order_is_rejected bool isX isL false true eq_refl eq_refl). Qed.
 V
   (cd "$W/proofs" && coqc -q -Q . "" Coverings.v >/dev/null 2>&1 && coqc -q -Q . "" Break_order.v >/dev/null 2>&1); }
+# The replay cells need the corpus and the replay script as well as the package, because what
+# they gut is the observer the replay is supposed to be exercising.
+copy_eval() { W=$(mktemp -d); cp -r "$REPO/plugin" "$REPO/proofs" "$REPO/tools" "$REPO/eval" "$W"/; echo "$W"; }
+
+replay_sees_a_blind_observer() {  # EV-01: gut every effect reading to a constant and the replay must go red
+  W=$(copy_eval); python3 - "$W/plugin/keel/effects.py" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+blind = {
+  "def report_effects(stdout: Any, command: Any) -> dict[str, bool]:":
+    '\n    return {n: False for n in ("report_null", "report_pass", "report_clean", "report_fail",'
+    '\n            "report_nowarn", "report_signature", "report_structured", "report_self")}',
+  "                  listed_self: bool = False) -> dict[str, Any]:":
+    '\n    return {n: False for n in ("report_ref", "report_paths", "report_pids", "report_listing")}',
+  "def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) -> dict[str, Any]:":
+    '\n    return {name: None for name in EFFECTS}',
+}
+for head, body in blind.items():
+    assert t.count(head) == 1, head
+    t = t.replace(head, head + body, 1)
+p.write_text(t)
+PY
+  ! (cd "$W" && python3 eval/replay.py >/dev/null 2>&1); }
+
+replay_refuses_a_dead_dispatcher() {  # EV-10: every handler returning {} is NOT-EVALUABLE (exit 2), never a pass
+  W=$(copy_eval); python3 - "$W/plugin/keel/dispatch.py" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+head = 'HANDLERS = {\n    "PreToolUse": pre_tool_use,'
+assert t.count(head) == 1
+t = t.replace(head, 'def _nothing(table, ledger, event):\n    return {}\n\n\nHANDLERS = {\n    "PreToolUse": _nothing,', 1)
+for row in ('"UserPromptSubmit": user_prompt_submit,', '"PreCompact": pre_compact,',
+            '"PostToolUse": post_tool_use,', '"Stop": reconcile,', '"SubagentStop": reconcile,',
+            '"SessionStart": session_start,', '"SubagentStart": session_start,'):
+    assert t.count(row) == 1, row
+    t = t.replace(row, row.split(":")[0] + ": _nothing,", 1)
+p.write_text(t)
+PY
+  (cd "$W" && python3 eval/replay.py >/dev/null 2>&1); [ $? -eq 2 ]; }
+
+artifact_read_refuses_a_document_that_is_not_a_measurement() {  # EV-08: a right-named file holding junk pays nothing
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import json, pathlib, tempfile
+from keel import effects
+st = pathlib.Path(tempfile.mkdtemp())
+(st / "observed.json").write_text(json.dumps({"junk": True}))
+(st / "remote.json").write_text(json.dumps({"junk": True}))
+read = lambda n: effects.read_delta(st, {"tool_name": "Read", "tool_input": {"file_path": str(st / n)}})
+raise SystemExit(0 if not read("observed.json")["observed_read"] and not read("remote.json")["remote_read"] else 1)
+PY
+}
+
+artifact_read_survives_a_malformed_artifact() {  # EV-08: a JSON list where a document belongs is False, never a raise
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import pathlib, tempfile
+from keel import effects
+st = pathlib.Path(tempfile.mkdtemp())
+for name in ("observed.json", "remote.json"):
+    (st / name).write_text("[]")
+for name in ("observed.json", "remote.json"):
+    rec = effects.read_delta(st, {"tool_name": "Read", "tool_input": {"file_path": str(st / name)}})
+    assert rec["observed_read"] is False and rec["remote_read"] is False, (name, rec)
+raise SystemExit(0)
+PY
+}
+
+net_read_counts_a_closed_port() {  # K13, the stated limit on U06's guard, re-measured rather than assumed
+  cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
+import pathlib, subprocess, tempfile
+from keel import effects
+d = pathlib.Path(tempfile.mkdtemp()); repo = d / "repo"; repo.mkdir(); state = d / "state"
+g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+g("init", "-q", "-b", "main"); g("config", "user.email", "k@x"); g("config", "user.name", "k")
+(repo / "a.txt").write_text("one\n"); g("add", "-A"); g("commit", "-q", "-m", "a")
+effects.snapshot(state, "s", "", str(repo))
+cmd = "exec 3<>/dev/tcp/127.0.0.1/9"   # nothing listens there; the handshake is refused
+out = subprocess.run(["bash", "-c", cmd], cwd=repo, capture_output=True, text=True)
+rec = effects.delta(state, "s", "", {"cwd": str(repo), "tool_input": {"command": cmd},
+                                     "tool_response": {"stdout": out.stdout}})
+# The limit README states: the counter cannot say what was reached, so a refused handshake is
+# still a network read. NOT-EVALUABLE (None) is the honest answer when the counter moved
+# unassignably and is not a counter-example; what would be is False -- a claim that the
+# connection was measured and was not a read.
+raise SystemExit(0 if rec["net_read"] is not False else 1)
+PY
+}
 "$@"

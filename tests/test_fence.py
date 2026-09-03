@@ -31,8 +31,10 @@ import unittest
 # exists to have deleted: it names a DIFFERENT directory in each of the two layouts these bytes
 # run from, so the copy that was supposed to be portable was the one file pinning itself to one
 # layout. One derivation, one home, and its docstring is where the reasoning lives.
+from types import SimpleNamespace
+
 from tests.plant_support import PLUGIN, REPO, smoke_replace
-from keel import clauses as C_MOD
+from keel import clauses as C_MOD, dispatch as DISPATCH
 
 SKILL = PLUGIN / "SKILL.md"
 POINTS_MD = PLUGIN / "POINTS.md"
@@ -41,6 +43,23 @@ VOCABULARY = PLUGIN / "vocabulary.json"
 CLAUSES = PLUGIN / "keel" / "clauses.json"
 
 PAGES = (SKILL, POINTS_MD, ACTS_MD)
+
+README = REPO / "README.md"
+MEASURED = REPO / "MEASURED.tsv"
+
+# The pages swept for SPELLED TOTALS: `PAGES`, plus the README.
+#
+# The README was outside every sweep in this file, and the exact drift
+# `SpelledCountsMatchWhatTheyCount` was written against survived there: it read "the seven acts"
+# while ACTS.md carried ten and the footnote under that very sentence pointed at a MEASURED
+# command printing 10. One document over from the class built to catch it, in the most-read file
+# in the repository, with the whole suite green.
+#
+# A separate tuple rather than an addition to `PAGES` because the other laws here are about the
+# SHIPPED pages -- what the marketplace installs beside the clause table -- and two of them
+# (`AdvisoryByConstruction`, `ConstructionCodeParses`) would be judging the README against rules
+# written for a skill. A count, though, is a count wherever it is printed.
+COUNTED_PAGES = (*PAGES, README)
 
 
 def _headings(text: str) -> list[str]:
@@ -207,6 +226,58 @@ class TheConstructionJoin(unittest.TestCase):
         self.assertEqual(
             headings - claimed, set(),
             f"POINTS.md sections no clause row anchors to: {sorted(headings - claimed)}",
+        )
+
+    def test_TEETH_the_anchor_pattern_refuses_what_it_was_written_to_refuse(self) -> None:
+        """The pattern's own text, pinned by what it must REJECT -- not only by what it accepts.
+
+        `test_every_construction_anchor_resolves` asserts `fullmatch` over the shipped anchors and
+        nothing else, and every one of them matches `.*` too. MEASURED: widening
+        `CONSTRUCTION_ANCHOR` to `.*` left the whole suite green while turning off two safeguards
+        at once -- the shape assertion above became vacuous (it fullmatches everything), and
+        `dispatch._construction`, whose entire job is to keep a misshapen pointer out of a deny
+        message, began passing every string through. One edit, two safeguards, zero red, because
+        the pattern was defined in one place and only ever asserted against itself.
+
+        A pattern is pinned by its refusals. These are the exact strings the docstring above
+        names, and the production filter is driven with them rather than trusted to agree.
+        """
+        refused = (
+            "see POINTS.md#a01 for details",   # the decorated form the docstring names
+            "POINTS.md#a01 for details",
+            "see POINTS.md#a01",
+            "OTHER.md#a01",
+            "POINTS.md#",
+            "POINTS.md#A01",                   # the fragment shape is lower-case
+            "",
+        )
+        for text in refused:
+            with self.subTest(anchor=text):
+                self.assertIsNone(
+                    C_MOD.CONSTRUCTION_ANCHOR.fullmatch(text),
+                    f"{text!r} is accepted as a construction anchor; the pattern has been "
+                    "widened and the shape assertion above is now vacuous")
+                clause = SimpleNamespace(construction=text)
+                self.assertEqual(
+                    "", DISPATCH._construction(clause),
+                    f"a deny message carried a construction pointer built from {text!r}; the "
+                    "production filter is supposed to drop a misshapen anchor, not print it")
+        # And the accepting direction, so a pattern narrowed to nothing is not green here either.
+        self.assertIsNotNone(C_MOD.CONSTRUCTION_ANCHOR.fullmatch("POINTS.md#a01"),
+                             "the pattern no longer accepts a well-formed anchor")
+
+    def test_the_anchor_pattern_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Widen the anchor pattern to `.*`, and this must go red.
+
+        That exact edit was made against the shipped tree and the full suite returned OK.
+        """
+        smoke_replace(
+            self, PLUGIN / "keel" / "clauses.py",
+            b'CONSTRUCTION_ANCHOR = re.compile(r"POINTS\\.md#[a-z0-9][a-z0-9-]*")',
+            b'CONSTRUCTION_ANCHOR = re.compile(r".*")',
+            "tests.test_fence.TheConstructionJoin."
+            "test_TEETH_the_anchor_pattern_refuses_what_it_was_written_to_refuse",
+            "is accepted as a construction anchor",
         )
 
     def test_the_contents_table_reaches_every_entry(self) -> None:
@@ -755,6 +826,19 @@ class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
             "acts": len(_headings(_load(ACTS_MD))),
             "points": len(clauses),
             "moments": len(clauses),
+            "clauses": len(clauses),
+            # One clause, one demand: the Stop summary reads every row, and `render_views` refuses
+            # to render that sentence at all if any clause lacks a `discharged_by`.
+            "demands": len(clauses),
+            # The sides the proof gate instantiates: every predicate a clause actually carries.
+            # `tools/render_coverings.py` walks the same three fields to emit one `SIDE` mark per
+            # side into `proofs/Clauses.v`, so this is that census read from the source rather
+            # than from the rendering -- the page's "all 51 sides" and the proof's instance count
+            # move together or the run is red.
+            "sides": sum(1 for c in clauses for side in
+                         ("fingerprint", "activated_by", "discharged_by")
+                         if isinstance(c.get(side), dict)),
+            "sessions": len(list((REPO / "eval" / "corpus").glob("*.jsonl"))),
             "constructions": len(constructions),
             "shapes": len(shapes),
             "tiers": len(re.findall(r"^### Tier ", skill, re.MULTILINE)),
@@ -762,7 +846,7 @@ class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
 
     def occurrences(self):
         """(page, line number, value, noun, phrase) for every spelled total on every page."""
-        for page in PAGES:
+        for page in COUNTED_PAGES:
             for number, line in enumerate(_load(page).splitlines(), 1):
                 for found in SPELLED_TOTAL_RX.finditer(line):
                     token = found.group(1).lower()
@@ -847,4 +931,151 @@ class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
             self, Path(__file__), b'r"\\b(?:the|these|those|all)\\s+', b'r"\\bNOTHINGMATCHESTHIS\\s+',
             "tests.test_fence.SpelledCountsMatchWhatTheyCount.test_the_check_has_a_subject",
             "stopped seeing the pages",
+        )
+
+
+# A footnote REFERENCE on the page, `[^m-derailments]`; its DEFINITION is the same token at the
+# start of a line followed by a colon. The two are told apart by that colon and nothing else.
+MEASURED_REF_RX = re.compile(r"\[\^m-([a-z0-9][a-z0-9-]*)\]")
+MEASURED_DEF_RX = re.compile(r"^\[\^m-([a-z0-9][a-z0-9-]*)\]:", re.MULTILINE)
+
+# The number a footnote is attached to: `27/27,[^m-replay]` (a ratio), `9\nsessions[^m-...]`
+# (the number is on the line above), "the seven acts[^m-act-count]" (spelled), or a bare `0`.
+# Read as the LAST such token before the marker, because that is the number a reader takes the
+# footnote to be about, wherever the line breaks fell.
+CITED_NUMBER_RX = re.compile(
+    r"(\d+)\s*/\s*(\d+)|(\d+)|\b(%s)\b" % "|".join(sorted(NUMBER_WORDS, key=len, reverse=True)),
+    re.IGNORECASE,
+)
+
+
+def _measured_rows() -> dict[str, dict[str, str]]:
+    """MEASURED.tsv by KEY. The published value of each row, as the row itself states it."""
+    lines = _load(MEASURED).splitlines()
+    head = lines[0].split("\t")
+    rows = {}
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        cells = dict(zip(head, line.split("\t")))
+        rows[cells["KEY"]] = cells
+    assert rows, "MEASURED.tsv carries no rows, so nothing here is joined to anything"
+    return rows
+
+
+class FootnotedNumbersEqualWhatWasMeasured(unittest.TestCase):
+    """Every README number carrying a `[^m-…]` footnote equals the MEASURED row it cites.
+
+    WHY THIS EXISTS, and it is the same shape as the class above one document over. The README
+    publishes figures and footnotes each to a named row of `MEASURED.tsv`: "10
+    sessions[^m-derailments] end at the refusal … 26/26,[^m-replay]". `tests/test_measured.py`
+    re-runs every row's own COMMAND and holds the row to what its command prints, so the TSV is
+    honest. Nothing joined the TSV to the page citing it.
+
+    MEASURED, on the tree this class landed on: the README said 10 derailments where the row and
+    its command both said 9, and 26/26 replay where the row said 27/27. Both numbers were
+    footnoted, in a section titled "Evidence", to a file that already disagreed with them, and the
+    whole suite was green. The sum 10+15+1 was still 26, which is what let the pair rot together.
+
+    The footnote is the join. A number a reader is invited to verify against a measurement must
+    BE that measurement -- and the fix for a red run here is to re-render the page from the row,
+    never to edit the row toward the page.
+    """
+
+    def cited(self):
+        """(key, cited number, ratio denominator or None, the phrase read) per footnote use."""
+        text = _load(README)
+        definitions = {m.start() for m in MEASURED_DEF_RX.finditer(text)}
+        for ref in MEASURED_REF_RX.finditer(text):
+            if ref.start() in definitions:
+                continue
+            before = text[:ref.start()]
+            numbers = list(CITED_NUMBER_RX.finditer(before))
+            if not numbers:
+                yield ref.group(1), None, None, "(no number before the marker)"
+                continue
+            last = numbers[-1]
+            ratio, denominator, digits, word = last.groups()
+            if ratio is not None:
+                yield ref.group(1), int(ratio), int(denominator), last.group(0)
+            elif digits is not None:
+                yield ref.group(1), int(digits), None, last.group(0)
+            else:
+                yield ref.group(1), NUMBER_WORDS[word.lower()], None, last.group(0)
+
+    def test_every_footnoted_number_equals_its_measured_row(self) -> None:
+        rows = _measured_rows()
+        wrong = []
+        for key, value, denominator, phrase in self.cited():
+            if key not in rows:
+                wrong.append(f"[^m-{key}] cites a row MEASURED.tsv does not carry")
+                continue
+            row = rows[key]
+            if value is None:
+                wrong.append(f"[^m-{key}] is attached to no number at all")
+                continue
+            if str(value) != row["VALUE"]:
+                wrong.append(
+                    f"README prints {phrase!r} for [^m-{key}] but MEASURED.tsv row {key} "
+                    f"has VALUE {row['VALUE']} ({row['SUBJECT']})")
+            if denominator is not None and str(denominator) != row["DENOMINATOR"]:
+                wrong.append(
+                    f"README prints {phrase!r} for [^m-{key}] but MEASURED.tsv row {key} "
+                    f"has DENOMINATOR {row['DENOMINATOR']}")
+        self.assertEqual(
+            [], wrong,
+            "the README publishes a number that the measurement it footnotes contradicts. Fix "
+            "the page from the row -- `python3 tests/../tools/render_views.py --write` for a "
+            "generated region, by hand from the row's own COMMAND otherwise. Never the reverse: "
+            "editing MEASURED.tsv to agree with the page deletes the measurement.")
+
+    def test_the_check_has_a_subject(self) -> None:
+        """A sweep that joins nothing is green over nothing, and must say so instead."""
+        cited = list(self.cited())
+        self.assertGreaterEqual(
+            len(cited), 4,
+            f"only {len(cited)} footnoted numbers were found in README.md; the sweep has stopped "
+            "seeing the page it is supposed to be reading")
+        print(f"\nDENOMINATOR subject=footnoted-numbers cited={len(cited)} "
+              f"rows={len(_measured_rows())}")
+
+    def test_every_footnote_definition_names_a_real_row_and_is_used(self) -> None:
+        """No footnote defined for a row that does not exist, and none defined and never cited."""
+        rows = _measured_rows()
+        text = _load(README)
+        defined = {m.group(1) for m in MEASURED_DEF_RX.finditer(text)}
+        used = {key for key, *_ in self.cited()}
+        self.assertEqual(set(), defined - set(rows),
+                         "a README footnote defines a MEASURED row that MEASURED.tsv does not carry")
+        self.assertEqual(set(), used - defined,
+                         "the README cites a `[^m-…]` footnote it never defines")
+        self.assertEqual(set(), defined - used,
+                         "a README footnote is defined and never cited, so a measurement is "
+                         "carried on the page and shown to no reader")
+
+    def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Put the drifted derailment count back on the page, and this must go red.
+
+        This exact number stood in the shipped README, footnoted to a row that said 9, through a
+        green suite.
+        """
+        smoke_replace(
+            self, README, b"the table. 9\nsessions[^m-derailments]",
+            b"the table. 10\nsessions[^m-derailments]",
+            "tests.test_fence.FootnotedNumbersEqualWhatWasMeasured."
+            "test_every_footnoted_number_equals_its_measured_row",
+            "has VALUE 9",
+        )
+
+    def test_the_page_sweep_reaches_the_readme(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        """Put "the seven acts" back in the README, and the spelled-count sweep must go red.
+
+        The README carried exactly this sentence, beside a footnote pointing at a command that
+        printed 10, while `SpelledCountsMatchWhatTheyCount` swept only the three shipped pages.
+        """
+        smoke_replace(
+            self, README, b"the ten acts[^m-act-count]", b"the seven acts[^m-act-count]",
+            "tests.test_fence.SpelledCountsMatchWhatTheyCount."
+            "test_every_spelled_total_equals_what_it_counts",
+            "says 'the seven acts' but there are 10 acts",
         )

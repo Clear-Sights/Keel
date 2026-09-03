@@ -44,11 +44,20 @@ TABLE = REPO / "plugin" / "keel" / "clauses.json"
 # NAMED SHAPES, not the class: "this result states nothing" is undecidable in general, so the
 # grader refuses the spellings that have been seen -- split-then-exact, `iff_refl`, an identity
 # lambda, and a bare `conj` of two hypotheses (MATH-04) -- and says so here rather than claim more.
+#
+# 2026-09-03 adds the SIMPLEST spelling of all, which was missing: `Proof. intros x H. exact H.
+# Qed.` -- a theorem `P -> P`, which type-checks, carries no axiom, and is counted as a `prf`
+# result by the census, so every other check in this file grades it PASS. Found by planting it
+# over a real result in Coverings.v and watching the gate stay green. The bare identity lambda
+# `exact (fun x => x)` goes with it. Both are refused only where they are the WHOLE proof, so a
+# result that genuinely closes on one hypothesis after real work is untouched.
 IDENTITY = re.compile(r"Proof\.\s*(?:intros?[^.]*\.\s*)?(?:"
                       r"split;\s*intro\s+\w+;\s*exact\s+\w+"
                       r"|(?:apply|exact)\s+iff_refl"
                       r"|split;\s*\[\s*exact\s*\(fun\s+\w+\s*=>\s*\w+\)\s*\|\s*exact\s*\(fun\s+\w+\s*=>\s*\w+\)\s*\]"
                       r"|exact\s*\(conj\s+\w+\s+\w+\)"
+                      r"|exact\s+\w+"
+                      r"|exact\s*\(fun\s+\w+\s*=>\s*\w+\)"
                       r")\.\s*Qed\.")
 EMPTY_BY_DESIGN = {"always", "tool-enum"}
 

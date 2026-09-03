@@ -33,9 +33,73 @@ TABLE_VIEWS = (
 README = REPO / "README.md"
 
 
+# WHEN a demand can be raised, read off the two fields that decide it and nothing else.
+#
+# The page used to say only that a deny records a demand, which reads as though every row could
+# stop the act it names before it runs. Three can. The rest are effect occasions -- the demand
+# they raise refuses the NEXT act -- or `always` rows that fire on the session's first act, or
+# terminal rows read at the ending. That distribution is a property of `event` and the
+# fingerprint's `kind`, so it is COMPUTED here rather than counted by hand into a sentence that
+# then rots: the numbers on the page move when the table moves, or the build is red.
+#
+# (label, one-line reason the occasion puts the demand there), in the order the moments occur.
+DEMAND_MOMENTS = (
+    ("before the act", "a closed host `tool_name` enum, read on `PreToolUse`"),
+    ("at the session's first act", "`always`, read on `PreToolUse`"),
+    ("after the act, from what it did", "an observed effect, read on `PostToolUse`"),
+    ("at the ending", "`always`, read at `Stop`"),
+)
+
+
+def demand_moment(row: dict) -> str:
+    """Which moment this clause's demand can be raised at. Total over the table, or it raises."""
+    event, fingerprint = row.get("event"), row.get("fingerprint")
+    kind = fingerprint.get("kind") if isinstance(fingerprint, dict) else None
+    if event == "PreToolUse":
+        return "at the session's first act" if kind == "always" else "before the act"
+    if event == "PostToolUse":
+        return "after the act, from what it did"
+    if event in ("Stop", "SubagentStop"):
+        return "at the ending"
+    raise SystemExit(
+        f"{row.get('id')}: event {event!r} belongs to no demand moment -- the moments table on "
+        "the page would be silently short by one row, which is the drift this generator exists "
+        "to make loud. Give the new event a moment in DEMAND_MOMENTS.")
+
+
+def render_demand_moments(rows: list[dict]) -> list[str]:
+    """The per-moment census of the table: every row lands in exactly one moment."""
+    tally = {label: 0 for label, _ in DEMAND_MOMENTS}
+    for row in rows:
+        tally[demand_moment(row)] += 1
+    empty = [label for label, count in tally.items() if not count]
+    if empty:
+        raise SystemExit(
+            "no clause is raised " + ", ".join(empty) + " -- a moment the page announces and "
+            "the table no longer populates is a column of zeroes read as a capability. Remove "
+            "the moment from DEMAND_MOMENTS, or restore a row that uses it.")
+    total = sum(tally.values())
+    if total != len(rows):
+        raise SystemExit(f"the moments census counted {total} of {len(rows)} clauses")
+    lines = [
+        "",
+        f"A demand is not always raisable before the act it names. Of the {total} clauses, only",
+        f"{tally['before the act']} can deny the costly call itself on its way in; the rest are read at a moment the",
+        "clause's own occasion fixes, and an effect occasion cannot be read until the act has",
+        "happened, so its demand refuses the *next* act rather than this one:",
+        "",
+        "| The demand is raised | Clauses | Because the occasion is |",
+        "| --- | --- | --- |",
+    ]
+    lines += [f"| {label} | {tally[label]} | {why} |" for label, why in DEMAND_MOMENTS]
+    return lines
+
+
 def render_clause_count(rows: list[dict], marker: str) -> list[str]:
     """Render prose whose cardinal is owned by the loaded clause table."""
     count = len(rows)
+    if marker == "demand-moments":
+        return [*render_demand_moments(rows), ""]
     if marker == "stop-ledger-read":
         missing = [row["id"] for row in rows if not row.get("discharged_by")]
         if missing:
@@ -143,7 +207,8 @@ def main(argv: list[str]) -> int:
     ]
     renderings.extend(
         (README, marker, render_clause_count(rows, marker))
-        for marker in ("stop-ledger-read", "package-clause-count", "shipped-clause-count")
+        for marker in ("stop-ledger-read", "demand-moments", "package-clause-count",
+                       "shipped-clause-count")
     )
     for path, marker, fresh in renderings:
         start, stop, lines = _region(path.read_text(encoding="utf-8"), path, marker)

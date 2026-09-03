@@ -162,9 +162,7 @@ def _names(clause, event: dict, subject: str) -> bool:
         return True
     for field in ("tool_input.file_path", "tool_input.path", "tool_input.notebook_path"):
         value = _get(event, field)
-        if isinstance(value, str) and value and (value == subject or value.endswith("/" + subject)
-                                                 or subject.endswith("/" + value.rsplit("/", 1)[-1])
-                                                 and value.rsplit("/", 1)[-1] == subject.rsplit("/", 1)[-1]):
+        if isinstance(value, str) and value and (value == subject or value.endswith("/" + subject)):
             return True
     return False
 
@@ -593,10 +591,13 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                     # very clause the proof answers. Both sides key on `standing:{key}`, so the
                     # discharge below lands on the row just raised and the pair nets clean.
                     #
-                    # This is NOT the self-licence `pre_tool_use` refuses. That one is two
-                    # SEGMENTS in one string with the act before the guard -- `git push && git
-                    # status` -- where the guard arrives too late to have licensed anything.
-                    # Here there are not two acts: the plant IS the observation, so there is no
+                    # This is NOT the self-licence a shipped clause would need to be refused
+                    # from. That refusal is STRUCTURAL, not a segment-order check: every shipped
+                    # `discharged_by` reads either a host enum naming a DIFFERENT tool than the
+                    # clause's own occasion tools, or an effect that a PreToolUse event never
+                    # carries, so no PreToolUse event can satisfy a clause's occasion and its
+                    # discharge at once (tests.test_self_licence, over the whole table). Here
+                    # there are not two acts: the plant IS the observation, so there is no
                     # order for it to be in. An ordinary run of the same checker still demands
                     # and does not discharge, because the guard requires the fault-proving form.
                 else:
@@ -768,6 +769,17 @@ def session_start(table, ledger: Ledger, event: dict) -> dict:
         session, agent = _ids(event)
         try:
             effects.observe(ledger.root, session, agent, str(event.get("cwd") or os.getcwd()))
+        except Exception:
+            pass
+        try:
+            # BEFORE compact: compaction rewrites every kept row's `prev`/`hash` (ledger.py
+            # `compact`), so a divergence in the chain compact is about to erase must be read
+            # first or it is destroyed unread. Carriage, not a decision -- `failed_closed=False`
+            # -- because a session must not be blocked by a corruption check on its own log.
+            divergent = ledger.verify_chain()
+            if divergent is not None:
+                journal.note_fault(event, "chain_divergent", f"row hash {divergent}",
+                                    failed_closed=False, root=ledger.root)
         except Exception:
             pass
         try:

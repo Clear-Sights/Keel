@@ -102,6 +102,15 @@ def fired(result: dict) -> str | None:
     return None
 
 
+# session file -> did the dispatcher actually deny or block anything in it, and which clauses it
+# named. Read by `main`: the first decides whether the run is evidence at all (see the
+# NOT-EVALUABLE note there), the second is the baseline the live-observer lane is held to.
+# RECORDED FROM THE GRADED RUN rather than measured again -- one observation, read twice, and one
+# fewer pass of subprocesses over the corpus.
+DENIED: dict[pathlib.Path, bool] = {}
+NAMED: dict[pathlib.Path, set[str]] = {}
+
+
 def replay(path: pathlib.Path) -> bool:
     lines = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     header, events = lines[0], lines[1:]
@@ -110,6 +119,8 @@ def replay(path: pathlib.Path) -> bool:
         results = [dispatch(event, state) for event in events]
 
     reasons = [fired(result) for result in results]
+    DENIED[path] = any(reason is not None for reason in reasons)
+    NAMED[path] = {clause for reason in reasons for clause in clauses_named(reason)}
     first = next((i for i, reason in enumerate(reasons) if reason), None)
 
     print(f"\n== {path.stem}: {header['description']}")
@@ -171,14 +182,129 @@ def replay(path: pathlib.Path) -> bool:
     return ok
 
 
+# The one authored session replayed a second time against the LIVE observer. Chosen because its
+# acts are file mutations in a worktree, which is the effect the observer can be made to measure
+# for real in a repository this file builds -- no network, no process table, nothing that depends
+# on the machine underneath.
+LIVE_SESSION = "t01-done-while-dirty"
+
+
+def _live_ground(work: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
+    """A real git repository and a state directory carrying a real `remote.json`."""
+    repo, state = work / "repo", work / "state"
+    repo.mkdir(); state.mkdir()
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "replay@keel.invalid")
+    git("config", "user.name", "replay")
+    (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "seed")
+    root = subprocess.run(["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    # `_artifact_read` accepts REMOTE when `tips` is a dict and the root matches the worktree the
+    # event names, which is what makes the session's Read of it pay A03 rather than nothing.
+    (state / "remote.json").write_text(json.dumps({"root": root, "tips": {}}), encoding="utf-8")
+    return repo, state
+
+
+def _live_event(event: dict, repo: pathlib.Path, state: pathlib.Path) -> dict:
+    """One authored event re-aimed at the real ground, with its authored record REMOVED."""
+    event = json.loads(json.dumps(event))
+    event.pop("keel_effect", None)          # the whole point: the observer must produce it
+    event["cwd"] = str(repo)
+    tool_input = event.get("tool_input")
+    if isinstance(tool_input, dict) and isinstance(tool_input.get("file_path"), str):
+        name = pathlib.PurePath(tool_input["file_path"]).name
+        home = state if "keel_state" in tool_input["file_path"] else repo
+        tool_input["file_path"] = str(home / name)
+    return event
+
+
+def live_session(path: pathlib.Path, recorded: set[str]) -> bool:
+    """Replay one session with no authored records, against a worktree that really changes.
+
+    WHY THIS LANE EXISTS. `dispatch._effect_record` returns immediately when the event already
+    carries a `keel_effect`, and `generate_corpus.py` writes a complete authored record into
+    every `PostToolUse` event -- so the corpus replay never calls `effects.delta`,
+    `effects.report_effects` or `effects.trace_effects` even once. MEASURED: with every one of
+    those gutted to constant blind values, the whole replay stayed green and exit 0. The corpus
+    proves the dispatcher reads a record correctly; it proved nothing at all about the thing that
+    writes the record, which is half the plugin.
+
+    So one session is driven again with `keel_effect` stripped and its acts performed for real in
+    a git repository built here. The bar is that every clause the RECORDED run blocks on is named
+    by the live run too: the authored record and the live observation must license the same
+    refusals. It is a subset rather than an equality because the live machine has effects the
+    corpus cannot author -- the host's connection counter ticks under `git` on some runs and not
+    others, raising `U06`/`U24` -- and a bar that goes red with the weather is not a bar.
+    """
+    with tempfile.TemporaryDirectory() as work:
+        repo, state = _live_ground(pathlib.Path(work))
+        events = [json.loads(line) for line in path.read_text().splitlines() if line.strip()][1:]
+        results = []
+        for event in events:
+            event = _live_event(event, repo, state)
+            tool_input = event.get("tool_input") or {}
+            # The act itself, performed. A Write that never writes leaves nothing for the
+            # observer to see, and the lane would be measuring an empty worktree.
+            if event["hook_event_name"] == "PostToolUse" and event.get("tool_name") == "Write":
+                pathlib.Path(tool_input["file_path"]).write_text(
+                    tool_input.get("content", ""), encoding="utf-8")
+            results.append(dispatch(event, str(state)))
+
+    print(f"\n== {path.stem} [LIVE OBSERVER]: authored effect records stripped; "
+          "the hook must observe the acts itself")
+    faults = [(i, why) for i, why in ((i, crashed(r)) for i, r in enumerate(results)) if why]
+    for index, why in faults:
+        print(f"   FAIL: event [{index}] rendered no decision -- {why}")
+    if faults:
+        return False
+    named = {c for r in results for c in clauses_named(fired(r))}
+    missing = sorted(recorded - named)
+    print(f"   recorded run named {sorted(recorded)}; live run named {sorted(named)}")
+    if missing:
+        print(f"   FAIL: the live observer licensed what the authored record refused: {missing} "
+              "went unnamed, so the record the decision rests on was not measured")
+        return False
+    print("   every clause the authored record refuses is refused live too — OK")
+    return True
+
+
 def main() -> int:
     paths = sorted(CORPUS.glob("*.jsonl"))
     if not paths:
         print(f"no corpus sessions found in {CORPUS}", file=sys.stderr)
         return 1
     outcomes = [replay(path) for path in paths]
+
+    live = next((p for p in paths if p.stem == LIVE_SESSION), None)
+    if live is None:
+        print(f"\nFAIL: the live-observer session {LIVE_SESSION!r} is not in the corpus, so "
+              "nothing here exercises the observer", file=sys.stderr)
+        return 1
+    outcomes.append(live_session(live, NAMED[live]))
+
     passed = sum(outcomes)
-    print(f"\nREPLAY sessions={len(outcomes)} passed={passed} failed={len(outcomes) - passed}")
+    print(f"\nREPLAY sessions={len(outcomes) - 1} passed={passed - 1} "
+          f"failed={len(outcomes) - passed}")
+
+    # A RUN THAT DENIED NOTHING IS NOT A GREEN RUN. Every handler in `HANDLERS` replaced by
+    # `return {}` leaves the benign control passing -- "silent on every event" is exactly what a
+    # dead dispatcher produces -- and the only thing separating that from a working table is
+    # whether anything, anywhere, actually refused. Counted rather than assumed, and a zero count
+    # exits 2 (NOT-EVALUABLE) rather than 1, because "the corpus disagrees with the dispatcher"
+    # and "there was no dispatcher to disagree with" are different findings.
+    denials = sum(1 for path in paths if DENIED.get(path))
+    print(f"REPLAY live-denials={denials}")
+    if not denials:
+        print("\nNOT-EVALUABLE: no session produced a denial or block from the dispatcher, so "
+              "nothing here observed the table refuse anything. A silent dispatcher passes every "
+              "control session; silence is not evidence.", file=sys.stderr)
+        return 2
     return 0 if all(outcomes) else 1
 
 

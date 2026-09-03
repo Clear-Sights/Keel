@@ -18,7 +18,8 @@ What each class gets, and what it does not:
   effect      Theorem 8: reads what the act did, never a segment; name-agnostic, and it
               separates byte-identical commands by their effects. On the guard side the
               effect is a datum the trace holds or a report shape where no trace exists.
-  positive    Theorems 6 and 7.
+  positive    NOT PRODUCIBLE: no admitted kind classifies as `positive`. Theorems 6 and 7 are
+              proven in Coverings.v and instantiated by no shipped side.
   composed    a composition of the classes above: each branch gets its own instance.
   nominal     the loader refuses the row on EVERY side (`CLAUSE-OCCASION-NOMINAL`,
               `CLAUSE-GUARD-NOMINAL`); this script never sees one.
@@ -64,10 +65,12 @@ RESULTS = {
         "  intros s D E d d' Hd Hd'.",
         "  split; [ exact (effect_is_name_agnostic string D E d)",
         "         | exact (effect_separates_same_segments string D E d d' Hd Hd') ]."]),
-    "positive": ("PositiveSide", "positive_sides_reject_every_false_claim", [
-        "  forall (s : PositiveSide) (T D : Type) (cl ob : T -> option D) c d d',",
-        "    cl c = Some d -> ob c = Some d' -> d <> d' -> ~ positive T D cl ob c."], [
-        "  intros s T D cl ob. exact (false_claim_always_rejected T D cl ob)."]),
+    # NO `positive` ENTRY. `classify_side` can no longer return that class: its only producer
+    # was `kind: nonzero`, which had zero shipped uses and was removed from the loader, so this
+    # map's positive arm could never be selected by any table this renderer is allowed to read.
+    # Theorems 6 and 7 remain PROVEN in proofs/Coverings.v and are cited in README as
+    # proven-not-instantiated; the arm returns when a side that compares a claimed datum to an
+    # observed one exists to instantiate them.
 }
 BOUNDARY = ("always", "tool-enum")  # no text is read: Theorem 1 has nothing to say, Theorem 3 is the edge
 

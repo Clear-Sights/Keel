@@ -42,6 +42,14 @@ CLAUSES = PLUGIN / "keel" / "clauses.json"
 SHIM = PLUGIN / "hooks" / "dispatch.sh"
 
 
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, PermissionError):
+        return False
+    return True
+
+
 def git(repo: str, *args: str) -> str:
     return subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True,
                           text=True).stdout
@@ -196,6 +204,26 @@ class TheObserverSeesTheWorld(Repo):
         self.assertTrue(d["head_reset"])
         self.assertEqual(["a.txt"], d["files_changed"])
 
+    def test_a_reset_with_an_unmeasurable_tree_comparison_is_not_evaluable(self) -> None:
+        """C-EFF-213: head_reset states the worktree changed WITH the move. When the tree
+        comparison itself could not be read, that is unknown, not false -- collapsing it to
+        False turned a real reset whose files could not be measured into "no reset"."""
+        pathlib.Path(self.repo, "a.txt").write_text("two\n", encoding="utf-8")
+        git(self.repo, "commit", "-qam", "second")
+        effects.snapshot(self.state, "s", "", self.repo)
+        subprocess.run(["git", "reset", "-q", "--hard", "HEAD~1"], cwd=self.repo, check=True)
+        real_git = effects._git
+
+        def flaky(cwd, *args, env=None):
+            if args and args[0] == "diff-tree":
+                return None
+            return real_git(cwd, *args, env=env)
+
+        with unittest.mock.patch.object(effects, "_git", side_effect=flaky):
+            d = effects.delta(self.state, "s", "", {})
+        self.assertIsNone(d["files_changed"])
+        self.assertIsNone(d["head_reset"])
+
     def test_a_process_ended_during_the_act_is_seen(self) -> None:
         child = subprocess.Popen(["sleep", "60"])
         self.addCleanup(lambda: child.poll() is None and child.kill())
@@ -229,6 +257,48 @@ class TheObserverSeesTheWorld(Repo):
         d = effects.delta(self.state, "s", "", {})
         self.assertEqual(sorted(ended), sorted(set(d["pids_gone"]) & set(ended)))
 
+    def test_a_member_orphaned_from_a_tree_born_session_leader_is_still_the_sessions(self) -> None:
+        """M-LAW-072's third lineage clause: a session leader born in the tree stays a member
+        of the tree by ppid, so the gap is its OWN descendants that get double-fork daemonized
+        away from it -- reparented to pid 1, carrying the leader's session id, not the leader's
+        ppid chain. Real setsid + a real orphaning fork, not a mock."""
+        effects.snapshot(self.state, "s", "", self.repo)
+        leader_pid = os.fork()
+        if leader_pid == 0:
+            os.setsid()
+            mid = os.fork()
+            if mid == 0:
+                grand = os.fork()
+                if grand == 0:
+                    time.sleep(6)
+                    os._exit(0)
+                os._exit(0)  # `mid` exits at once: `grand` is reparented to pid 1
+            os.waitpid(mid, 0)
+            time.sleep(6)  # the leader itself stays alive, and stays in the tree by ppid
+            os._exit(0)
+        def _reap_leader() -> None:
+            if _alive(leader_pid):
+                os.kill(leader_pid, 9)
+            try:
+                os.waitpid(leader_pid, 0)
+            except ChildProcessError:
+                pass
+        self.addCleanup(_reap_leader)
+        for _ in range(100):
+            table = effects.proc_table() or {}
+            grand = [p for p, (_, ppid, sid) in table.items()
+                    if sid == leader_pid and ppid == 1 and p != leader_pid]
+            if grand:
+                break
+            time.sleep(0.05)
+        self.assertTrue(grand, "the grandchild was never reparented to pid 1")
+        grandchild = grand[0]
+        self.addCleanup(lambda: (os.kill(grandchild, 9) if _alive(grandchild) else None))
+        d = effects.delta(self.state, "s", "", {})
+        self.assertIn(leader_pid, d["pids_spawned"], "the session leader itself, in the tree by ppid")
+        self.assertIn(grandchild, d["pids_spawned"],
+                      "orphaned to pid 1, but its session leader is a tree pid")
+
     def _gap(self, moved: bool) -> None:
         """Plant the idle gap: the counter the previous act ended on, equal to now (quiet) or
         behind it (the host moved on its own while nothing of this session ran)."""
@@ -258,6 +328,19 @@ class TheObserverSeesTheWorld(Repo):
         with unittest.mock.patch.object(effects, "net_active_opens", return_value=1000):
             self._gap(moved=False)
             self.assertFalse(self.observe("git status")["net_out"])
+
+    def test_a_legitimately_deep_ancestry_is_not_dropped_by_a_hop_cap(self) -> None:
+        """C-EFF-074: `under` walked a fixed 64-hop cap and silently dropped anything deeper --
+        a long build pipeline or interpreter chain is real ancestry no matter how many
+        generations deep. The walk must stop only on pid<=1 or a repeated pid (a cycle)."""
+        root, parent, table, depth = 1000, 1000, {}, 100
+        for i in range(depth):
+            pid = 2000 + i
+            table[pid] = (f"t{i}", parent, 5555)
+            parent = pid
+        deepest = parent
+        kin = effects.under(root, table)
+        self.assertIn(deepest, kin, "a depth-100 ancestry was dropped by the old 64-hop cap")
 
     def test_a_process_of_another_lineage_is_not_assigned(self) -> None:
         """Born DURING the act, alive after it, and not this session's: a child of a process
@@ -296,6 +379,15 @@ class TheObserverSeesTheWorld(Repo):
         self.assertFalse(self.observe("echo 'ls -la'")["report_paths"])
         # A loud act is not a look: it changed the file it printed.
         self.assertFalse(self.observe("printf three > a.txt && ls")["report_paths"])
+
+    def test_a_bare_directory_name_does_not_pay_a_demand_on_a_path_under_it(self) -> None:
+        """C-EFF-161: `ls src` printing only `src` must not pay a demand keyed on `src/main.py`
+        -- the report never named the file, only its parent directory."""
+        os.mkdir(os.path.join(self.repo, "src"))
+        pathlib.Path(self.repo, "src", "main.py").write_text("x\n", encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-qm", "add src")
+        self.assertFalse(self.observe("echo src")["report_paths"])
 
     def test_a_listing_claims_live_pids_and_a_mention_claims_none(self) -> None:
         self.assertTrue(self.observe("ps -eo pid,comm")["report_pids"])

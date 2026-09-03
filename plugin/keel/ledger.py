@@ -106,6 +106,9 @@ def _canon(obj) -> str:
 
 
 def _digest(text: str) -> str:
+    """SHA-256, truncated to 16 hex characters -- 64 bits. Both the chain link and `derive_id`
+    read this width, so a 64-bit collision in either would silently merge two chain rows or two
+    distinct demands into one."""
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
@@ -180,9 +183,11 @@ class Ledger:
                     continue
                 yield row
 
-    def scope(self, session: str, agent: str):
-        """ONE pass over the file, answering every question this ledger has: the OPEN demand rows
-        by id, the ids a guard call has DISCHARGED, and the chain head the next row links to.
+    @staticmethod
+    def _books(rows):
+        """The set difference, written ONCE. `(books, tail)`, where `books` maps each
+        `(session, agent)` to its `(demand rows by id, discharged ids)` and `tail` is the last
+        row's hash.
 
         DEMAND, DISCHARGE AND OPEN ARE NOT THREE CONCEPTS. They are one set difference,
         `demanded - discharged`, taken here and nowhere else -- and a licence is membership in
@@ -190,18 +195,36 @@ class Ledger:
         was never raised is also not open, and reading that as a licence would let the costly act
         through on the strength of nothing ever having happened. `.get` throughout: a row missing
         `id`, `session` or `kind` is malformed and skipped, not a KeyError. First demand row per
-        id wins; that IS the dedup. Three methods over three walks used to answer these.
+        id wins; that IS the dedup.
+
+        Both readers of the difference eat this fold: `scope`, which answers one (session, agent),
+        and `compact`, which asks which sessions still owe. The same rule stated twice is exactly
+        how a verifier starts reporting corruption on a sound ledger -- `compact` kept a second
+        copy of this loop, and a drift between them would have let compaction drop rows that
+        `scope` still counts as open, retiring a live obligation.
         """
-        demanded, closed, tail = {}, set(), ""
-        for row in self._rows():
+        books: dict = {}
+        tail = ""
+        for row in rows:
             tail = row.get("hash", "")
             rid = row.get("id")
-            if rid is None or row.get("session") != session or row.get("agent") != agent:
+            if rid is None:
                 continue
+            demanded, closed = books.setdefault((row.get("session"), row.get("agent")),
+                                                ({}, set()))
             if row.get("kind") == "demand":
                 demanded.setdefault(rid, row)
             elif row.get("kind") == "discharge":
                 closed.add(rid)
+        return books, tail
+
+    def scope(self, session: str, agent: str):
+        """ONE pass over the file, answering every question this ledger has: the OPEN demand rows
+        by id, the ids a guard call has DISCHARGED, and the chain head the next row links to.
+        The difference itself is `_books`. Three methods over three walks used to answer these.
+        """
+        books, tail = self._books(self._rows())
+        demanded, closed = books.get((session, agent), ({}, set()))
         return {i: r for i, r in demanded.items() if i not in closed}, closed, tail
 
     def _append(self, row: dict) -> None:
@@ -263,6 +286,15 @@ class Ledger:
         has nothing this ledger can ever be asked about again. Run at SessionStart only, and
         only past COMPACT_AT: the rewrite races a concurrent session's append, and that window
         is taken once per session start, never per event.
+
+        COMPACTION REWRITES EVERY HASH IT KEEPS. `prev` and `hash` are recomputed down the kept
+        rows below, so after a compaction every stored hash differs from the one an earlier
+        reader saw: the chain detects an ALTERED row, and Keel itself alters all of them at each
+        SessionStart past COMPACT_AT. A chain hash is therefore comparable only within one
+        compaction generation, which is why `verify_chain` re-derives rather than remembers.
+
+        `owing` is NOT a second copy of the set difference: it reads the one fold `scope` reads
+        (`_books`), so compaction cannot retire a session that `scope` still counts as owing.
         """
         try:
             if self.path.stat().st_size < self.COMPACT_AT:
@@ -270,14 +302,9 @@ class Ledger:
         except OSError:
             return 0
         rows = list(self._rows())
-        owing: dict = {}
-        for r in rows:
-            ids = owing.setdefault(r.get("session"), set())
-            if r.get("kind") == "demand":
-                ids.add(r.get("id"))
-            elif r.get("kind") == "discharge":
-                ids.discard(r.get("id"))
-        keep = {s for s, ids in owing.items() if ids} | {keep_session}
+        books, _ = self._books(rows)
+        keep = {s for (s, _agent), (demanded, closed) in books.items()
+                if set(demanded) - closed} | {keep_session}
         kept = [r for r in rows if r.get("session") in keep]
         if len(kept) == len(rows):
             return 0

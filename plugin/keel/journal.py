@@ -1,8 +1,9 @@
 """keel.journal -- the persisted record: what Keel did, per session, per tool.
 
-WHY THIS EXISTS. Keel hooks PreToolUse, PostToolUse, Stop, SessionStart, SubagentStart and
-SubagentStop -- six event families, every one of them evaluated against the clause table -- and
-wrote nothing down unless a demand was actually raised. `obligations.jsonl` is a LEDGER, not a log:
+WHY THIS EXISTS. Keel hooks PreToolUse, PostToolUse, Stop, SubagentStop, SessionStart,
+SubagentStart, UserPromptSubmit and PreCompact -- eight event families, every one of them routed
+through `dispatch.HANDLERS` -- and wrote nothing down unless a demand was actually raised.
+`obligations.jsonl` is a LEDGER, not a log:
 it records outstanding obligations, so a session in which every clause passed leaves the state
 directory empty, and so does a session in which the plugin never ran at all.
 
@@ -16,7 +17,7 @@ as green", the reason `dispatch.main` refuses a zero-clause load -- turned aroun
 the plugin itself. A gate that will not accept an unexplained silence from the session should not
 be producing one about itself.
 
-FOUR ROW KINDS, deliberately not five:
+FIVE ROW KINDS:
 
   * `session` -- ONE row the first time a session is seen, carrying the clause count. The liveness
     proof, and the reason the log answers "did it run" separately from "did it find anything". A
@@ -24,6 +25,7 @@ FOUR ROW KINDS, deliberately not five:
   * `deny`    -- a PreToolUse refusal, naming the clause and the subject it is keyed on.
   * `block`   -- a Stop/SubagentStop reconciliation block, naming the unreconciled count.
   * `fault`   -- an event that could not be evaluated, and which way it fell.
+  * `repair`  -- an envelope that needed repair before it could be read (see `note_repair`).
 
 There is deliberately NO row per allowed call: a sibling plugin measured that policy and found the
 log ran 99%+ noise. A log nobody can read is a log nobody reads.
@@ -238,7 +240,7 @@ def note_block(event: dict, open_count, clause_ids, root=None) -> None:
     try:
         _append(_row(event, "block",
                      open_count=None if open_count is None else int(open_count),
-                     clause_ids=[str(c) for c in list(clause_ids)[:10]]), root=root)
+                     clause_ids=[str(c) for c in clause_ids]), root=root)
     except Exception:
         pass
 

@@ -74,6 +74,15 @@ class ALookPaysOnlyWhatItNames(unittest.TestCase):
         self._bash("ls", report_paths=True, named_paths=["other.txt"])
         self.assertIn("U19", self._next(), "a listing naming only other.txt paid config.txt")
 
+    def test_TEETH_a_read_of_a_same_named_file_in_another_directory_pays_nothing(self) -> None:
+        """C-DSP-023: `_names`' basename arm discharged a demand keyed on `docs/notes.md` from a
+        Read of `/other/place/notes.md` -- a guard paying for a file it never looked at. A
+        discharge must record what the guard act actually did; sharing a basename is not that."""
+        self._bash("sed -i s/a/b/ docs/notes.md", files_changed=["docs/notes.md"])
+        self._read("/other/place/notes.md")
+        self.assertIn("U19", self._next(),
+                      "a Read of a different directory's notes.md paid docs/notes.md")
+
     def test_a_read_of_the_changed_file_pays(self) -> None:
         self._bash("sed -i s/a/b/ config.txt", files_changed=["config.txt"])
         self._read("config.txt")

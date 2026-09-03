@@ -86,7 +86,7 @@ class Clause:
     # Optional, terminal clauses only. A clause with `activated_by` produces NO demand until
     # that predicate has been observed in the session, so a standing obligation waits for its
     # occasion instead of firing at every ending. Declared in the table rather than coded in
-    # the dispatcher, like `unless` and `scope`.
+    # the dispatcher, like `scope`.
     activated_by: dict[str, Any] | None = None
     # Commands that constitute the occasion. Required when activated_by is present:
     # a precondition nothing exercises is a precondition nobody can show works.
@@ -255,27 +255,11 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     value = _resolve(event, predicate.get("on", ""))
     if value is _MISSING:
         return False
-    if kind == "tool":
-        return value == predicate.get("equals")
-    if kind == "nonzero":
-        try:
-            return int(value) != 0
-        except (TypeError, ValueError):
-            return False
     if kind == "regex":
         if not isinstance(value, str):
             return False
-        return _regex_predicate(predicate, value)
+        return re.search(predicate["pattern"], value) is not None
     return False
-
-
-def _regex_predicate(predicate: dict[str, Any], value: str) -> bool:
-    if re.search(predicate["pattern"], value) is None:
-        return False
-    return all(
-        re.search(entry, value) is None
-        for entry in predicate.get("unless") or []
-    )
 
 
 def _predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool | None:
@@ -371,7 +355,6 @@ def classify_side(predicate: Any) -> str:
       effect      reads what the act DID -- a worktree, ref, process, network or output delta
                   named in `keel.effects.EFFECTS` (Thm 8: name-agnostic; on the guard side a
                   datum the trace holds, or a report shape where no trace exists)
-      positive    compares a datum the trace produced to one the report states (Thm 6, 7)
       composed    a composition of the classes above, every branch agnostic
       textual     reads the raw command as text (Thm 1: never mention-immune) -- refused
       nominal     selects on a program's name -- refused on every side (Thm 3, Thm 5)
@@ -412,16 +395,12 @@ def _own_class(predicate: dict[str, Any]) -> str:
         return "always"
     if kind == "effect":
         return "effect"
-    if kind == "tool":
-        return "tool-enum"
     if kind == "regex":
         if predicate.get("on") == "tool_name":
             return "tool-enum"
         return "textual" if predicate.get("on") == COMMAND_FIELD else "unclassified"
     if kind in ("program", "pipeline"):
         return "nominal"
-    if kind == "nonzero":
-        return "positive"
     return "unclassified"
 
 
@@ -429,15 +408,23 @@ def _own_class(predicate: dict[str, Any]) -> str:
 # boundary itself. A guard is discharged by a host tool call or by an observed effect of the
 # discharging act, never by what the act was called: tool calls are agnostic, so nominal
 # coverage of a guard has no excuse.
-AGNOSTIC_CLASSES = frozenset({"always", "tool-enum", "effect", "positive", "composed"})
+# `positive` is NOT in this set and is no longer a class any side can have. `nonzero` was its
+# only producer and had zero shipped uses (grep count 0 in clauses.json); by the audit's REPLACE 1
+# it was not the Definition `positive` of Coverings.v either -- a bare `int(value) != 0` on one
+# field compares nothing to anything. A class no witness input can select is a branch the fixtures
+# cannot grade, so the kind is gone and the class with it. The positive FORM remains proven in
+# proofs/Coverings.v and is stated in README as proven-not-instantiated; building a positive side
+# means adding a kind that reads a claimed field AND an observed field, not restoring this one.
+AGNOSTIC_CLASSES = frozenset({"always", "tool-enum", "effect", "composed"})
 
 
 def derive_closure(predicate: Any) -> str:
     """Whether a side is closed, DERIVED from its class -- never declared.
 
-    `host`: a closed host enum covers the act. `world`: the observer measures it. `datum`: a
-    report is compared to the trace. There is no `open`: a side whose closure would be open
-    is nominal, and the loader refuses it.
+    `host`: a closed host enum covers the act. `world`: the observer measures it. There is no
+    `open`: a side whose closure would be open is nominal, and the loader refuses it. There is
+    no `datum` either -- that was the closure of a `positive` side, and no class the loader
+    admits produces one; it returns when a positive kind is built, not before.
     """
     cls = classify_side(predicate)
     if cls == "tool-enum":
@@ -450,8 +437,6 @@ def derive_closure(predicate: Any) -> str:
         return "host" if _matches_a_tool_enum(predicate) else "world"
     if cls == "effect":
         return "world"
-    if cls == "positive":
-        return "datum"
     return cls
 
 
@@ -513,6 +498,57 @@ def _fixture_event(predicate: dict[str, Any], fixture: Any) -> dict[str, Any]:
 PROBE_TIMEOUT_CEILING_MS = 5000
 
 
+# THE SPELLINGS THIS LOADER NO LONGER CARRIES, REFUSED BY NAME RATHER THAN IGNORED.
+#
+# Each of these was machinery with ZERO shipped uses (grep count 0 in clauses.json), and a
+# predicate branch no witness input can select is a branch the fixtures cannot grade: it loads
+# clean forever because nothing ever reaches it. They were removed. But removal alone SOFTENS the
+# table -- an author who writes one of them today would get silence, and silence means the
+# evaluator quietly does something other than what the row says:
+#
+#   kind: "tool"     a second spelling of the tool-enum class (the shipped one is
+#                    `kind: regex, on: tool_name`). Two spellings of one class is one class the
+#                    renderer and the loader can disagree about.
+#   kind: "nonzero"  the only producer of the retired `positive` class; a bare `int(value) != 0`
+#                    on ONE field, which compares no claim to any observation and so is not the
+#                    Definition `positive` of Coverings.v that it was standing in for.
+#   `unless`         a regex exclusion list. Ignoring it would WIDEN the match the author wrote:
+#                    they asked for "matches P but not Q" and would silently get "matches P".
+#
+# So each is refused with its own reason at load, on every side and at every depth. Regrowing one
+# means putting its evaluator back AND deleting its entry here -- two deliberate acts, not a
+# forgotten key.
+_RETIRED_KINDS = {
+    "tool": "the tool-enum class is spelled `kind: regex, on: tool_name`; there is no second spelling",
+    "nonzero": "a one-field `!= 0` is not the Definition `positive` of Coverings.v (it compares "
+               "no claimed datum to an observed one), and no side used it",
+}
+
+
+def _refuse_retired_spellings(predicate: dict[str, Any], clause_id: str) -> None:
+    """Refuse a removed predicate spelling anywhere in a side, at any depth.
+
+    Walks EVERY node, not `_leaves`: `_leaves` skips a composition node that carries no `kind` of
+    its own, and `unless` is a key, not a kind, so an exclusion list parked on a top-level
+    `any_of` would have passed through unread.
+    """
+    nodes = [predicate]
+    while nodes:
+        node = nodes.pop()
+        if not isinstance(node, dict):
+            continue
+        kind = node.get("kind")
+        if kind in _RETIRED_KINDS:
+            raise ClauseError("CLAUSE-KIND-RETIRED",
+                              f"{clause_id}: `kind: {kind}` was removed -- {_RETIRED_KINDS[kind]}")
+        if "unless" in node:
+            raise ClauseError(
+                "CLAUSE-UNLESS-RETIRED",
+                f"{clause_id}: `unless` was removed; ignoring it would widen the match this side "
+                f"declares. Write the exclusion into the pattern, or use `all_of`")
+        nodes.extend((node.get("any_of") or []) + (node.get("all_of") or []))
+
+
 def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
     if predicate is None:
         return
@@ -520,19 +556,9 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
         if leaf.get("kind") == "effect" and leaf.get("effect") not in _effects.EFFECTS:
             raise ClauseError("CLAUSE-EFFECT-UNKNOWN",
                               f"{clause_id}: {leaf.get('effect')!r} is not an effect the observer measures")
-        # `nonzero` COMPARES A DATUM THE TRACE PRODUCED TO ONE THE REPORT STATES (Thm 6, 7) --
-        # that datum is the host's own `tool_response`, never a field the operator's command
-        # populates. A `nonzero` read of `tool_input.command` (or any other surface) is fixture
-        # bait: the fixture writes a number into a field no real event ever fills that way, so
-        # the row is admitted as a `positive` covering that is dead in production.
-        if leaf.get("kind") == "nonzero" and not str(leaf.get("on", "")).startswith("tool_response."):
-            raise ClauseError("CLAUSE-NONZERO-NOT-RESPONSE",
-                              f"{clause_id}: nonzero reads {leaf.get('on')!r}, not tool_response.*")
     if predicate.get("kind") == "regex":
         try:
             re.compile(predicate.get("pattern", ""))
-            for entry in predicate.get("unless") or []:
-                re.compile(entry)
         except (re.error, TypeError) as exc:
             raise ClauseError("CLAUSE-REGEX-INVALID", f"{clause_id}: {exc}") from exc
     key_from = predicate.get("key_from")
@@ -592,7 +618,22 @@ def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
     return own + [leaf for sub in branches for leaf in _leaves(sub)]
 
 
-AGNOSTIC_OCCASIONS = AGNOSTIC_CLASSES
+# THE OCCASION SIDE IS NARROWER THAN THE GUARD SIDE, and this is where that is written down.
+#
+# README:188-197 states the law: every occasion is `always`, a host tool enum, or an effect --
+# exactly three. This name used to be `= AGNOSTIC_CLASSES`, an alias, which claimed the occasion
+# side accepted all five guard-side classes, and it was READ BY NOTHING: the check below spelled
+# `AGNOSTIC_CLASSES` directly, so the alias documented a licence the code never granted and the
+# README denied. Two spellings of one rule that disagreed, and the loose one was the code.
+#
+# `composed` is a guard-side class only. Keel's pre-act occasions are `always` (they fire on
+# every Bash call, at the cost of firing always) and every separating occasion is post-act, an
+# effect (proofs/Coverings.v, the Theorem 3 discussion). A composition on the occasion side would
+# be a pre-act attempt to separate two acts, which Theorem 3 says can only be done by name.
+#
+# No shipped row exercises the gap -- all 27 occasion sides are already `always`, tool-enum or
+# effect -- so this narrows a licence nothing used rather than removing a covering anyone had.
+AGNOSTIC_OCCASIONS = frozenset({"always", "tool-enum", "effect"})
 
 
 def _discriminator(clause: "Clause") -> dict:
@@ -611,7 +652,16 @@ def _discriminator(clause: "Clause") -> dict:
 
 
 def _admit(clause: Clause) -> Clause:
-    # THE CLASS OF EVERY SIDE IS CHECKED FIRST: a side the table may not carry is refused by
+    # A RETIRED SPELLING IS REFUSED BEFORE ANYTHING ELSE, so the author gets the reason rather
+    # than a downstream symptom. Without this, `kind: tool` would fall out as
+    # CLAUSE-SIDE-UNCLASSIFIED ("no class in Coverings.v covers this shape"), which is true but
+    # tells the author nothing about the spelling that IS carried, and `unless` would be refused
+    # by nothing at all.
+    for name in ("fingerprint", "activated_by", "discharged_by"):
+        predicate = getattr(clause, name)
+        if isinstance(predicate, dict):
+            _refuse_retired_spellings(predicate, f"{clause.id}.{name}")
+    # THE CLASS OF EVERY SIDE IS CHECKED NEXT: a side the table may not carry is refused by
     # its shape, before any fixture is graded against it.
     for name in ("fingerprint", "activated_by", "discharged_by"):
         predicate = getattr(clause, name)
@@ -631,11 +681,13 @@ def _admit(clause: Clause) -> Clause:
         # On the occasion side a miss is the costly act proceeding with its guard removed. So a
         # nominal occasion is refused outright: not carried as `open` with a theorem instance
         # documenting the gap, which is what this table did for sixteen sides, but refused.
-        if name in ("fingerprint", "activated_by") and classify_side(predicate) not in AGNOSTIC_CLASSES:
+        if name in ("fingerprint", "activated_by") and classify_side(predicate) not in AGNOSTIC_OCCASIONS:
             raise ClauseError(
                 "CLAUSE-OCCASION-NOMINAL",
-                f"{clause.id}.{name}: selects the act by the program's name; an act spelled "
-                f"under another name proceeds unguarded (Theorem 3, Theorem 5)")
+                f"{clause.id}.{name}: an occasion is `always`, a host tool enum, or an effect "
+                f"(README's occasion law); {classify_side(predicate)!r} selects the act some "
+                f"other way, and an act spelled under another name proceeds unguarded "
+                f"(Theorem 3, Theorem 5)")
         # A GUARD MUST BE NAME-AGNOSTIC TOO. Tool calls are agnostic: a guard is discharged by
         # a host tool call (the closed `tool_name` enum) or by an observed effect of the
         # discharging act (a datum the trace holds, a report shape where no trace exists),
@@ -745,8 +797,8 @@ def _admit(clause: Clause) -> Clause:
     # direction -- a false discharge removes the guard while the costly act proceeds.
     #
     # The event is built by `_fixture_event` from the guard's OWN declaration, so a guard reading
-    # `tool_name` takes tool names and C08's `nonzero` guard on `tool_response.exit_code` at
-    # PostToolUse takes exit codes, without this law knowing anything special about either.
+    # `tool_name` takes tool names and C08's `report_fail` effect guard on a PostToolUse Bash
+    # record takes an effect record, without this law knowing anything special about either.
     #
     # Every command-string `fixtures_no_discharge` set carries the ECHO-MENTION of one of its own
     # positives. That single case is what found C09: `echo 'ps aux | grep -v $$'` discharged the

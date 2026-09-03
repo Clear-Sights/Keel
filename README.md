@@ -73,7 +73,25 @@ one of the 24 clause demands is read at Stop by one mechanism
 
 <!-- END GENERATED: stop-ledger-read -->
 A licence is an **observed discharge**, never an absent demand — the absence of evidence is never
-treated as permission. The ledger's properties, each stated in the code it constrains:
+treated as permission.
+
+<!-- BEGIN GENERATED: demand-moments | source: plugin/keel/clauses.json | regenerate: python3 tools/render_views.py --write -->
+
+A demand is not always raisable before the act it names. Of the 24 clauses, only
+3 can deny the costly call itself on its way in; the rest are read at a moment the
+clause's own occasion fixes, and an effect occasion cannot be read until the act has
+happened, so its demand refuses the *next* act rather than this one:
+
+| The demand is raised | Clauses | Because the occasion is |
+| --- | --- | --- |
+| before the act | 3 | a closed host `tool_name` enum, read on `PreToolUse` |
+| at the session's first act | 3 | `always`, read on `PreToolUse` |
+| after the act, from what it did | 14 | an observed effect, read on `PostToolUse` |
+| at the ending | 4 | `always`, read at `Stop` |
+
+<!-- END GENERATED: demand-moments -->
+
+The ledger's properties, each stated in the code it constrains:
 
 - **Obligations are un-windowed within a session.** A promise does not expire because an hour
   passed; events may be windowed for cost, demands never are.
@@ -83,10 +101,21 @@ treated as permission. The ledger's properties, each stated in the code it const
   with the clause directory emptied, `rm -rf build/` was ALLOWED and Stop returned `{}` — a clean
   bill of health from a gate that checked nothing — so a zero-clause load now blocks Stop rather
   than passing it.
-- **The hash chain detects corruption, not forgery.** The ledger is written by the same agent it
-  constrains. The chain detects accidental corruption, a truncated write, bit-rot; it does NOT
-  detect deliberate forgery — anyone who can append to the ledger can append a matching hash. No
-  mechanism inside this trust boundary can do better.
+- **The hash chain is read once per session, at SessionStart, and it is advisory.** Every ledger
+  row carries the hash of the row before it, computed as the row is appended.
+  `dispatch.session_start` calls `Ledger.verify_chain`, which re-derives that chain and names the
+  first divergent hash; a divergence is written to the journal as a `chain_divergent` fault and
+  **does not block** (`failed_closed=False`) — a session must not be stopped by a corruption check
+  on its own log. The call sits deliberately **before** compaction, because compaction rewrites
+  every kept row's `prev` and `hash`, so a divergence compaction is about to erase must be read
+  first or it is destroyed unread.
+  What that buys, and what it does not: the check runs **once, at the start**, so corruption
+  introduced *during* a session is not noticed until the next one begins. What a verification
+  catches is accidental corruption, a truncated write, bit-rot — an altered row, a broken or
+  missing hash. What it does not catch is **the deletion of a valid tail** (a shorter chain
+  re-derives cleanly) and **forgery** — the ledger is written by the same agent it constrains, so
+  anyone who can append a row can append its matching hash. No mechanism inside this trust
+  boundary can do better than that last one.
 - **A measured scoping limit (2026-08-14, observed, not theorised).** A nested `claude -p`
   invocation reported the SAME `session_id` as the session that launched it, with `agent_id`
   empty. Scope is keyed on `(session_id, agent_id)`, so a nested run shares its parent's ledger
@@ -110,7 +139,7 @@ treated as permission. The ledger's properties, each stated in the code it const
   [`POINTS.md`](plugin/POINTS.md) and [`ACTS.md`](plugin/ACTS.md) beside it) — the positive
   half. For each denied moment it names the construction that makes the guard unnecessary from
   then on, and for the moments that leave no mark in a call sequence — budgets, plans, defaults,
-  reports — the seven acts[^m-act-count] carry the same reading. Each clause row's `construction` field
+  reports — the ten acts[^m-act-count] carry the same reading. Each clause row's `construction` field
   anchors into `POINTS.md`, so every negative is followed by its positive as a schema property
   the loader checks, not a cross-document convention.
 
@@ -163,12 +192,15 @@ cannot be told from the act the demand guards against.
 
 Limits before capability claims — read these before the clause table below.
 
-- **The ledger constrains an honest-but-forgetful agent, not a forging one.** Its hash chain
-  detects altered rows and broken or missing hashes, but not deletion of a valid tail; a writer
-  able to forge rows can recompute hashes.
-- **A licence is scoped to its clause and session** — one observed guard licenses later
-  matching calls for that clause anywhere in the same session, not just against the same file,
-  branch, or command.
+- **The ledger constrains an honest-but-forgetful agent, not a forging one.** Its hash chain is
+  re-derivable, and `session_start` re-derives it once per session: that names an altered row or a
+  broken or missing hash, still misses the deletion of a valid tail, and is no defence at all
+  against a writer able to forge rows, who can recompute hashes anyway. The divergence is recorded
+  as a fault, never enforced as a denial.
+- **A licence is scoped to `(session, agent, clause, subject)`** — one observed guard licenses
+  later matching calls for that clause and that subject, by the same agent in the same session.
+  It is session-wide only where the subject itself is session-wide (the empty key); otherwise a
+  Read of one file does not pay for the traversal of another.
 - **A discharge records what the guard act did, never what it was called.** A guard is a
   host tool call (`Read`, `Grep`, `Glob`, `AskUserQuestion` — the closed `tool_name` enum) or an
   observed **effect** of the guard act. Where a trace exists the effect is a datum checked
@@ -190,29 +222,46 @@ Limits before capability claims — read these before the clause table below.
   demand it passes only with a leading `# keel-guard: <clause id>` line naming the demand it
   will pay; after it ran, its effect record either paid the demand or did not. A committed call
   that paid nothing is a `broken_commitment` in the journal and the demand stays open, so the
-  next act is refused again. Host reads (`Read`, `Grep`, `Glob`) are never refused by an open
-  demand: they cannot be the act, and they are how most guards are paid.
+  next act is refused again. Host reads (`Read`, `Grep`, `Glob`) and the non-acts
+  (`AskUserQuestion`, `ExitPlanMode`) are never refused by an open demand: neither can be the
+  act — a read cannot change the world, and neither `AskUserQuestion` nor `ExitPlanMode`
+  changes anything either — and refusing
+  a non-act once blocked a refused push behind the very question that would have resolved it.
 - **No occasion reads a program's name.** Before the act, the name is the only thing that
   distinguishes one command from another (`proofs/Coverings.v`, Theorem 3), so an occasion that
   read it would miss the same act spelled differently, with its guard removed. Every occasion is
-  therefore one of: `always` (three clauses fire on the first act of a session), a host tool
-  enum, or an **effect** — what the act did to the worktree, the refs, the process table, the
-  network or its own output, observed by the hook before and after the call
-  (`keel/effects.py`, Theorem 8). An effect occasion is enforced after the act: the demand it
-  raises refuses the *next* act until the guard is seen, and the snapshot retains the pre-image
-  of anything the act changed or removed. The loader refuses a nominal occasion
-  (`CLAUSE-OCCASION-NOMINAL`).
+  therefore one of: `always` (three clauses fire on the first act of a session — a call that
+  discharges any one of them counts as progress and is not itself refused by the other two, or
+  no session could ever begin), a host tool enum, or an **effect** — what the act did to the
+  worktree, the refs, the process table, the network or its own output, observed by the hook
+  before and after the call (`keel/effects.py`, Theorem 8). An effect occasion is enforced after
+  the act: the demand it raises refuses the *next* act until the guard is seen, and the snapshot
+  retains the pre-image of anything the act changed or removed. The loader refuses a nominal
+  occasion (`CLAUSE-OCCASION-NOMINAL`).
 - **An observation is the act's only if it is assigned to it, by one rule.** A process is
   assigned by lineage (the session's tree, its process sessions, or a process session born
   during the act); the host's connection counter has no lineage and is assigned by the idle
   gap — if it moved while no act of this session was running, its movement across the act is
   NOT-EVALUABLE, never the act's. A network effect is any assigned outbound connection, so the
   first `git fetch` of a session raises `U06` and `U24` once; on a host that opens connections
-  by itself they are raised once as NOT-EVALUABLE. A process effect is a pre-existing process
-  of this session ending during a call; a report effect is a closed set of PASS/FAIL/clean
-  datum shapes read off stdout. Each costs at most one interruption per session, because a
-  licence is session-scoped. An effect the observer could not measure — no snapshot, no
-  repository, `git` timing out — is NOT-EVALUABLE and the occasion is treated as live.
+  by itself they are raised once anyway, on an unassignable movement. A process effect is a
+  pre-existing process of this session ending during a call; a report effect is a closed set of
+  PASS/FAIL/clean datum shapes read off stdout. Each costs at most one interruption per session,
+  because a licence is session-scoped. An effect the observer could not measure — no snapshot, no
+  repository, `git` timing out — is NOT-EVALUABLE and the occasion is treated as **live**, which
+  is the fail-closed reading and what actually runs. NOT-EVALUABLE is not a third outcome an
+  operator sees: `clauses.match` says it on the hook's stderr, which reaches the debug log and
+  nothing else, and the demand that lands in the ledger carries the clause's ordinary reason.
+  So an unmeasured occasion and a measured one are told apart in the log, never on the wire.
+- **A network read is a connection this session opened, not a service it reached.** `U06` asks
+  for "a read of the network that changes nothing and reports no failure", and all the observer
+  has is the host's connection counter: an assigned outbound connection from an act that changed
+  no file, moved no ref, left no process and reported no failure. A quiet connect to a closed
+  port satisfies that — measured, not theorised — so the effect cannot distinguish an
+  authenticated canary from a refused TCP handshake, and it is stated here rather than implied
+  away. What it does still refuse is a *mention*: claiming a canary ran pays nothing, because
+  either the counter moved during the act or it did not. The limit is recorded beside the effect
+  it belongs to in `keel/effects.py` and re-measured by the `net_read_counts_a_closed_port` cell.
 - **It does not judge prose.** Every fingerprint is an exact predicate over command, tool, or
   path identity; a clause that would need to infer intent from a command string is not admitted.
 - **The denial is verified; the behaviour change is not.** "Prevented" here means exactly one
@@ -290,24 +339,43 @@ half in [`plugin/POINTS.md`](plugin/POINTS.md).
 
 <!-- END GENERATED: clause-routes -->
 
-Two clauses[^m-local-tooling-clauses] (`U01`, `U02`) name Keel's own probe in their guards; the
-loader refuses the table if that file is not in the bundle. Their occasions are effects — a
+One clause[^m-local-tooling-clauses] (`U01`) names Keel's own probe in its guard, and names it as
+an example: the guard is discharged by *any* probe that prints a report, so the file is a
+convenience the bundle ships and not a requirement — the loader does not refuse a table when it
+is absent, and a clause that did require it would be a guard selecting by program name, which the
+loader refuses outright (`CLAUSE-GUARD-NOMINAL`). `U01`'s occasion is an effect — a
 process that survives the call that launched it — so a repository with no launcher of its own
-never triggers them, and one that launches workers under any name does. `U25`'s occasion is a
-clean scan report in the call's output, whatever printed it; it is discharged only by a test
-invocation whose command text contains `prefix` or `distractor`, and per the discharge limit above
-the ledger records that such a command was *invoked*, not that the regression test exists or
-passed.
+never triggers it, and one that launches workers under any name does. `U25`'s occasion is a
+clean scan report in the call's output, whatever printed it; it is discharged by the observed
+effect `report_fail` — *some* act of this session printed a report with findings — and by nothing
+else. It is **not** keyed on the command text: this paragraph used to say the discharge required
+a command containing `prefix` or `distractor`, and no such condition ships or could. A textual
+guard is refused by the loader (`CLAUSE-TEXT-COVERING`, Theorem 1), so the shipped guard is
+strictly weaker than that sentence claimed — the observation is "a scanner was seen finding
+something", not "the prefix-distractor regression was the thing run".
 
 ## Evidence
 
 `python3 eval/replay.py` from the repository root replays recorded sessions through the real
 dispatcher — **every clause has a session that drives it**, each denied at or before the event
 where the session went wrong, and each required to name the clause it declares rather than
-merely to deny, so a session is evidence about its own row and not about the table. 10
-sessions[^m-derailments] end at the refusal; 15 continue through the guard and require the same
-call to pass afterward; one benign control stays silent — 26/26,[^m-replay] standard library
+merely to deny, so a session is evidence about its own row and not about the table. 9
+sessions[^m-derailments] end at the refusal; 17 continue through the guard and require the same
+call to pass afterward; one benign control stays silent — 27/27,[^m-replay] standard library
 only, and succeeds iff every session meets its expectation.
+
+One of those sessions is replayed a second time with its authored effect records **stripped**, in
+a git repository the replay builds and mutates for real, so the live observer — not the corpus —
+has to produce the record the decision is made from. Every clause the recorded run blocks on must
+be named by the live run too, or the replay fails. Without it the corpus proved only that the
+dispatcher reads records correctly. `dispatch._effect_record` returns immediately when an event
+already carries a record, so no authored session ever reaches `effects.delta`: with that function
+and both report readings replaced by constant blind values, the corpus replay was green and
+exited 0. The live lane is what turns that mutation red (`replay_sees_a_blind_observer`).
+
+A run in which no session produced a denial at all is **NOT-EVALUABLE** (exit 2), never a pass: a
+dispatcher whose handlers all return `{}` satisfies the benign control, and a suite whose only
+green comes from silence is measuring nothing.
 
 The sessions are generated from `eval/generate_corpus.py` (`--check` is a gate), so every
 recorded effect is explicit: a `PostToolUse` event carries the full observation record, and an
@@ -324,12 +392,42 @@ rather than hidden by it.
 axioms, what each class of covering can be: a covering over the raw command text is never
 mention-immune (Theorem 1); one over a segment's leading program is, provided its vocabulary
 excludes the quoting program (Theorem 2), and is monotone in that vocabulary (Theorem 5) — which
-is why no side of the table is one; a
-covering over the pipe topology is name-agnostic (Theorem 4); a positive obligation that compares
-the run's own datum has an empty evasion set (Theorem 7); a covering over what the act did reads
-no segment, so it is name-agnostic and separates byte-identical commands by their effects
-(Theorem 8); an ordering enforced backward rejects every trace the inductive `violates`
-describes (Theorem 8a).
+is why no side of the table is one; a covering over the pipe topology is name-agnostic
+(Theorem 4); a positive obligation that compares the run's own datum has an empty evasion set
+(Theorem 7); a covering over what the act did reads no segment, so it is name-agnostic and
+separates byte-identical commands by their effects (Theorem 8); an ordering enforced backward
+rejects every trace the inductive `violates` describes (Theorem 8a). Added for the classes the
+loader was already assuming and this file did not state: a disjunction or conjunction of
+name-agnostic coverings is name-agnostic (`any_of_name_agnostic`, `all_of_name_agnostic`); a
+covering that reads only the host's own `tool_name` field is mention-immune, since a mention
+arrives as a Bash call and the host reports the quoting program
+(`host_enum_immune`); the `always` covering reads no segment, so renaming changes nothing it
+could see (`always_is_name_agnostic`); a composition with a non-vacuous textual disjunct is not
+mention-immune, because the disjunct alone already defeats it
+(`disj_with_textual_not_mention_immune`); and NOT-EVALUABLE is live — an unmeasured occasion is
+treated as fired and an unmeasured guard as unpaid, so no trace with an unmeasured guard is ever
+licensed (`unmeasured_occasion_fires`, `unmeasured_guard_never_licenses`).
+
+**Which of these the shipped table actually instantiates, and which are proven only.** All 51
+sides of the 24 clauses fall into three classes: `effect` and `composed` (36 sides, Theorem 8
+with `any_of_name_agnostic` and `all_of_name_agnostic`), `always` (7 sides, the Theorem 3
+boundary) and `tool-enum` (8 sides,
+`host_enum_immune`). `tools/check_coq.py` prints exactly that census, so the claim is a build
+output, not a paragraph. Everything else here is **proven and instantiated by nothing**:
+
+- **Theorem 4 (topology).** No clause side reads pipe topology or segment count.
+- **Theorems 6 and 7 (the positive form).** No side is `positive`. The only code that ever
+  produced that class was a `kind: nonzero` predicate with zero shipped uses, which compared one
+  field to zero rather than a claimed datum to an observed one — not the Definition the theorems
+  are about. It was removed; a `positive` side would need a kind that reads both fields.
+- **Theorem 2 (structural mention-immunity).** No code element reads `scan` at all, so no side is
+  `structural`; Theorem 2 is what licenses the *refusal* of textual sides, not a side of its own.
+- **`ReadsFrom` (closure).** A Definition, deliberately with no theorem: nothing in `Coverings.v`
+  separates host, world and datum by proof, and `classify_side` assigning a side to one of them is
+  code, not a result.
+
+A proven form with no instance is not a capability. These are listed so the table cannot be read
+as covering ground the theory merely describes.
 
 The theory is not cited over the table; it is applied to it. `keel/clauses.py` reads the class of
 every side from its shape (`classify_side`) and refuses what the class forbids — a textual side,
