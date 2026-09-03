@@ -1,0 +1,247 @@
+id	kind	source	statement	depends_on
+M-COV-001	Section	proofs/Coverings.v:26	Section Coverings.	
+M-COV-002	Variable	proofs/Coverings.v:28	Variable Text : Type. (* a raw command, as the host delivers it *)	
+M-COV-003	Variable	proofs/Coverings.v:29	Variable Program : Type. (* the name of an invoked program *)	
+M-COV-004	Definition	proofs/Coverings.v:32	Record Segment := { seg_argv : list Program }.	M-COV-003
+M-COV-005	Variable	proofs/Coverings.v:34	Variable scan : Text -> list Segment. (* the ONE object every structural covering reads *)	M-COV-002,M-COV-004
+M-COV-006	Variable	proofs/Coverings.v:35	Variable mention : Text -> Text. (* the embedding e(c) = echo '<c>' *)	M-COV-002
+M-COV-007	Variable	proofs/Coverings.v:36	Variable infix : Text -> Text -> Prop. (* infix c d : c occurs verbatim inside d *)	M-COV-002
+M-COV-008	Hypothesis	proofs/Coverings.v:39	Hypothesis mention_preserves : forall c, infix c (mention c).	M-COV-006,M-COV-007
+M-COV-009	Variable	proofs/Coverings.v:43	Variable quoting_program : Program.	M-COV-003
+M-COV-010	Hypothesis	proofs/Coverings.v:44-45	Hypothesis scan_mention_single : forall c, scan (mention c) = [ {| seg_argv := [quoting_program] |} ].	M-COV-005,M-COV-006,M-COV-009
+M-COV-011	Definition	proofs/Coverings.v:47	Definition Covering := Text -> Prop.	M-COV-002
+M-COV-012	Definition	proofs/Coverings.v:51	Definition mention_immune (P : Covering) : Prop := forall c, ~ P (mention c).	M-COV-006,M-COV-011
+M-COV-013	Definition	proofs/Coverings.v:56-57	Definition textual (P : Covering) : Prop := forall c d, P c -> infix c d -> P d.	M-COV-007,M-COV-011
+M-COV-014	Definition	proofs/Coverings.v:60	Definition non_vacuous (P : Covering) : Prop := exists c, P c.	M-COV-011
+M-COV-015	Theorem	proofs/Coverings.v:65-66	Theorem textual_never_immune : forall P, textual P -> non_vacuous P -> ~ mention_immune P.	M-COV-013,M-COV-014,M-COV-012
+M-COV-016	Definition	proofs/Coverings.v:74-76	Definition structural (wanted : Program -> Prop) : Covering := fun c => exists s p rest, In s (scan c) /\ seg_argv s = p :: rest /\ wanted p.	M-COV-005,M-COV-011,M-COV-003
+M-COV-017	Theorem	proofs/Coverings.v:80-81	Theorem structural_immune : forall wanted, ~ wanted quoting_program -> mention_immune (structural wanted).	M-COV-016,M-COV-012,M-COV-009
+M-COV-018	Corollary	proofs/Coverings.v:93-95	Corollary textual_and_structural_incompatible : forall wanted, ~ wanted quoting_program -> non_vacuous (structural wanted) -> ~ textual (structural wanted).	M-COV-016,M-COV-014,M-COV-013,M-COV-015,M-COV-017
+M-COV-019	Definition	proofs/Coverings.v:108-109	Definition rename (r : Program -> Program) (s : Segment) : Segment := {| seg_argv := map r (seg_argv s) |}.	M-COV-003,M-COV-004
+M-COV-020	Definition	proofs/Coverings.v:111-112	Definition name_agnostic (Q : list Segment -> Prop) : Prop := forall r segs, Q segs <-> Q (map (rename r) segs).	M-COV-004,M-COV-019
+M-COV-021	Definition	proofs/Coverings.v:127-128	Definition nominal_segs (wanted : Program -> Prop) (segs : list Segment) : Prop := exists s p rest, In s segs /\ seg_argv s = p :: rest /\ wanted p.	M-COV-003,M-COV-004
+M-COV-022	Theorem	proofs/Coverings.v:130-132	Theorem name_agnostic_cannot_separate_by_name : forall (wanted : Program -> Prop) p q, wanted p -> ~ wanted q -> ~ name_agnostic (nominal_segs wanted).	M-COV-021,M-COV-020
+M-COV-023	Theorem	proofs/Coverings.v:150-151	Theorem topology_is_name_agnostic : forall n, name_agnostic (fun segs => length segs = n).	M-COV-020
+M-COV-024	Definition	proofs/Coverings.v:164-165	Definition effect {Delta : Type} (E : Delta -> Prop) (d : Delta) : list Segment -> Prop := fun _ => E d.	M-COV-004
+M-COV-025	Theorem	proofs/Coverings.v:167-168	Theorem effect_is_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta), name_agnostic (effect E d).	M-COV-024,M-COV-020
+M-COV-026	Theorem	proofs/Coverings.v:175-177	Theorem effect_separates_same_segments : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' -> forall segs, effect E d segs /\ ~ effect E d' segs.	M-COV-024
+M-COV-027	Theorem	proofs/Coverings.v:190-192	Theorem nominal_monotone : forall (V W : Program -> Prop), (forall p, V p -> W p) -> forall c, structural V c -> structural W c.	M-COV-016
+M-COV-028	Variable	proofs/Coverings.v:223	Variable Datum : Type.	
+M-COV-029	Variable	proofs/Coverings.v:224	Variable claimed : Text -> option Datum. (* what the report SAYS the run produced *)	M-COV-002,M-COV-028
+M-COV-030	Variable	proofs/Coverings.v:225	Variable observed : Text -> option Datum. (* what the trace shows it DID produce *)	M-COV-002,M-COV-028
+M-COV-031	Definition	proofs/Coverings.v:227-228	Definition positive : Covering := fun c => exists d, claimed c = Some d /\ observed c = Some d.	M-COV-011,M-COV-029,M-COV-030
+M-COV-032	Theorem	proofs/Coverings.v:237-240	Theorem positive_needs_no_vocabulary : forall (f : Text -> Text), (forall c, claimed (f c) = claimed c) -> (forall c, observed (f c) = observed c) -> forall c, positive c <-> positive (f c).	M-COV-031,M-COV-029,M-COV-030
+M-COV-033	Theorem	proofs/Coverings.v:251-252	Theorem false_claim_always_rejected : forall c d d', claimed c = Some d -> observed c = Some d' -> d <> d' -> ~ positive c.	M-COV-031,M-COV-029,M-COV-030
+M-COV-034	Corollary	proofs/Coverings.v:262-263	Corollary no_claim_is_not_a_pass : forall c, claimed c = None -> ~ positive c.	M-COV-031,M-COV-029
+M-COV-035	Variable	proofs/Coverings.v:279	Variable Event : Type.	
+M-COV-036	Variable	proofs/Coverings.v:280	Variable isX : Event -> Prop.	M-COV-035
+M-COV-037	Variable	proofs/Coverings.v:280	Variable isL : Event -> Prop.	M-COV-035
+M-COV-038	Inductive	proofs/Coverings.v:287-289	Inductive violates : list Event -> Prop := violates_here | violates_later.	M-COV-035,M-COV-036,M-COV-037
+M-COV-039	Constructor	proofs/Coverings.v:288	violates_here : forall e rest, isL e -> violates (e :: rest).	M-COV-038,M-COV-037
+M-COV-040	Constructor	proofs/Coverings.v:289	violates_later : forall e rest, ~ isX e -> violates rest -> violates (e :: rest).	M-COV-038,M-COV-036
+M-COV-041	Definition	proofs/Coverings.v:292-293	Definition backward (t : list Event) : Prop := forall pre e post, t = pre ++ e :: post -> isL e -> exists p, In p pre /\ isX p.	M-COV-035,M-COV-037,M-COV-036
+M-COV-042	Theorem	proofs/Coverings.v:303-304	Theorem violation_is_never_backward : forall t, violates t -> ~ backward t.	M-COV-038,M-COV-041
+M-COV-043	Corollary	proofs/Coverings.v:316-317	Corollary out_of_order_is_rejected : forall l x, isL l -> isX x -> ~ backward (l :: x :: nil).	M-COV-041,M-COV-042,M-COV-036,M-COV-037
+M-COV-044	Definition	proofs/Coverings.v:323-324	Definition forward (t : list Event) : Prop := forall e, In e t -> isX e -> exists q, In q t /\ isL q.	M-COV-035,M-COV-036,M-COV-037
+M-COV-045	Corollary	proofs/Coverings.v:326-327	Corollary forward_only_admits_the_violation : forall e, isL e -> (forall p, ~ isX p) -> forward (e :: nil).	M-COV-044,M-COV-037,M-COV-036
+M-COV-046	Variable	proofs/Coverings.v:337	Variable done : nat -> Prop. (* done i : step i of the chain has occurred *)	
+M-COV-047	Hypothesis	proofs/Coverings.v:340	Hypothesis link : forall i, done (S i) -> done i.	M-COV-046
+M-COV-048	Theorem	proofs/Coverings.v:347	Theorem chain_composes : forall j i, i <= j -> done j -> done i.	M-COV-046,M-COV-047
+M-CLS-001	Law	proofs/Clauses.v:9	SIDE A01_fingerprint: class=always closure=always	
+M-CLS-002	Law	proofs/Clauses.v:10	SIDE A01_discharged_by: class=effect closure=world effects=observed_read	
+M-CLS-003	Law	proofs/Clauses.v:11	SIDE A02_fingerprint: class=always closure=always	
+M-CLS-004	Law	proofs/Clauses.v:12	SIDE A02_discharged_by: class=composed closure=host	
+M-CLS-005	Law	proofs/Clauses.v:13	BRANCH A02_discharged_by_branch0: class=effect closure=world effects=observed_read	
+M-CLS-006	Law	proofs/Clauses.v:14	BRANCH A02_discharged_by_branch1: class=tool-enum closure=host	
+M-CLS-007	Law	proofs/Clauses.v:15	BRANCH A02_discharged_by_branch2: class=effect closure=world effects=report_paths	
+M-CLS-008	Law	proofs/Clauses.v:16	SIDE A03_fingerprint: class=always closure=always	
+M-CLS-009	Law	proofs/Clauses.v:17	SIDE A03_discharged_by: class=effect closure=world effects=remote_read	
+M-CLS-010	Law	proofs/Clauses.v:18	SIDE C03-verify-what-returns_fingerprint: class=always closure=always	
+M-CLS-011	Law	proofs/Clauses.v:19	SIDE C03-verify-what-returns_activated_by: class=tool-enum closure=host	
+M-CLS-012	Law	proofs/Clauses.v:20	SIDE C03-verify-what-returns_discharged_by: class=tool-enum closure=host	
+M-CLS-013	Law	proofs/Clauses.v:21	SIDE C08-check-can-fail_fingerprint: class=always closure=always	
+M-CLS-014	Law	proofs/Clauses.v:22	SIDE C08-check-can-fail_activated_by: class=effect closure=world effects=report_pass	
+M-CLS-015	Law	proofs/Clauses.v:23	SIDE C08-check-can-fail_discharged_by: class=effect closure=world effects=report_fail	
+M-CLS-016	Law	proofs/Clauses.v:24	SIDE C09-checker-excludes-self_fingerprint: class=effect closure=world effects=report_self	
+M-CLS-017	Law	proofs/Clauses.v:25	SIDE C09-checker-excludes-self_discharged_by: class=effect closure=world effects=report_listing	
+M-CLS-018	Law	proofs/Clauses.v:26	SIDE D01_fingerprint: class=tool-enum closure=host	
+M-CLS-019	Law	proofs/Clauses.v:27	SIDE D01_discharged_by: class=tool-enum closure=host	
+M-CLS-020	Law	proofs/Clauses.v:28	SIDE P01_fingerprint: class=tool-enum closure=host	
+M-CLS-021	Law	proofs/Clauses.v:29	SIDE P01_discharged_by: class=tool-enum closure=host	
+M-CLS-022	Law	proofs/Clauses.v:30	SIDE P02_fingerprint: class=tool-enum closure=host	
+M-CLS-023	Law	proofs/Clauses.v:31	SIDE P02_discharged_by: class=tool-enum closure=host	
+M-CLS-024	Law	proofs/Clauses.v:32	SIDE T01_fingerprint: class=always closure=always	
+M-CLS-025	Law	proofs/Clauses.v:33	SIDE T01_discharged_by: class=effect closure=world effects=observed_read	
+M-CLS-026	Law	proofs/Clauses.v:34	SIDE T02_fingerprint: class=always closure=always	
+M-CLS-027	Law	proofs/Clauses.v:35	SIDE T02_activated_by: class=effect closure=world effects=remote_ref_moved	
+M-CLS-028	Law	proofs/Clauses.v:36	SIDE T02_discharged_by: class=effect closure=world effects=remote_landed	
+M-CLS-029	Law	proofs/Clauses.v:37	SIDE U01_fingerprint: class=effect closure=world effects=pids_spawned	
+M-CLS-030	Law	proofs/Clauses.v:38	SIDE U01_discharged_by: class=effect closure=world effects=report_pass	
+M-CLS-031	Law	proofs/Clauses.v:39	SIDE U02_fingerprint: class=effect closure=world effects=pids_spawned_again	
+M-CLS-032	Law	proofs/Clauses.v:40	SIDE U02_discharged_by: class=effect closure=world effects=report_after_change	
+M-CLS-033	Law	proofs/Clauses.v:41	SIDE U03_fingerprint: class=effect closure=world effects=pids_gone	
+M-CLS-034	Law	proofs/Clauses.v:42	SIDE U03_discharged_by: class=effect closure=world effects=observed_read,report_pids	
+M-CLS-035	Law	proofs/Clauses.v:43	SIDE U06_fingerprint: class=effect closure=world effects=net_out	
+M-CLS-036	Law	proofs/Clauses.v:44	SIDE U06_discharged_by: class=effect closure=world effects=net_read	
+M-CLS-037	Law	proofs/Clauses.v:45	SIDE U08_fingerprint: class=effect closure=world effects=commit_signed	
+M-CLS-038	Law	proofs/Clauses.v:46	SIDE U08_discharged_by: class=effect closure=world effects=report_signature	
+M-CLS-039	Law	proofs/Clauses.v:47	SIDE U09_fingerprint: class=effect closure=world effects=head_switched	
+M-CLS-040	Law	proofs/Clauses.v:48	SIDE U09_discharged_by: class=effect closure=world effects=observed_read,report_ref	
+M-CLS-041	Law	proofs/Clauses.v:49	SIDE U10_fingerprint: class=effect closure=world effects=report_null	
+M-CLS-042	Law	proofs/Clauses.v:50	SIDE U10_discharged_by: class=composed closure=host	
+M-CLS-043	Law	proofs/Clauses.v:51	BRANCH U10_discharged_by_branch0: class=effect closure=world effects=report_structured	
+M-CLS-044	Law	proofs/Clauses.v:52	BRANCH U10_discharged_by_branch1: class=tool-enum closure=host	
+M-CLS-045	Law	proofs/Clauses.v:53	SIDE U12_fingerprint: class=effect closure=world effects=files_changed	
+M-CLS-046	Law	proofs/Clauses.v:54	SIDE U12_discharged_by: class=composed closure=host	
+M-CLS-047	Law	proofs/Clauses.v:55	BRANCH U12_discharged_by_branch0: class=tool-enum closure=host	
+M-CLS-048	Law	proofs/Clauses.v:56	BRANCH U12_discharged_by_branch1: class=tool-enum closure=host	
+M-CLS-049	Law	proofs/Clauses.v:57	BRANCH U12_discharged_by_branch2: class=effect closure=world effects=report_paths	
+M-CLS-050	Law	proofs/Clauses.v:58	SIDE U13_fingerprint: class=effect closure=world effects=files_changed	
+M-CLS-051	Law	proofs/Clauses.v:59	SIDE U13_discharged_by: class=composed closure=host	
+M-CLS-052	Law	proofs/Clauses.v:60	BRANCH U13_discharged_by_branch0: class=tool-enum closure=host	
+M-CLS-053	Law	proofs/Clauses.v:61	BRANCH U13_discharged_by_branch1: class=effect closure=world effects=report_paths	
+M-CLS-054	Law	proofs/Clauses.v:62	SIDE U19_fingerprint: class=effect closure=world effects=files_changed	
+M-CLS-055	Law	proofs/Clauses.v:63	SIDE U19_discharged_by: class=composed closure=host	
+M-CLS-056	Law	proofs/Clauses.v:64	BRANCH U19_discharged_by_branch0: class=tool-enum closure=host	
+M-CLS-057	Law	proofs/Clauses.v:65	BRANCH U19_discharged_by_branch1: class=tool-enum closure=host	
+M-CLS-058	Law	proofs/Clauses.v:66	BRANCH U19_discharged_by_branch2: class=effect closure=world effects=report_paths	
+M-CLS-059	Law	proofs/Clauses.v:67	SIDE U20_fingerprint: class=effect closure=world effects=files_removed,head_reset	
+M-CLS-060	Law	proofs/Clauses.v:68	SIDE U20_discharged_by: class=effect closure=world effects=report_fail,report_pass	
+M-CLS-061	Law	proofs/Clauses.v:69	SIDE U24_fingerprint: class=effect closure=world effects=net_out	
+M-CLS-062	Law	proofs/Clauses.v:70	SIDE U24_discharged_by: class=effect closure=world effects=report_nowarn	
+M-CLS-063	Law	proofs/Clauses.v:71	SIDE U25_fingerprint: class=effect closure=world effects=report_clean	
+M-CLS-064	Law	proofs/Clauses.v:72	SIDE U25_discharged_by: class=effect closure=world effects=report_fail	
+M-CLS-065	Inductive	proofs/Clauses.v:74-111	Inductive EffectSide := <37 constructors, one per clause-side instantiating class effect>.	
+M-CLS-066	Constructor	proofs/Clauses.v:75-111	A01_discharged_by : EffectSide	M-CLS-065
+M-CLS-067	Constructor	proofs/Clauses.v:75-111	A02_discharged_by_branch0 : EffectSide	M-CLS-065
+M-CLS-068	Constructor	proofs/Clauses.v:75-111	A02_discharged_by_branch2 : EffectSide	M-CLS-065
+M-CLS-069	Constructor	proofs/Clauses.v:75-111	A03_discharged_by : EffectSide	M-CLS-065
+M-CLS-070	Constructor	proofs/Clauses.v:75-111	C08_check_can_fail_activated_by : EffectSide	M-CLS-065
+M-CLS-071	Constructor	proofs/Clauses.v:75-111	C08_check_can_fail_discharged_by : EffectSide	M-CLS-065
+M-CLS-072	Constructor	proofs/Clauses.v:75-111	C09_checker_excludes_self_fingerprint : EffectSide	M-CLS-065
+M-CLS-073	Constructor	proofs/Clauses.v:75-111	C09_checker_excludes_self_discharged_by : EffectSide	M-CLS-065
+M-CLS-074	Constructor	proofs/Clauses.v:75-111	T01_discharged_by : EffectSide	M-CLS-065
+M-CLS-075	Constructor	proofs/Clauses.v:75-111	T02_activated_by : EffectSide	M-CLS-065
+M-CLS-076	Constructor	proofs/Clauses.v:75-111	T02_discharged_by : EffectSide	M-CLS-065
+M-CLS-077	Constructor	proofs/Clauses.v:75-111	U01_fingerprint : EffectSide	M-CLS-065
+M-CLS-078	Constructor	proofs/Clauses.v:75-111	U01_discharged_by : EffectSide	M-CLS-065
+M-CLS-079	Constructor	proofs/Clauses.v:75-111	U02_fingerprint : EffectSide	M-CLS-065
+M-CLS-080	Constructor	proofs/Clauses.v:75-111	U02_discharged_by : EffectSide	M-CLS-065
+M-CLS-081	Constructor	proofs/Clauses.v:75-111	U03_fingerprint : EffectSide	M-CLS-065
+M-CLS-082	Constructor	proofs/Clauses.v:75-111	U03_discharged_by : EffectSide	M-CLS-065
+M-CLS-083	Constructor	proofs/Clauses.v:75-111	U06_fingerprint : EffectSide	M-CLS-065
+M-CLS-084	Constructor	proofs/Clauses.v:75-111	U06_discharged_by : EffectSide	M-CLS-065
+M-CLS-085	Constructor	proofs/Clauses.v:75-111	U08_fingerprint : EffectSide	M-CLS-065
+M-CLS-086	Constructor	proofs/Clauses.v:75-111	U08_discharged_by : EffectSide	M-CLS-065
+M-CLS-087	Constructor	proofs/Clauses.v:75-111	U09_fingerprint : EffectSide	M-CLS-065
+M-CLS-088	Constructor	proofs/Clauses.v:75-111	U09_discharged_by : EffectSide	M-CLS-065
+M-CLS-089	Constructor	proofs/Clauses.v:75-111	U10_fingerprint : EffectSide	M-CLS-065
+M-CLS-090	Constructor	proofs/Clauses.v:75-111	U10_discharged_by_branch0 : EffectSide	M-CLS-065
+M-CLS-091	Constructor	proofs/Clauses.v:75-111	U12_fingerprint : EffectSide	M-CLS-065
+M-CLS-092	Constructor	proofs/Clauses.v:75-111	U12_discharged_by_branch2 : EffectSide	M-CLS-065
+M-CLS-093	Constructor	proofs/Clauses.v:75-111	U13_fingerprint : EffectSide	M-CLS-065
+M-CLS-094	Constructor	proofs/Clauses.v:75-111	U13_discharged_by_branch1 : EffectSide	M-CLS-065
+M-CLS-095	Constructor	proofs/Clauses.v:75-111	U19_fingerprint : EffectSide	M-CLS-065
+M-CLS-096	Constructor	proofs/Clauses.v:75-111	U19_discharged_by_branch2 : EffectSide	M-CLS-065
+M-CLS-097	Constructor	proofs/Clauses.v:75-111	U20_fingerprint : EffectSide	M-CLS-065
+M-CLS-098	Constructor	proofs/Clauses.v:75-111	U20_discharged_by : EffectSide	M-CLS-065
+M-CLS-099	Constructor	proofs/Clauses.v:75-111	U24_fingerprint : EffectSide	M-CLS-065
+M-CLS-100	Constructor	proofs/Clauses.v:75-111	U24_discharged_by : EffectSide	M-CLS-065
+M-CLS-101	Constructor	proofs/Clauses.v:75-111	U25_fingerprint : EffectSide	M-CLS-065
+M-CLS-102	Constructor	proofs/Clauses.v:75-111	U25_discharged_by : EffectSide	M-CLS-065
+M-CLS-103	Theorem	proofs/Clauses.v:113-121	Theorem effect_sides_read_the_world_not_the_command : forall (s : EffectSide) (D : Type) (E : D -> Prop) (d d' : D), E d -> ~ E d' -> name_agnostic string (effect string E d) /\ (forall segs, effect string E d segs /\ ~ effect string E d' segs).	M-CLS-065,M-COV-025,M-COV-026
+M-LAW-001	Law	plugin/keel/clauses.py:521	CLAUSE-EFFECT-UNKNOWN: a predicate leaf of kind effect names an effect not in _effects.EFFECTS: not an effect the observer measures.	
+M-LAW-002	Law	plugin/keel/clauses.py:528-530	CLAUSE-NONZERO-NOT-RESPONSE: a nonzero predicate must read tool_response.* (Thm 6, 7 compare a datum the trace produced to one the report states); reading any other field is fixture bait, a positive covering dead in production.	
+M-LAW-003	Law	plugin/keel/clauses.py:531-537	CLAUSE-REGEX-INVALID: a regex predicate's pattern or unless entries must compile as a valid regex.	
+M-LAW-004	Law	plugin/keel/clauses.py:538-554	CLAUSE-KEY-FROM-INVALID: a key_from must be a nonempty string, or a dict with a nonempty on and, if present, a compilable pattern and an int-or-string group.	
+M-LAW-005	Law	plugin/keel/clauses.py:558-579	CLAUSE-PROBE-INVALID: a probe must declare cmd as a nonempty list of nonempty strings, timeout_ms an int in (0, PROBE_TIMEOUT_CEILING_MS], and a valid expect (empty, nonempty, or {regex: str} that compiles).	
+M-LAW-006	Law	plugin/keel/clauses.py:567-574	CLAUSE-PROBE-MUTATING: a probe's argv[0] must carry no path separator and the whole argv must be in _READ_ONLY_PROBES: a path-qualified or non-allowlisted probe is refused, since normalising to the basename let /tmp/evil/git and ./git through.	
+M-LAW-007	Law	plugin/keel/clauses.py:620-624	CLAUSE-TEXT-COVERING: a fingerprint/activated_by/discharged_by predicate classified textual reads the raw command as text; by Theorem 1 no pattern edit makes that mention-immune, so it is refused with no exemption to write.	
+M-LAW-008	Law	plugin/keel/clauses.py:625-628	CLAUSE-SIDE-UNCLASSIFIED: a predicate whose shape classify_side reports as unclassified is refused: no class in Coverings.v covers this shape.	
+M-LAW-009	Law	plugin/keel/clauses.py:634-638	CLAUSE-OCCASION-NOMINAL: an occasion (fingerprint or activated_by) not classified in AGNOSTIC_CLASSES selects the act by the program's name; an act spelled under another name proceeds unguarded (Theorem 3, Theorem 5).	
+M-LAW-010	Law	plugin/keel/clauses.py:645-649	CLAUSE-GUARD-NOMINAL: a discharged_by predicate not classified in AGNOSTIC_CLASSES names the program that discharges; a guard is a host tool call or an observed effect of the discharging act, never a spelling.	
+M-LAW-011	Law	plugin/keel/clauses.py:653-656	CLAUSE-GUARD-ALWAYS: a discharged_by of kind always is paid by any act at all: it observes nothing, so it is refused rather than carried as a covering with nothing to cover.	
+M-LAW-012	Law	plugin/keel/clauses.py:657-658	CLAUSE-NO-ACTIVATION-FIXTURES: a clause declaring activated_by must declare fixtures_activate.	
+M-LAW-013	Law	plugin/keel/clauses.py:659-662	CLAUSE-ACTIVATION-FIXTURE-MISS: every fixture in fixtures_activate must satisfy the clause's activated_by predicate.	
+M-LAW-014	Law	plugin/keel/clauses.py:663-664	CLAUSE-EVENT-UNKNOWN: clause.event must be one of the five events in _EVENTS that may carry enforcement, a strict subset of the eight the dispatcher routes.	
+M-LAW-015	Law	plugin/keel/clauses.py:665-666	CLAUSE-NO-FIXTURES: a clause must declare both fixtures_pos and fixtures_neg.	
+M-LAW-016	Law	plugin/keel/clauses.py:698-700	CLAUSE-EFFECT-EVENT: a clause whose fingerprint classifies as effect is observed after the act, so it must declare event PostToolUse.	
+M-LAW-017	Law	plugin/keel/clauses.py:702-707	CLAUSE-SUBJECT-UNKEYABLE-EFFECT: a subject keyed on an effect datum must name exactly one effect in KEYABLE_EFFECTS, the record carries it as a list, or no demand could ever be raised under it.	
+M-LAW-018	Law	plugin/keel/clauses.py:708-710	CLAUSE-FIXTURE-POS-MISS: every fixture in fixtures_pos must satisfy the clause's discriminator predicate (fingerprint, or discharged_by for a terminal clause).	
+M-LAW-019	Law	plugin/keel/clauses.py:711-736	CLAUSE-FIXTURE-POS-UNKEYABLE: a positive fixture that matches the fingerprint but whose subject extractor finds no operand in it is refused: the clause would abstain and that occasion would never be denied, even though the fixture list asserts it covers it.	
+M-LAW-020	Law	plugin/keel/clauses.py:737-739	CLAUSE-FIXTURE-NEG-HIT: no fixture in fixtures_neg may satisfy the clause's discriminator predicate.	
+M-LAW-021	Law	plugin/keel/clauses.py:759-762	CLAUSE-NO-GUARD-FIXTURES: a clause with a discharged_by predicate must declare both fixtures_discharge and fixtures_no_discharge.	
+M-LAW-022	Law	plugin/keel/clauses.py:763-766	CLAUSE-GUARD-FIXTURE-MISS: every fixture in fixtures_discharge must satisfy the clause's discharged_by predicate.	
+M-LAW-023	Law	plugin/keel/clauses.py:767-770	CLAUSE-GUARD-FIXTURE-HIT: no fixture in fixtures_no_discharge may satisfy the clause's discharged_by predicate.	
+M-LAW-024	Law	plugin/keel/clauses.py:795-799	CLAUSE-CARRIES-AN-EXCUSE: a clause data object carrying any field in EXCUSE_FIELDS is refused: those fields state in prose what the proof derives, so they must be deleted.	
+M-LAW-025	Law	plugin/keel/clauses.py:804-807	CLAUSE-ID-DUPLICATE: no two clauses in a loaded bundle may share an id.	
+M-LAW-026	Law	plugin/keel/clauses.py:816-817	CLAUSE-BUNDLE-INVALID: a loaded clause bundle's top level must be a JSON list.	
+M-LAW-027	Law	plugin/keel/effects.py:40	EFFECTS[files_changed]: a file has different content after the act, or exists after it and did not before. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed	
+M-LAW-028	Law	plugin/keel/effects.py:41	EFFECTS[files_removed]: a file that had content before the act has none after it, or does not exist; a top-level gitignored entry that vanished is named too, by path only	
+M-LAW-029	Law	plugin/keel/effects.py:42	EFFECTS[head_moved]: HEAD names a different commit after the act	
+M-LAW-030	Law	plugin/keel/effects.py:43	EFFECTS[head_switched]: HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit; or the act recorded a checkout in HEAD's reflog and HEAD ended where it began	
+M-LAW-031	Law	plugin/keel/effects.py:44	EFFECTS[head_reset]: HEAD moved to an ancestor of where it was, and the worktree changed with it; or the act recorded a reset in HEAD's reflog, whatever it moved back to afterwards	
+M-LAW-032	Law	plugin/keel/effects.py:45	EFFECTS[commit_signed]: the act created the commit HEAD now names, and that commit carries a signature	
+M-LAW-033	Law	plugin/keel/effects.py:46	EFFECTS[remote_ref_moved]: a remote-tracking ref names a different commit after the act	
+M-LAW-034	Law	plugin/keel/effects.py:47	EFFECTS[remote_landed]: every remote head this session moved is equal to a local ref (measured at the remote)	
+M-LAW-035	Law	plugin/keel/effects.py:48	EFFECTS[pids_gone]: a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it	
+M-LAW-036	Law	plugin/keel/effects.py:49	EFFECTS[pids_spawned]: a process that did not exist before the act is still running after it (stated limit: a worker that exited before the act returned was never a process that outlived it, and is not observed), assigned to this session by lineage: in its tree, or in one of its process sessions	
+M-LAW-037	Law	plugin/keel/effects.py:50	EFFECTS[pids_spawned_again]: pids_spawned, and this session had already spawned one before	
+M-LAW-038	Law	plugin/keel/effects.py:51	EFFECTS[net_out]: the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act	
+M-LAW-039	Law	plugin/keel/effects.py:52	EFFECTS[report_null]: the act printed a null datum, or nothing, while reading a structured file	
+M-LAW-040	Law	plugin/keel/effects.py:53	EFFECTS[report_pass]: the act printed a test-report datum with no failures	
+M-LAW-041	Law	plugin/keel/effects.py:54	EFFECTS[report_clean]: the act printed a scanner-report datum with no findings	
+M-LAW-042	Law	plugin/keel/effects.py:55	EFFECTS[report_fail]: the act printed a report datum with failures or findings	
+M-LAW-043	Law	plugin/keel/effects.py:58	EFFECTS[report_ref]: an act that changed no file, ref or process printed a ref name or commit id the ref snapshot holds	
+M-LAW-044	Law	plugin/keel/effects.py:59	EFFECTS[report_paths]: an act that changed no file, ref or process printed a path the worktree snapshot holds	
+M-LAW-045	Law	plugin/keel/effects.py:60	EFFECTS[named_paths]: the worktree paths that report named, in full: what a demand keyed on a changed path is paid by	
+M-LAW-046	Law	plugin/keel/effects.py:61	EFFECTS[named_pids]: the live pids that report named: what a demand keyed on a gone pid is paid by	
+M-LAW-047	Law	plugin/keel/effects.py:62	EFFECTS[report_pids]: the act printed at least two pids that were alive at the snapshot	
+M-LAW-048	Law	plugin/keel/effects.py:63	EFFECTS[report_self]: the act's output contains a whole segment of its own command: a listing that listed itself. The one effect whose datum is read from the command text, not the world: Theorem 8 covers a world-derived datum, so this side is stated, not proven, name-agnostic	
+M-LAW-049	Law	plugin/keel/effects.py:64	EFFECTS[report_structured]: the act printed a JSON datum that is not null	
+M-LAW-050	Law	plugin/keel/effects.py:65	EFFECTS[report_signature]: the act printed a signature block or a verified-signature datum	
+M-LAW-051	Law	plugin/keel/effects.py:66	EFFECTS[report_nowarn]: report_pass, and the report carries no warning line	
+M-LAW-052	Law	plugin/keel/effects.py:67	EFFECTS[net_read]: net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network. Stated limit (K13): the host counter cannot say what was reached, so a quiet connect to a closed port is a read; the trace refuses a mention, not a wasted call	
+M-LAW-053	Law	plugin/keel/effects.py:68	EFFECTS[report_after_change]: report_pass on an act that ran after a file changed since the last spawn	
+M-LAW-054	Law	plugin/keel/effects.py:69	EFFECTS[report_listing]: report_pids, and the output holds no segment of the act's own command: a listing that excluded the observer	
+M-LAW-055	Law	plugin/keel/effects.py:70	EFFECTS[observed_read]: the host Read tool returned Keel's own worktree measurement (observed.json), as written	
+M-LAW-056	Law	plugin/keel/effects.py:71	EFFECTS[remote_read]: the host Read tool returned Keel's own remote measurement (remote.json), with tips present	
+M-LAW-057	Law	proofs/Coverings.v:198-203	A miss means opposite things on the two sides: on the OCCASION side a miss raises no obligation, so the costly act proceeds with no guard at all -- expensive and silent; on the GUARD side a miss fails to discharge, so the clause denies an act that was in fact guarded -- cheap, and the interruption is visible and self-correcting.	M-COV-027
+M-LAW-058	Law	proofs/Coverings.v:205-209	"An occasion must therefore be nominal (Theorem 3: before the act, the name is the only thing that distinguishes it) and its vocabulary is load-bearing; a GUARD need not be, since a fact about the trace such as ""the suite ran and passed"" is readable as a status and a count with no vocabulary at all -- Theorem 4 already says such a covering is name-agnostic."	M-COV-022,M-COV-023
+M-LAW-059	Law	proofs/Coverings.v:62-64	Theorem 1's consequence: a textual covering that fires at all is defeated by a mention for every command it accepts, not merely the strings someone thought to try -- no counterexample is exhibited because none is needed.	M-COV-015
+M-LAW-060	Law	proofs/Coverings.v:142-149	"Theorem 4's consequence: C09 (""the checker's own pid is excluded from what it lists"") is a topological fact and C08 (""the exit status was non-zero"") is an effect fact; both were arrived at as one-off fixes, and this theorem says they are the general form of what survives -- guards read the shape of what ran, or its effects."	M-COV-023,M-COV-025
+M-LAW-061	Law	proofs/Coverings.v:157-163	Theorem 8's consequence: an effect covering separates two acts with the same segments -- byte-identical commands -- whenever what they did differs; the command string is not the input, the world is.	M-COV-024,M-COV-025,M-COV-026
+M-LAW-062	Law	proofs/Coverings.v:245-250	"Theorem 7's consequence: the evasion set is not merely bounded, it is EMPTY -- contrast Theorem 1, where it is unbounded -- which is the whole argument for preferring the positive form; ""being forced to state the number bypasses dishonesty"", proved."	M-COV-033,M-COV-015
+M-LAW-063	Law	proofs/Coverings.v:114-126	"Theorem 3's consequence: a nominal covering with any name in and any name out is never name-agnostic; the boundary is exact and this is stated as ""Not hard: absent"", not merely difficult."	M-COV-022
+M-LAW-064	Law	README.md:90-96	A measured scoping limit (2026-08-14, observed, not theorised): a nested claude -p invocation reported the SAME session_id as the session that launched it, with agent_id empty; scope is keyed on (session_id, agent_id), so a nested run shares its parent's ledger and the parent can be blocked at Stop by a demand the child raised.	
+M-LAW-065	Law	README.md:86-89	The hash chain detects corruption, not forgery: it detects accidental corruption, a truncated write, bit-rot; it does NOT detect deliberate forgery -- anyone who can append to the ledger can append a matching hash.	
+M-LAW-066	Law	README.md:159-161	The ledger constrains an honest-but-forgetful agent, not a forging one: its hash chain detects altered rows and broken or missing hashes, but not deletion of a valid tail; a writer able to forge rows can recompute hashes.	
+M-LAW-067	Law	README.md:162-164	A licence is scoped to its clause and session: one observed guard licenses later matching calls for that clause anywhere in the same session, not just against the same file, branch, or command.	
+M-LAW-068	Law	README.md:165-174	A discharge records what the guard act did, never what it was called: a guard is a host tool call or an observed effect of the guard act; where a trace exists the effect is a datum checked against it and a mention pays nothing; where no trace exists the effect is a report shape, and a claim that agrees with the shape is accepted -- the stated bound of a report effect; the loader refuses a guard that names a program (CLAUSE-GUARD-NOMINAL), with no field to argue an exception and no waiver.	
+M-LAW-069	Law	README.md:175-180	The first guards are observations of Keel's own measurement: before the first act nothing agnostic separates a push from anything else (Theorem 3), so A01, A02 and A03 are paid by a host Read of observed.json and of remote.json.	
+M-LAW-070	Law	README.md:181-187	A guard that is itself a Bash act passes on a commitment and is checked by its effect: before it runs, a Bash call cannot be told from the act it would guard, so under an open demand it passes only with a leading # keel-guard: <clause id> line naming the demand it will pay.	
+M-LAW-071	Law	README.md:188-197	No occasion reads a program's name: before the act, the name is the only thing that distinguishes one command from another (Coverings.v, Theorem 3), so an occasion that read it would miss the same act spelled differently, with its guard removed; the loader refuses a nominal occasion (CLAUSE-OCCASION-NOMINAL).	
+M-LAW-072	Law	README.md:198-204	An observation is the act's only if it is assigned to it, by one rule: a process is assigned by lineage; the host's connection counter has no lineage and is assigned by the idle gap.	
+M-LAW-073	Law	README.md:286-293	U25's occasion is a clean scan report in the call's output, whatever printed it; it is discharged only by a test invocation whose command text contains prefix or distractor, and per the discharge limit above the ledger records that such a command was invoked, not that the regression test exists or passed.	
+M-LAW-074	Law	README.md:316-320	proofs/Coverings.v proves, relative to a scanner with two stated properties and with zero axioms: a covering over the raw command text is never mention-immune (Theorem 1); one over a segment's leading program is, provided its vocabulary excludes the quoting program (Theorem 2), and is monotone in that vocabulary (Theorem 5) -- which is why no side of the table is one.	
+M-LAW-075	Law	README.md:320-321	A covering over the pipe topology is name-agnostic (Theorem 4).	
+M-LAW-076	Law	README.md:321-322	A positive obligation that compares the run's own datum has an empty evasion set (Theorem 7).	
+M-LAW-077	Law	README.md:322-323	A covering over what the act did reads no segment, so it is name-agnostic and separates byte-identical commands by their effects (Theorem 8).	
+M-LAW-078	Law	README.md:324-325	An ordering enforced backward rejects every trace the inductive violates describes (Theorem 8a).	
+M-LAW-079	Law	README.md:79-85	Absence is not a pass: an empty ledger at Stop means nothing was recorded, not that nothing is owed -- NOT-EVALUABLE; a zero-clause load now blocks Stop rather than passing it.	
+M-LAW-080	Law	README.md:207-208,215	NOT-EVALUABLE is live: an effect the observer could not measure is NOT-EVALUABLE and the occasion is treated as live, not passed.	
+M-LAW-081	Law	plugin/keel/ledger.py:1-4	Demand, discharge and open are one set difference (demanded - discharged); a licence is membership in the second set and nothing else, deliberately not "absent from the first".	
+M-LAW-082	Law	README.md:77-78	Obligations are un-windowed within a session: a promise does not expire because an hour passed; events may be windowed for cost, demands never are.	
+M-LAW-083	Law	plugin/hooks/dispatch.sh:57-71	Exactly one JSON object reaches the wire: output is captured so a dispatcher that printed a decision and then died cannot have fail_open's object appended after it, putting two objects on the wire.	
+M-LAW-084	Law	plugin/keel/wire.py:23	No surrogate code point survives wire: the module's one guarantee.	
+M-LAW-085	Law	plugin/keel/journal.py:35-36	The journal is observability, never policy: every entry point swallows everything, because a gate that denied because its logger could not write would be a worse defect than the missing log.	
+M-LAW-086	Law	plugin/keel/ledger.py:109-112	The digest is SHA-256 truncated to 16 hex = 64 bits, for both the chain link and derive_id; a collision merges two demands into one licence or forges a chain link at a 64-bit birthday bound.	
+M-LAW-087	Law	plugin/keel/dispatch.py:13-18	Fail direction is split: carriage fails OPEN (a wiring fault emits {} and exits 0), a decision that could not be computed fails CLOSED, and an event with no closed wire falls back to carriage.	
+M-LAW-088	Law	README.md:127-135	The /compact cut: a bare /compact gets the vendored preserve list, one that already carries instructions is left untouched, and an automatic compaction cannot be instructed so that path only reports it ran unsteered.	
+M-LAW-089	Law	plugin/keel/dispatch.py:783-792	A deny's subject is read back out of the rendered prose, last match, so the ledger key and what the agent was told cannot disagree.	
+M-LAW-090	Law	README.md:194-197	The opening-move waiver: the three always occasions fire on the same first act, so a call discharging any one of them is progress and is not itself refused by the other two.	
+M-LAW-091	Law	plugin/keel/clauses.py:16-21	The construction anchor is one spelling (POINTS.md#[a-z0-9][a-z0-9-]*), read by everything that needs it -- dispatch renders the pointer only when it matches and the test fence asserts the shape it names.	
+M-LAW-092	Law	plugin/keel/clauses.py:44-51	An event is either an enforceable clause target or a named-and-justified non-enforcing bookkeeping event; one in neither set is undecided, and the event-surface law goes red rather than defaulting to unenforceable in silence.	
+M-LAW-093	Law	plugin/keel/clauses.py:170-180	The probe bound is measured, not assumed: an 8-segment command asks the same read-only probe question 16 times (2N exactly); at the 5000ms per-probe cap that is 80s against a 20s hook timeout, so the hook is canceled and the deny row fails OPEN through the hang.	
+M-LAW-094	Law	plugin/keel/clauses.py:553-564	The terminal-clause discriminator: for an ordinary clause the fixtures test the fingerprint, but a terminal clause's fingerprint is always (every Stop is the occasion) so the fixtures must test the guard instead, or the clause is unloadable for the wrong reason.	
+M-LAW-095	Law	plugin/keel/clauses.py:764	One table, no second place: this is the one clause table the package loads.	

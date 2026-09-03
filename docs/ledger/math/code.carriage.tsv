@@ -1,0 +1,129 @@
+id	kind	source	what	reads	writes/returns
+C-CAR-001	branch	plugin/keel/ledger.py:49-51	state_dir: KEEL_STATE_DIR env set -> use it verbatim	os.environ[KEEL_STATE_DIR]	Path(env)
+C-CAR-002	branch	plugin/keel/ledger.py:52-53	state_dir: no KEEL_STATE_DIR but CODEX_PLUGIN_ROOT/CODEX_HOME set -> codex path	os.environ[CODEX_PLUGIN_ROOT/CODEX_HOME]	~/.codex/keel_state
+C-CAR-003	branch	plugin/keel/ledger.py:54	state_dir: default branch, neither env set -> claude path	(none)	~/.claude/keel_state
+C-CAR-004	constant	plugin/keel/ledger.py:60	name of the pre-rename state env var, kept for legacy detection	-	LEGACY_STATE_ENV = "GYROSCOPE_STATE_DIR"
+C-CAR-005	constant	plugin/keel/ledger.py:61	name of the pre-rename state directory, kept for legacy detection	-	LEGACY_STATE_DIR = "gyroscope_state"
+C-CAR-006	constant	plugin/keel/ledger.py:66	ledger's file name, spelled once for opener and existence-check	-	LEDGER_FILE = "obligations.jsonl"
+C-CAR-007	branch	plugin/keel/ledger.py:96-98	legacy_state: GYROSCOPE_STATE_DIR still set -> report it regardless of target	os.environ[GYROSCOPE_STATE_DIR]	Path(env)
+C-CAR-008	branch	plugin/keel/ledger.py:99-101	legacy_state: sibling dir exists AND current ledger file absent -> report beside dir, else None	state_dir(), beside.is_dir(), (current/LEDGER_FILE).exists()	beside or None
+C-CAR-009	function	plugin/keel/ledger.py:104-105	canonical JSON encoding used for hashing and storage (sorted keys, compact separators)	obj	str
+C-CAR-010	function	plugin/keel/ledger.py:108-109	sha256 digest of text, truncated to 16 hex chars	text	digest str
+C-CAR-011	function	plugin/keel/ledger.py:112-118	chain rule: hash = digest(prev + canon(body)); single definition shared by writer and verifier	prev, body(dict minus hash)	hash str
+C-CAR-012	function	plugin/keel/ledger.py:121-127	content-addressed demand id: digest(canon([session, agent, clause_id, subject]))	session, agent, clause_id, subject	id str
+C-CAR-013	field	plugin/keel/ledger.py:141-143	Demand.id computed property, never a stored field, derived every access	self.session/agent/clause_id/subject	derive_id(...)
+C-CAR-014	function	plugin/keel/ledger.py:155-158	Ledger.__init__: resolve root, create dir, fix ledger path	root or state_dir()	self.root, self.path
+C-CAR-015	branch	plugin/keel/ledger.py:161-162	_rows: ledger file does not exist -> generator yields nothing	self.path.exists()	(empty generator)
+C-CAR-016	field	plugin/keel/ledger.py:166	_rows opens file with errors="replace" so a torn multi-byte UTF-8 sequence corrupts one row, not the read	self.path	file handle
+C-CAR-017	branch	plugin/keel/ledger.py:168-169	_rows: blank/whitespace-only line -> skip	line	continue
+C-CAR-018	branch	plugin/keel/ledger.py:171-176	_rows: json.JSONDecodeError on a line -> skip (malformed row, not fatal)	line	continue
+C-CAR-019	branch	plugin/keel/ledger.py:177-180	_rows: JSON-valid but not a dict (e.g. 123, null) -> skip	row	continue
+C-CAR-020	field	plugin/keel/ledger.py:197	scope: tail tracks the hash of the last row seen across the whole file (any session)	row.get("hash","")	tail
+C-CAR-021	branch	plugin/keel/ledger.py:198-200	scope: row missing id, or session/agent mismatch -> skip via .get, never KeyError	row.get("id"/"session"/"agent")	continue
+C-CAR-022	law-code	plugin/keel/ledger.py:201-202	scope dedup on demand: first demand row per id wins (setdefault)	row.get("kind")=="demand", rid	demanded[rid] set once
+C-CAR-023	law-code	plugin/keel/ledger.py:203-204	scope dedup on discharge: any discharge row for an id marks it closed (set membership, not count)	row.get("kind")=="discharge", rid	closed.add(rid)
+C-CAR-024	law-code	plugin/keel/ledger.py:205	scope's set difference: open = demanded - closed, licence is membership in closed and nothing else	demanded, closed	{i:r for i,r in demanded.items() if i not in closed}, closed, tail
+C-CAR-025	branch	plugin/keel/ledger.py:209-212	_append: prev hash computed by scanning every row via _rows (last row's hash)	self._rows()	prev
+C-CAR-026	field	plugin/keel/ledger.py:213	_append: row["prev"]=prev, row["hash"]=_chain_hash(prev,row)	prev, row	row["prev"], row["hash"]
+C-CAR-027	branch	plugin/keel/ledger.py:220-225	_append torn-write handling: after flush, if file non-empty and last byte isn't \n, write \n before appending (terminates a fragment left by a torn write)	fh.tell(), last byte of file	newline written if needed
+C-CAR-028	field	plugin/keel/ledger.py:226	_append: write canonical JSON row + newline	row	appended line
+C-CAR-029	branch	plugin/keel/ledger.py:230-231	demand(): if d.id already in open_ids for this session/agent -> no-op, return False	d.id, self.open_ids(session,agent)	False
+C-CAR-030	branch	plugin/keel/ledger.py:232-233	demand(): otherwise append demand row, return True	d (Demand)	appended row, True
+C-CAR-031	branch	plugin/keel/ledger.py:240-241	discharge(): if already licensed (is_licensed true) -> no-op, return (re-observing a guard changes nothing)	session, agent, demand_id	None (no append)
+C-CAR-032	branch	plugin/keel/ledger.py:242-243	discharge(): otherwise append discharge row	session, agent, demand_id, how	appended row
+C-CAR-033	function	plugin/keel/ledger.py:245-247	is_licensed: True iff demand_id is in the discharged set for (session,agent)	session, agent, demand_id	bool
+C-CAR-034	function	plugin/keel/ledger.py:249-250	open_ids: set of open demand ids for (session,agent)	scope(session,agent)	set[str]
+C-CAR-035	function	plugin/keel/ledger.py:252-253	open_demands: list of open demand row dicts for (session,agent)	scope(session,agent)	list[dict]
+C-CAR-036	constant	plugin/keel/ledger.py:255	COMPACT_AT = 1<<20 bytes, threshold below which compact() is a no-op	-	1048576
+C-CAR-037	branch	plugin/keel/ledger.py:267-271	compact(): file smaller than COMPACT_AT (or stat fails) -> return 0, no rewrite	self.path.stat().st_size	0
+C-CAR-038	law-code	plugin/keel/ledger.py:276-277	compact() owing computation: a demand row adds its id to that session's owing set	row kind=="demand"	owing[session].add(id)
+C-CAR-039	law-code	plugin/keel/ledger.py:278-279	compact() owing computation: a discharge row discards its id from that session's owing set	row kind=="discharge"	owing[session].discard(id)
+C-CAR-040	law-code	plugin/keel/ledger.py:280	compact() keep rule: keep sessions whose owing set is non-empty, plus keep_session unconditionally	owing, keep_session	keep (set of sessions)
+C-CAR-041	field	plugin/keel/ledger.py:281	compact(): kept = rows whose session is in keep	rows, keep	kept list
+C-CAR-042	branch	plugin/keel/ledger.py:282-283	compact(): nothing would be dropped -> return 0 without rewriting	len(kept), len(rows)	0
+C-CAR-043	law-code	plugin/keel/ledger.py:284-289	compact(): re-chain kept rows from scratch, recomputing prev/hash in order	kept rows (hash/prev stripped)	re-chained lines
+C-CAR-044	branch	plugin/keel/ledger.py:290-292	compact(): write to .tmp file then os.replace for atomic swap	lines	self.path replaced
+C-CAR-045	field	plugin/keel/ledger.py:293	compact(): return count of rows dropped	len(rows), len(kept)	dropped count
+C-CAR-046	branch	plugin/keel/ledger.py:300-301	verify_chain(): recomputed hash diverges from stored hash -> return the divergent hash (or "<missing>")	row body, row.get("hash")	row["hash"] or "<missing>"
+C-CAR-047	field	plugin/keel/ledger.py:302	verify_chain(): on match, advance prev to this row's hash and continue	row["hash"]	prev
+C-CAR-048	branch	plugin/keel/ledger.py:303	verify_chain(): no divergence found across whole file -> return None	(end of loop)	None
+C-CAR-049	constant	plugin/keel/journal.py:49	plugin name stamped on every journal row	-	PLUGIN = "keel"
+C-CAR-050	function	plugin/keel/journal.py:52-53	_root: resolve journal root (explicit root or state_dir())	root	Path
+C-CAR-051	field	plugin/keel/journal.py:65	_append: mkdir(parents=True, exist_ok=True) before writing decisions.jsonl	path	directory created
+C-CAR-052	field	plugin/keel/journal.py:66-67	_append: write one compact JSON line (ensure_ascii=True) to decisions.jsonl, relying on POSIX atomic short-write append	row	appended line
+C-CAR-053	function	plugin/keel/journal.py:70-80	_row: build the shared row envelope (ts, plugin, kind, session_id, agent_id, tool_name, hook_event) merged with kind-specific extras	event dict, kind, extra	row dict
+C-CAR-054	field	plugin/keel/journal.py:93	_marker_name: sanitize session id to [A-Za-z0-9-_] chars (non-injective), truncate to 64	session	safe prefix
+C-CAR-055	field	plugin/keel/journal.py:94	_marker_name: append sha256(session)[:16] to the sanitized prefix so distinct ids cannot collide	session	marker filename
+C-CAR-056	constant	plugin/keel/journal.py:105	_STALE_CLAIM_SECONDS = 120, strictly above the 60s hook timeout, bound on how long an unfinished claim marker may stand before takeover	-	120
+C-CAR-057	branch	plugin/keel/journal.py:117	_committed: marker file size > 0 -> True (row actually landed)	marker.stat().st_size	bool
+C-CAR-058	branch	plugin/keel/journal.py:118-119	_committed: OSError on stat (marker missing) -> False	marker.stat()	False
+C-CAR-059	branch	plugin/keel/journal.py:136-138	_steal_if_stale: stat fails (OSError) -> False, cannot steal what isn't there	marker.stat()	False
+C-CAR-060	branch	plugin/keel/journal.py:139-140	_steal_if_stale: marker committed (size>0) or younger than _STALE_CLAIM_SECONDS -> False, leave it alone	marker size, mtime age	False
+C-CAR-061	branch	plugin/keel/journal.py:141-144	_steal_if_stale: os.utime re-stamp fails -> False	marker	False
+C-CAR-062	branch	plugin/keel/journal.py:145	_steal_if_stale: stale and re-stamped successfully -> True, takeover granted	marker	True
+C-CAR-063	branch	plugin/keel/journal.py:152-154	_commit: write "1" into marker to mark it committed; OSError swallowed (best-effort)	marker	marker contents="1"
+C-CAR-064	branch	plugin/keel/journal.py:168-169,178-179	_claim: O_CREAT\|O_EXCL open succeeds (first try or after mkdir retry) -> this process won the claim, close fd, return True	marker path	True
+C-CAR-065	branch	plugin/keel/journal.py:170-171	_claim: FileExistsError on first open -> defer to _steal_if_stale	marker	_steal_if_stale(marker)
+C-CAR-066	branch	plugin/keel/journal.py:172-175	_claim: FileNotFoundError (parent dir missing) -> mkdir parents, retry the O_CREAT\|O_EXCL open	marker.parent	directory created, retry open
+C-CAR-067	branch	plugin/keel/journal.py:176-177	_claim: retry open also FileExistsError -> defer to _steal_if_stale	marker	_steal_if_stale(marker)
+C-CAR-068	branch	plugin/keel/journal.py:190-191	note_session: empty/missing session_id -> return without recording	event.get("session_id")	None
+C-CAR-069	branch	plugin/keel/journal.py:197-198	note_session: marker already _committed -> return (already noted this session, cheap stat path)	marker	None
+C-CAR-070	branch	plugin/keel/journal.py:199-200	note_session: _claim fails (lost the race) -> return without recording	marker	None
+C-CAR-071	note_*	plugin/keel/journal.py:202	note_session: append row kind="session" carrying clauses=int(clause_count), the liveness proof	event, clause_count	appended "session" row
+C-CAR-072	branch	plugin/keel/journal.py:203-214	note_session: append raised -> unlink the marker to release the claim (degrade to re-noting, never silence), then re-raise	exception from _append	marker unlinked, exception re-raised
+C-CAR-073	field	plugin/keel/journal.py:216	note_session: on success, _commit(marker) so the marker now stands for a landed row	marker	marker committed
+C-CAR-074	branch	plugin/keel/journal.py:217-218	note_session: outer try/except Exception: pass, this journal never raises into the caller	whole function body	swallowed
+C-CAR-075	note_*	plugin/keel/journal.py:222-225	note_deny: append row kind="deny" with clause_id, subject truncated to 200 chars, reason truncated to 400 chars	event, clause_id, subject, reason	appended "deny" row
+C-CAR-076	branch	plugin/keel/journal.py:226-227	note_deny: outer try/except Exception: pass	function body	swallowed
+C-CAR-077	note_*	plugin/keel/journal.py:239-241	note_block: append row kind="block" with open_count (None preserved as null, not coerced to 0, distinct from the clean-terminal's own 0) and clause_ids	event, open_count, clause_ids	appended "block" row
+C-CAR-078	field	plugin/keel/journal.py:241	note_block: clause_ids truncated to first 10, each stringified	clause_ids	list[str] len<=10
+C-CAR-079	branch	plugin/keel/journal.py:242-243	note_block: outer try/except Exception: pass	function body	swallowed
+C-CAR-080	note_*	plugin/keel/journal.py:254-255	note_fault: append row kind="fault" with stage, detail truncated to 400 chars, failed_closed bool	event, stage, detail, failed_closed	appended "fault" row
+C-CAR-081	branch	plugin/keel/journal.py:256-257	note_fault: outer try/except Exception: pass	function body	swallowed
+C-CAR-082	note_*	plugin/keel/journal.py:280	note_repair: append row kind="repair" with repaired=int(repaired) (undecodable bytes)	event, repaired	appended "repair" row field repaired
+C-CAR-083	field	plugin/keel/journal.py:280	note_repair: escaped=int(escaped) kept as a separate count (unpaired surrogate escapes), not summed with repaired, keyword-only parameter	escaped	appended "repair" row field escaped
+C-CAR-084	branch	plugin/keel/journal.py:281-282	note_repair: outer try/except Exception: pass	function body	swallowed
+C-CAR-085	constant	plugin/keel/wire.py:30	replacement char used for every scrubbed surrogate	-	REPLACEMENT = "�"
+C-CAR-086	regex	plugin/keel/wire.py:35	_SURROGATE_RX: matches the whole lone-surrogate code point range U+D800-U+DFFF	str	match/no match
+C-CAR-087	branch	plugin/keel/wire.py:40-41	scrub_text: fast path, no surrogate found -> return (text, 0) unchanged	text	(text, 0)
+C-CAR-088	branch	plugin/keel/wire.py:45	scrub_text: surrogates found -> single-pass subn replace, returns (result, count)	text	(scrubbed text, count)
+C-CAR-089	branch	plugin/keel/wire.py:55-56	scrub: value is str -> delegate to scrub_text	value	(text,n)
+C-CAR-090	branch	plugin/keel/wire.py:60-62	scrub dict: key is str -> scrub the key text too (a surrogate in a key reaches the same encoder)	k	(scrubbed k, n)
+C-CAR-091	branch	plugin/keel/wire.py:63-77	scrub dict: scrubbing a key collides with an existing key (in out or in value) -> append "~2","~3",... suffix until unique, so no value is silently dropped	k, out, value	unique key k
+C-CAR-092	field	plugin/keel/wire.py:78-80	scrub dict: recursively scrub each value, accumulate total replaced count	v	out[k]=scrubbed v, total+=n
+C-CAR-093	branch	plugin/keel/wire.py:81	scrub dict: if nothing changed (total==0) return original value object unchanged, else return rebuilt dict	total	(out,total) or (value,0)
+C-CAR-094	branch	plugin/keel/wire.py:83-87	scrub list: recursively scrub each item, accumulate total replaced count	item	items list, total
+C-CAR-095	branch	plugin/keel/wire.py:88	scrub list: if nothing changed return original list unchanged, else return rebuilt list	total	(items,total) or (value,0)
+C-CAR-096	branch	plugin/keel/wire.py:89	scrub: fallback for non-str/dict/list values (int, bool, None, float) -> return unchanged	value	(value, 0)
+C-CAR-097	branch	plugin/keel/wire.py:100-102	read_stdin: sys.stdin.buffer.read() succeeds (empty stream coerced via "or b\"\"" to empty bytes)	sys.stdin.buffer	data bytes
+C-CAR-098	branch	plugin/keel/wire.py:103-104	read_stdin: buffer read raises AttributeError/ValueError/OSError -> fall back to text-mode sys.stdin.read(), scrub directly	sys.stdin	scrub_text(text)
+C-CAR-099	branch	plugin/keel/wire.py:105	read_stdin: buffer read succeeded -> hand bytes to _decode_counting	data	_decode_counting(data)
+C-CAR-100	branch	plugin/keel/wire.py:124-125	_decode_counting: strict utf-8-sig decode succeeds (handles BOM correctly, not as damage) -> scrub_text, zero repairs on clean payload	data	scrub_text(text)
+C-CAR-101	branch	plugin/keel/wire.py:126-127	_decode_counting: strict utf-8-sig decode raises UnicodeDecodeError -> fall through to lossy decode	data	pass
+C-CAR-102	branch	plugin/keel/wire.py:140	_decode_counting: decode with utf-8-sig + errors="surrogateescape" (one lone surrogate per undecodable byte), then scrub_text counts bytes correctly	data	scrub_text(text), byte-accurate repaired count
+C-CAR-103	branch	plugin/hooks/dispatch.sh:7	plugin_root resolution: CLAUDE_PLUGIN_ROOT env set -> use it	CLAUDE_PLUGIN_ROOT	plugin_root
+C-CAR-104	branch	plugin/hooks/dispatch.sh:8-9	plugin_root resolution: CLAUDE_PLUGIN_ROOT unset, CODEX_PLUGIN_ROOT set -> use it	CODEX_PLUGIN_ROOT	plugin_root
+C-CAR-105	branch	plugin/hooks/dispatch.sh:10-11	plugin_root resolution: neither env set -> derive from $(dirname "$0")/.. via cd+pwd, or empty on failure	$0	plugin_root or empty
+C-CAR-106	branch	plugin/hooks/dispatch.sh:25	fail_open case arm: message "could not resolve plugin root" -> visible_fault same text	$1	visible_fault
+C-CAR-107	branch	plugin/hooks/dispatch.sh:26	fail_open case arm: message matches "could not enter plugin root:"* -> visible_fault "could not enter plugin root" (strips interpolated path)	$1	visible_fault
+C-CAR-108	branch	plugin/hooks/dispatch.sh:27	fail_open case arm: message matches "interpreter not found:"* -> visible_fault "interpreter not found" (strips interpolated interpreter name)	$1	visible_fault
+C-CAR-109	branch	plugin/hooks/dispatch.sh:28	fail_open case arm: default/anything else -> visible_fault "Python dispatcher failed"	$1	visible_fault
+C-CAR-110	branch	plugin/hooks/dispatch.sh:30-36	fail_open: emit {"systemMessage": "keel hook wiring fault: <visible_fault>"} on stdout and exit 0 (carriage fails open, never exit 2 on a wiring fault)	visible_fault	stdout JSON, exit 0
+C-CAR-111	branch	plugin/hooks/dispatch.sh:40	call site: plugin_root empty -> fail_open "could not resolve plugin root"	plugin_root	fail_open call
+C-CAR-112	branch	plugin/hooks/dispatch.sh:41	call site: cd "$plugin_root" fails -> fail_open "could not enter plugin root: $plugin_root"	cd exit status	fail_open call
+C-CAR-113	field	plugin/hooks/dispatch.sh:43	python interpreter selection: ${KEEL_PYTHON:-python3}	KEEL_PYTHON env	python var
+C-CAR-114	branch	plugin/hooks/dispatch.sh:44	call site: command -v "$python" fails -> fail_open "interpreter not found: $python"	python var	fail_open call
+C-CAR-115	field	plugin/hooks/dispatch.sh:71	capture rule: out=$("$python" -m keel.dispatch) captures child stdout instead of streaming it, so a died-after-printing child cannot leave two JSON objects on the wire	python -m keel.dispatch	out, status=$?
+C-CAR-116	branch	plugin/hooks/dispatch.sh:73-75	exit forwarding: captured output non-empty and child status==2 -> print out, exit 2 (deliberate closed decision forwarded)	out, status	stdout=out, exit 2
+C-CAR-117	branch	plugin/hooks/dispatch.sh:73,76	exit forwarding: captured output non-empty and child status!=2 -> print out, exit 0	out, status	stdout=out, exit 0
+C-CAR-118	branch	plugin/hooks/dispatch.sh:78	exit forwarding: output empty and status==0 -> exit 0	status	exit 0
+C-CAR-119	branch	plugin/hooks/dispatch.sh:79	exit forwarding: output empty and status==2 -> exit 2	status	exit 2
+C-CAR-120	branch	plugin/hooks/dispatch.sh:81	exit forwarding: output empty and status neither 0 nor 2 -> fail_open "Python dispatcher failed" (child said nothing)	status	fail_open call
+C-CAR-121	hook-row	plugin/hooks/hooks.json:3-14	PostToolUse hook row: matcher Bash\|Edit\|MultiEdit\|NotebookEdit\|Read\|Write, command dispatch.sh, timeout 60	event=PostToolUse	registered hook
+C-CAR-122	hook-row	plugin/hooks/hooks.json:15-26	PreCompact hook row: matcher "auto", command dispatch.sh, timeout 60	event=PreCompact	registered hook
+C-CAR-123	hook-row	plugin/hooks/hooks.json:27-38	PreToolUse hook row: matcher Agent\|AskUserQuestion\|Bash\|Edit\|ExitPlanMode\|Glob\|Grep\|MultiEdit\|NotebookEdit\|Read\|Task\|Write, command dispatch.sh, timeout 60	event=PreToolUse	registered hook
+C-CAR-124	hook-row	plugin/hooks/hooks.json:39-49	SessionStart hook row: no matcher, command dispatch.sh, timeout 60	event=SessionStart	registered hook
+C-CAR-125	hook-row	plugin/hooks/hooks.json:50-61	Stop hook row: matcher "*", command dispatch.sh, timeout 60	event=Stop	registered hook
+C-CAR-126	hook-row	plugin/hooks/hooks.json:62-73	SubagentStart hook row: matcher "*", command dispatch.sh, timeout 60	event=SubagentStart	registered hook
+C-CAR-127	hook-row	plugin/hooks/hooks.json:74-85	SubagentStop hook row: matcher "*", command dispatch.sh, timeout 60	event=SubagentStop	registered hook
+C-CAR-128	hook-row	plugin/hooks/hooks.json:86-96	UserPromptSubmit hook row: no matcher, command dispatch.sh, timeout 60	event=UserPromptSubmit	registered hook

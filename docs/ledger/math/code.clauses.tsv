@@ -1,0 +1,185 @@
+id	kind	source	what	reads	writes/returns
+C-CLS-001	regex	plugin/keel/clauses.py:23	CONSTRUCTION_ANCHOR: shape of a POINTS.md anchor fragment	-	regex object
+C-CLS-002	constant	plugin/keel/clauses.py:36-42	_EVENTS: the five events a clause may target	-	set[str]
+C-CLS-003	constant	plugin/keel/clauses.py:48-56	_NON_ENFORCING: three routed events deliberately not targetable, with reasons	-	dict[str,str]
+C-CLS-004	constant	plugin/keel/clauses.py:68	COMMAND_FIELD: the one field name meaning 'reads the command'	-	'tool_input.command'
+C-CLS-005	function	plugin/keel/clauses.py:134-164	event_key: extract cross-event correlation key from predicate.key_from (bare path, or on/pattern/group object; missing field, non-str value, or no regex match all yield '')	predicate.key_from, event[on]	correlation key string, truncated to 200 chars
+C-CLS-006	constant	plugin/keel/clauses.py:181	_PROBE_CACHE: module-level memo of probe spec -> measured truth, one process per event	-	dict[str, bool|None]
+C-CLS-007	function	plugin/keel/clauses.py:184-186	reset_probe_cache: clears the probe cache so tests get per-event scope	-	-
+C-CLS-008	branch	plugin/keel/clauses.py:192-195	_run_probe: cache hit returns memoized result, else measures and stores	_PROBE_CACHE, spec	bool|None
+C-CLS-009	branch	plugin/keel/clauses.py:199-206	_measure_probe: subprocess raised OSError/TimeoutExpired/ValueError -> None (not evaluable)	spec.cmd, spec.timeout_ms	None
+C-CLS-010	branch	plugin/keel/clauses.py:207-208	_measure_probe: nonzero returncode -> None (not evaluable)	completed.returncode	None
+C-CLS-011	branch	plugin/keel/clauses.py:211-212	_measure_probe: expect=='empty' -> output==''	spec.expect, output	bool
+C-CLS-012	branch	plugin/keel/clauses.py:213-214	_measure_probe: expect=='nonempty' -> output!=''	spec.expect, output	bool
+C-CLS-013	branch	plugin/keel/clauses.py:215	_measure_probe: expect is a regex object -> re.search(expect.regex, output) is not None	spec.expect.regex, output	bool
+C-CLS-014	branch	plugin/keel/clauses.py:236-237	_base_predicate: predicate.event set and mismatches event.hook_event_name -> False	predicate.event, event.hook_event_name	bool False
+C-CLS-015	branch	plugin/keel/clauses.py:238-240	_base_predicate: predicate.tools set (not ['*']) and event.tool_name not in it -> False	predicate.tools, event.tool_name	bool False
+C-CLS-016	branch	plugin/keel/clauses.py:241-243	_base_predicate: no own kind, has any_of -> any(sub) composition	predicate.any_of, event	bool
+C-CLS-017	branch	plugin/keel/clauses.py:244-245	_base_predicate: no own kind, has all_of -> all(sub) composition	predicate.all_of, event	bool
+C-CLS-018	branch	plugin/keel/clauses.py:247-248	_base_predicate: kind=='always' -> True	predicate.kind	bool True
+C-CLS-019	branch	plugin/keel/clauses.py:249-254	_base_predicate: kind=='effect' -> resolve keel_effect.<effect>, true only if present, not missing, not None, truthy	predicate.effect, event.keel_effect.*	bool
+C-CLS-020	branch	plugin/keel/clauses.py:255-257	_base_predicate: resolve predicate.on on event; missing -> False	predicate.on, event	bool False
+C-CLS-021	branch	plugin/keel/clauses.py:258-259	_base_predicate: kind=='tool' -> value == predicate.equals	predicate.on value, predicate.equals	bool
+C-CLS-022	branch	plugin/keel/clauses.py:260-264	_base_predicate: kind=='nonzero' -> int(value)!=0, TypeError/ValueError -> False	predicate.on value	bool
+C-CLS-023	branch	plugin/keel/clauses.py:265-268	_base_predicate: kind=='regex' -> value must be str, else False; else delegate to _regex_predicate	predicate.on value	bool
+C-CLS-024	branch	plugin/keel/clauses.py:269	_base_predicate: unknown kind falls through -> False	predicate.kind	bool False
+C-CLS-025	branch	plugin/keel/clauses.py:273-274	_regex_predicate: predicate.pattern does not search-match value -> False	predicate.pattern, value	bool False
+C-CLS-026	branch	plugin/keel/clauses.py:275-278	_regex_predicate: pattern matched, all predicate.unless entries fail to match -> True else False	predicate.unless, value	bool
+C-CLS-027	branch	plugin/keel/clauses.py:286-287	_predicate: any leaf is an unmeasured effect (_unmeasured true) -> None (NOT-EVALUABLE)	predicate leaves, event.keel_effect	None
+C-CLS-028	branch	plugin/keel/clauses.py:290-291	_predicate: cheap _base_predicate gate fails -> False before any probe runs	predicate, event	bool False
+C-CLS-029	branch	plugin/keel/clauses.py:292-293	_predicate: predicate.probe present -> run it via _run_probe, else True	predicate.probe	bool|None
+C-CLS-030	function	plugin/keel/clauses.py:296-312	_unmeasured: event carries a keel_effect record and this predicate's named effect is recorded as None (observer could not see); event/tools mismatch or no record -> False	event.keel_effect, predicate.event/tools/effect	bool
+C-CLS-031	branch	plugin/keel/clauses.py:327-331	match: _predicate result None -> print NOT-EVALUABLE to stderr, treat occasion as live -> True (fail closed toward demand)	clause.fingerprint, event	bool True
+C-CLS-032	branch	plugin/keel/clauses.py:332	match: return the measured predicate result unchanged	clause.fingerprint, event	bool
+C-CLS-033	branch	plugin/keel/clauses.py:336-337	discharges: clause.discharged_by is None -> False (no guard side to satisfy)	clause.discharged_by	bool False
+C-CLS-034	branch	plugin/keel/clauses.py:338-341	discharges: _predicate result None -> print 'not a pass' warning; return the (falsy) result as-is	clause.discharged_by, event	bool|None
+C-CLS-035	function	plugin/keel/clauses.py:344-356	_matches_a_tool_enum: True iff predicate itself reads tool_name, or recursively any any_of/all_of branch does	predicate.on, predicate.any_of, predicate.all_of	bool
+C-CLS-036	branch	plugin/keel/clauses.py:379-380	classify_side: predicate is not a dict -> 'absent'	predicate	'absent'
+C-CLS-037	branch	plugin/keel/clauses.py:394-395	classify_side: composed branches include 'textual' -> whole side is 'textual'	branch classes	'textual'
+C-CLS-038	branch	plugin/keel/clauses.py:396-397	classify_side: composed branches include 'nominal' (and no textual) -> 'nominal'	branch classes	'nominal'
+C-CLS-039	branch	plugin/keel/clauses.py:398-399	classify_side: exactly one distinct branch class (plus own) -> that class	branch classes, own	single class
+C-CLS-040	branch	plugin/keel/clauses.py:400-401	classify_side: multiple distinct branch classes, all within AGNOSTIC_CLASSES -> 'composed'	branch classes, AGNOSTIC_CLASSES	'composed'
+C-CLS-041	branch	plugin/keel/clauses.py:402	classify_side: multiple distinct branch classes not all agnostic -> 'unclassified'	branch classes	'unclassified'
+C-CLS-042	branch	plugin/keel/clauses.py:403-404	classify_side: no branches, predicate has own kind -> that own class	own	own class
+C-CLS-043	branch	plugin/keel/clauses.py:405	classify_side: no branches and no own kind -> 'unclassified'	predicate.kind	'unclassified'
+C-CLS-044	branch	plugin/keel/clauses.py:411-412	_own_class: kind=='always' -> 'always'	predicate.kind	'always'
+C-CLS-045	branch	plugin/keel/clauses.py:413-414	_own_class: kind=='effect' -> 'effect'	predicate.kind	'effect'
+C-CLS-046	branch	plugin/keel/clauses.py:415-416	_own_class: kind=='tool' -> 'tool-enum'	predicate.kind	'tool-enum'
+C-CLS-047	branch	plugin/keel/clauses.py:417-419	_own_class: kind=='regex' and on=='tool_name' -> 'tool-enum'	predicate.kind, predicate.on	'tool-enum'
+C-CLS-048	branch	plugin/keel/clauses.py:420	_own_class: kind=='regex' and on==COMMAND_FIELD -> 'textual', else 'unclassified'	predicate.kind, predicate.on	'textual'|'unclassified'
+C-CLS-049	branch	plugin/keel/clauses.py:421-422	_own_class: kind in ('program','pipeline') -> 'nominal'	predicate.kind	'nominal'
+C-CLS-050	branch	plugin/keel/clauses.py:423-424	_own_class: kind=='nonzero' -> 'positive'	predicate.kind	'positive'
+C-CLS-051	branch	plugin/keel/clauses.py:425	_own_class: any other kind -> 'unclassified'	predicate.kind	'unclassified'
+C-CLS-052	constant	plugin/keel/clauses.py:432	AGNOSTIC_CLASSES: the side classes licensed on either side (always, tool-enum, effect, positive, composed)	-	frozenset[str]
+C-CLS-053	branch	plugin/keel/clauses.py:443-444	derive_closure: class=='tool-enum' -> 'host'	classify_side(predicate)	'host'
+C-CLS-054	branch	plugin/keel/clauses.py:445-448	derive_closure: class=='composed' and some branch reads tool_name -> 'host'	classify_side(predicate), _matches_a_tool_enum	'host'
+C-CLS-055	branch	plugin/keel/clauses.py:449-450	derive_closure: class=='composed' and no branch reads tool_name -> 'world'	classify_side(predicate), _matches_a_tool_enum	'world'
+C-CLS-056	branch	plugin/keel/clauses.py:451-452	derive_closure: class=='effect' -> 'world'	classify_side(predicate)	'world'
+C-CLS-057	branch	plugin/keel/clauses.py:453-454	derive_closure: class=='positive' -> 'datum'	classify_side(predicate)	'datum'
+C-CLS-058	branch	plugin/keel/clauses.py:455	derive_closure: any other class (always/nominal/unclassified/absent) -> returned unchanged	classify_side(predicate)	cls
+C-CLS-059	constant	plugin/keel/clauses.py:458	KEYABLE_EFFECTS: the effects a subject may key a demand on (files_changed, files_removed, pids_gone)	-	tuple[str,...]
+C-CLS-060	function	plugin/keel/clauses.py:461-477	subject_fields: the event field(s) a subject/discriminator extractor may read -- dict spec's 'on' (default tool_input.command), bare string spec, or a list of field names filtered to non-empty strings	spec (subject/key_from-like dict or string)	list[str] of field names
+C-CLS-061	function	plugin/keel/clauses.py:480-500	_fixture_event: builds a synthetic event from a predicate's own event/tools declaration; a dict fixture passes through unchanged, a string/scalar fixture is placed at the first declared subject_fields path	predicate.event, predicate.tools, subject_fields(predicate), fixture	synthetic event dict
+C-CLS-062	constant	plugin/keel/clauses.py:513	PROBE_TIMEOUT_CEILING_MS: ceiling on a clause's probe.timeout_ms, held under the hook's own timeout so a probe cannot outlive its hook	-	5000
+C-CLS-063	law-code	plugin/keel/clauses.py:520-522	CLAUSE-EFFECT-UNKNOWN: refuses a leaf naming an effect not present in keel.effects.EFFECTS	leaf.kind, leaf.effect, _effects.EFFECTS	raises ClauseError
+C-CLS-064	law-code	plugin/keel/clauses.py:528-530	CLAUSE-NONZERO-NOT-RESPONSE: refuses a nonzero leaf whose 'on' does not start with tool_response. (nonzero must compare a datum the trace produced, never an operator-controlled field)	leaf.kind, leaf.on	raises ClauseError
+C-CLS-065	law-code	plugin/keel/clauses.py:531-537	CLAUSE-REGEX-INVALID: refuses a regex-kind predicate whose pattern or any unless entry fails to compile	predicate.pattern, predicate.unless	raises ClauseError
+C-CLS-066	law-code	plugin/keel/clauses.py:538-547	CLAUSE-KEY-FROM-INVALID: refuses key_from that is not a nonempty string or a dict with a nonempty string 'on'	predicate.key_from	raises ClauseError
+C-CLS-067	law-code	plugin/keel/clauses.py:548-552	CLAUSE-KEY-FROM-INVALID: refuses a key_from.pattern that fails to compile	predicate.key_from.pattern	raises ClauseError
+C-CLS-068	law-code	plugin/keel/clauses.py:553-554	CLAUSE-KEY-FROM-INVALID: refuses a key_from.group that is not int or str	predicate.key_from.group	raises ClauseError
+C-CLS-069	law-code	plugin/keel/clauses.py:558-566	CLAUSE-PROBE-INVALID: refuses a probe whose cmd/timeout_ms/expect fail the structural shape (nonempty str list, int timeout in (0, ceiling], valid expect shape)	predicate.probe.cmd/timeout_ms/expect	raises ClauseError
+C-CLS-070	law-code	plugin/keel/clauses.py:567-571	CLAUSE-PROBE-MUTATING: refuses a probe whose argv[0] contains a path separator	predicate.probe.cmd[0]	raises ClauseError
+C-CLS-071	law-code	plugin/keel/clauses.py:572-574	CLAUSE-PROBE-MUTATING: refuses a probe whose whole argv is not in the _READ_ONLY_PROBES allowlist	predicate.probe.cmd, _READ_ONLY_PROBES	raises ClauseError
+C-CLS-072	law-code	plugin/keel/clauses.py:575-579	CLAUSE-PROBE-INVALID: refuses a probe expect.regex that fails to compile	predicate.probe.expect.regex	raises ClauseError
+C-CLS-073	constant	plugin/keel/clauses.py:167	_READ_ONLY_PROBES: the only probe argv a clause may run	-	tuple of one tuple: (git, status, --porcelain)
+C-CLS-074	branch	plugin/keel/clauses.py:583-585	_leaves: predicate has no any_of/all_of branches -> the predicate itself is the sole leaf	predicate.any_of, predicate.all_of	list[predicate]
+C-CLS-075	branch	plugin/keel/clauses.py:591-592	_leaves: predicate has branches -> its own kind (if any) is a leaf too, plus every branch's leaves recursively	predicate.kind, branches	list[predicate]
+C-CLS-076	constant	plugin/keel/clauses.py:595	AGNOSTIC_OCCASIONS: alias of AGNOSTIC_CLASSES for the occasion-side reading	-	frozenset[str]
+C-CLS-077	branch	plugin/keel/clauses.py:607-609	_discriminator: fingerprint is kind=='always' and clause has a discharged_by -> fixtures are graded against discharged_by (terminal clause: occasion discriminates nothing)	clause.fingerprint.kind, clause.discharged_by	predicate dict
+C-CLS-078	branch	plugin/keel/clauses.py:610	_discriminator: otherwise -> fixtures are graded against the fingerprint itself	clause.fingerprint	predicate dict
+C-CLS-079	branch	plugin/keel/clauses.py:616-619	_admit: side-class loop over fingerprint/activated_by/discharged_by, skipping any side that is not a dict	clause.fingerprint/activated_by/discharged_by	-
+C-CLS-080	law-code	plugin/keel/clauses.py:620-624	CLAUSE-TEXT-COVERING: refuses any side (fingerprint/activated_by/discharged_by) classified 'textual' -- Theorem 1: no pattern edit makes raw-command reading mention-immune	classify_side(predicate)	raises ClauseError
+C-CLS-081	law-code	plugin/keel/clauses.py:625-628	CLAUSE-SIDE-UNCLASSIFIED: refuses any side classified 'unclassified' -- no Coverings.v class covers the shape	classify_side(predicate)	raises ClauseError
+C-CLS-082	law-code	plugin/keel/clauses.py:629-638	CLAUSE-OCCASION-NOMINAL: refuses a fingerprint or activated_by side not in AGNOSTIC_CLASSES -- an occasion must be name-agnostic (Theorem 3, 5)	name, classify_side(predicate), AGNOSTIC_CLASSES	raises ClauseError
+C-CLS-083	law-code	plugin/keel/clauses.py:639-649	CLAUSE-GUARD-NOMINAL: refuses a discharged_by side not in AGNOSTIC_CLASSES -- a guard must be name-agnostic too	classify_side(predicate), AGNOSTIC_CLASSES	raises ClauseError
+C-CLS-084	law-code	plugin/keel/clauses.py:650-656	CLAUSE-GUARD-ALWAYS: refuses a discharged_by of kind=='always' -- a guard paid by any act observes nothing	clause.discharged_by.kind	raises ClauseError
+C-CLS-085	law-code	plugin/keel/clauses.py:657-658	CLAUSE-NO-ACTIVATION-FIXTURES: refuses a clause with activated_by set but no fixtures_activate	clause.activated_by, clause.fixtures_activate	raises ClauseError
+C-CLS-086	fixture-loop	plugin/keel/clauses.py:659-662	fixtures_activate loop: each activation fixture must satisfy _base_predicate(activated_by, ...), else CLAUSE-ACTIVATION-FIXTURE-MISS	clause.fixtures_activate, clause.activated_by	raises ClauseError per miss
+C-CLS-087	law-code	plugin/keel/clauses.py:663-664	CLAUSE-EVENT-UNKNOWN: refuses a clause.event not among the five in _EVENTS	clause.event, _EVENTS	raises ClauseError
+C-CLS-088	law-code	plugin/keel/clauses.py:665-666	CLAUSE-NO-FIXTURES: refuses a clause missing fixtures_pos or fixtures_neg	clause.fixtures_pos, clause.fixtures_neg	raises ClauseError
+C-CLS-089	branch	plugin/keel/clauses.py:682-684	_admit: compiles fingerprint, activated_by, discharged_by via _compile (leaf/regex/key_from/probe checks) before fixture grading	clause.fingerprint/activated_by/discharged_by	-
+C-CLS-090	law-code	plugin/keel/clauses.py:697-700	CLAUSE-EFFECT-EVENT: refuses a fingerprint classified 'effect' whose clause.event is not PostToolUse -- an effect occasion is observed after the act	classify_side(clause.fingerprint), clause.event	raises ClauseError
+C-CLS-091	branch	plugin/keel/clauses.py:701	_admit: computes the fixture discriminator via _discriminator(clause)	clause	predicate dict
+C-CLS-092	law-code	plugin/keel/clauses.py:702-707	CLAUSE-SUBJECT-UNKEYABLE-EFFECT: refuses a subject keyed on 'effect' whose value is not exactly one of KEYABLE_EFFECTS	clause.subject, KEYABLE_EFFECTS	raises ClauseError
+C-CLS-093	fixture-loop	plugin/keel/clauses.py:708-710	fixtures_pos loop: each positive fixture must satisfy _base_predicate(discriminator, ...), else CLAUSE-FIXTURE-POS-MISS	clause.fixtures_pos, discriminator	raises ClauseError per miss
+C-CLS-094	law-code	plugin/keel/clauses.py:725-736	CLAUSE-FIXTURE-POS-UNKEYABLE: within the fixtures_pos loop, refuses a positive fixture that matches the fingerprint but whose dict subject extractor finds no operand (pattern search + captured group empty)	clause.subject, fixture, subject_fields(clause.subject)	raises ClauseError
+C-CLS-095	fixture-loop	plugin/keel/clauses.py:737-739	fixtures_neg loop: each negative fixture must NOT satisfy _base_predicate(discriminator, ...), else CLAUSE-FIXTURE-NEG-HIT	clause.fixtures_neg, discriminator	raises ClauseError per hit
+C-CLS-096	branch	plugin/keel/clauses.py:759-760	_admit: clause.discharged_by is None -> return clause early, exempt from guard-fixture witnessing (no guard side to witness)	clause.discharged_by	clause
+C-CLS-097	law-code	plugin/keel/clauses.py:761-762	CLAUSE-NO-GUARD-FIXTURES: refuses a clause with a discharged_by but missing fixtures_discharge or fixtures_no_discharge	clause.fixtures_discharge, clause.fixtures_no_discharge	raises ClauseError
+C-CLS-098	fixture-loop	plugin/keel/clauses.py:763-766	fixtures_discharge loop: each discharge fixture must satisfy _base_predicate(discharged_by, ...), else CLAUSE-GUARD-FIXTURE-MISS	clause.fixtures_discharge, clause.discharged_by	raises ClauseError per miss
+C-CLS-099	fixture-loop	plugin/keel/clauses.py:767-770	fixtures_no_discharge loop: each no-discharge fixture must NOT satisfy _base_predicate(discharged_by, ...), else CLAUSE-GUARD-FIXTURE-HIT	clause.fixtures_no_discharge, clause.discharged_by	raises ClauseError per hit
+C-CLS-100	constant	plugin/keel/clauses.py:361	EXCUSE_FIELDS: the three prose-excuse field names a row may not carry (why_no_program, guard_vocabulary, waiver)	-	frozenset[str]
+C-CLS-101	law-code	plugin/keel/clauses.py:795-799	CLAUSE-CARRIES-AN-EXCUSE: refuses a raw row dict carrying any of EXCUSE_FIELDS	data keys, EXCUSE_FIELDS	raises ClauseError
+C-CLS-102	law-code	plugin/keel/clauses.py:805-807	CLAUSE-ID-DUPLICATE: refuses a clause list containing the same id twice	clause.id across list	raises ClauseError
+C-CLS-103	branch	plugin/keel/clauses.py:809	_unique_sorted: returns clauses sorted by id	clause.id	list[Clause] sorted
+C-CLS-104	law-code	plugin/keel/clauses.py:816-817	CLAUSE-BUNDLE-INVALID: refuses a shipped bundle whose top-level JSON value is not a list	json.load(stream)	raises ClauseError
+C-CLS-105	function	plugin/keel/clauses.py:812-818	load_bundle: parses the JSON bundle file, then loads+admits+uniques every row through _load_object/_unique_sorted	path (file contents)	list[Clause]
+C-CLS-106	function	plugin/keel/clauses.py:821-823	default_bundle: the one clause table path this package loads (clauses.json beside this module)	-	Path
+C-CLS-107	function	plugin/keel/clauses.py:826-842	load_default: loads the one shipped bundle with no loose-file fallback; a missing bundle raises rather than silently returning another table	default_bundle()	list[Clause]
+C-CLS-108	clause-side	plugin/keel/clauses.json:12-14	A01.fingerprint: kind=always (fires on every event)	-	predicate/extractor result
+C-CLS-109	clause-side	plugin/keel/clauses.json:15-...	A01.discharged_by: kind=effect effect=observed_read	keel_effect.observed_read	predicate/extractor result
+C-CLS-110	clause-side	plugin/keel/clauses.json:11	A01.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-111	clause-side	plugin/keel/clauses.json:285-287	A02.fingerprint: kind=always	-	predicate/extractor result
+C-CLS-112	clause-side	plugin/keel/clauses.json:288-...	A02.discharged_by: any_of: kind=effect effect=observed_read | kind=regex on=tool_name pattern=^Glob$ | kind=effect effect=report_paths	keel_effect.observed_read, tool_name, keel_effect.report_paths	predicate/extractor result
+C-CLS-113	clause-side	plugin/keel/clauses.json:284	A02.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-114	clause-side	plugin/keel/clauses.json:531-533	A03.fingerprint: kind=always	-	predicate/extractor result
+C-CLS-115	clause-side	plugin/keel/clauses.json:534-...	A03.discharged_by: kind=effect effect=remote_read	keel_effect.remote_read	predicate/extractor result
+C-CLS-116	clause-side	plugin/keel/clauses.json:530	A03.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-117	clause-side	plugin/keel/clauses.json:796-798	C03-verify-what-returns.fingerprint: kind=always	-	predicate/extractor result
+C-CLS-118	clause-side	plugin/keel/clauses.json:815-...	C03-verify-what-returns.activated_by: kind=regex on=tool_name pattern=^(Agent|Task)$	tool_name	predicate/extractor result
+C-CLS-119	clause-side	plugin/keel/clauses.json:799-...	C03-verify-what-returns.discharged_by: kind=regex on=tool_name pattern=^Read$	tool_name	predicate/extractor result
+C-CLS-120	clause-side	plugin/keel/clauses.json:795	C03-verify-what-returns.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-121	clause-side	plugin/keel/clauses.json:843-845	C08-check-can-fail.fingerprint: kind=always	-	predicate/extractor result
+C-CLS-122	clause-side	plugin/keel/clauses.json:846-...	C08-check-can-fail.activated_by: kind=effect effect=report_pass event=PostToolUse tools=[Bash], keyed by key_from	keel_effect.report_pass, hook_event_name, tool_name	predicate/extractor result
+C-CLS-123	clause-side	plugin/keel/clauses.json:853-...	C08-check-can-fail.activated_by.key_from: on=tool_input.command, pattern extracts the leading command/subcommand token, group=1	tool_input.command	predicate/extractor result
+C-CLS-124	clause-side	plugin/keel/clauses.json:911-...	C08-check-can-fail.discharged_by: kind=effect effect=report_fail event=PostToolUse tools=[Bash], keyed by key_from	keel_effect.report_fail, hook_event_name, tool_name	predicate/extractor result
+C-CLS-125	clause-side	plugin/keel/clauses.json:918-...	C08-check-can-fail.discharged_by.key_from: on=tool_input.command, pattern extracts the leading command/subcommand token, group=1	tool_input.command	predicate/extractor result
+C-CLS-126	clause-side	plugin/keel/clauses.json:842	C08-check-can-fail.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-127	clause-side	plugin/keel/clauses.json:1076-1079	C09-checker-excludes-self.fingerprint: kind=effect effect=report_self	keel_effect.report_self	predicate/extractor result
+C-CLS-128	clause-side	plugin/keel/clauses.json:1080-...	C09-checker-excludes-self.discharged_by: kind=effect effect=report_listing	keel_effect.report_listing	predicate/extractor result
+C-CLS-129	clause-side	plugin/keel/clauses.json:1075	C09-checker-excludes-self.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-130	clause-side	plugin/keel/clauses.json:1364-1368	D01.fingerprint: kind=regex on=tool_name pattern=^(Agent|Task)$	tool_name	predicate/extractor result
+C-CLS-131	clause-side	plugin/keel/clauses.json:1369-...	D01.discharged_by: kind=regex on=tool_name pattern=^(Read|Glob|Grep)$	tool_name	predicate/extractor result
+C-CLS-132	clause-side	plugin/keel/clauses.json:1363	D01.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-133	clause-side	plugin/keel/clauses.json:1411-1415	P01.fingerprint: kind=regex on=tool_name pattern=^ExitPlanMode$	tool_name	predicate/extractor result
+C-CLS-134	clause-side	plugin/keel/clauses.json:1416-...	P01.discharged_by: kind=regex on=tool_name pattern=^(Read|Glob|Grep)$	tool_name	predicate/extractor result
+C-CLS-135	clause-side	plugin/keel/clauses.json:1410	P01.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-136	clause-side	plugin/keel/clauses.json:1455-1459	P02.fingerprint: kind=regex on=tool_name pattern=^ExitPlanMode$	tool_name	predicate/extractor result
+C-CLS-137	clause-side	plugin/keel/clauses.json:1460-...	P02.discharged_by: kind=regex on=tool_name pattern=^AskUserQuestion$	tool_name	predicate/extractor result
+C-CLS-138	clause-side	plugin/keel/clauses.json:1454	P02.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-139	clause-side	plugin/keel/clauses.json:1496-1498	T01.fingerprint: kind=always	-	predicate/extractor result
+C-CLS-140	clause-side	plugin/keel/clauses.json:1499-...	T01.discharged_by: kind=effect effect=observed_read	keel_effect.observed_read	predicate/extractor result
+C-CLS-141	clause-side	plugin/keel/clauses.json:1495	T01.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-142	clause-side	plugin/keel/clauses.json:1688-1690	T02.fingerprint: kind=always	-	predicate/extractor result
+C-CLS-143	clause-side	plugin/keel/clauses.json:1728-...	T02.activated_by: kind=effect effect=remote_ref_moved	keel_effect.remote_ref_moved	predicate/extractor result
+C-CLS-144	clause-side	plugin/keel/clauses.json:1691-...	T02.discharged_by: kind=effect effect=remote_landed	keel_effect.remote_landed	predicate/extractor result
+C-CLS-145	clause-side	plugin/keel/clauses.json:1687	T02.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-146	clause-side	plugin/keel/clauses.json:1810-1813	U01.fingerprint: kind=effect effect=pids_spawned	keel_effect.pids_spawned	predicate/extractor result
+C-CLS-147	clause-side	plugin/keel/clauses.json:1814-...	U01.discharged_by: kind=effect effect=report_pass	keel_effect.report_pass	predicate/extractor result
+C-CLS-148	clause-side	plugin/keel/clauses.json:1809	U01.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-149	clause-side	plugin/keel/clauses.json:2012-2015	U02.fingerprint: kind=effect effect=pids_spawned_again	keel_effect.pids_spawned_again	predicate/extractor result
+C-CLS-150	clause-side	plugin/keel/clauses.json:2016-...	U02.discharged_by: kind=effect effect=report_after_change	keel_effect.report_after_change	predicate/extractor result
+C-CLS-151	clause-side	plugin/keel/clauses.json:2007-2011	U02.subject: on=tool_input.command, pattern matches dispatch.sh/--target target token, group=1	tool_input.command	predicate/extractor result
+C-CLS-152	clause-side	plugin/keel/clauses.json:2212-2215	U03.fingerprint: kind=effect effect=pids_gone	keel_effect.pids_gone	predicate/extractor result
+C-CLS-153	clause-side	plugin/keel/clauses.json:2216-...	U03.discharged_by: any_of: kind=effect effect=report_pids | kind=effect effect=observed_read	keel_effect.report_pids, keel_effect.observed_read	predicate/extractor result
+C-CLS-154	clause-side	plugin/keel/clauses.json:2209-2211	U03.subject: keyed on effect=pids_gone (list-valued, KEYABLE_EFFECTS)	keel_effect.pids_gone	predicate/extractor result
+C-CLS-155	clause-side	plugin/keel/clauses.json:2492-2495	U06.fingerprint: kind=effect effect=net_out	keel_effect.net_out	predicate/extractor result
+C-CLS-156	clause-side	plugin/keel/clauses.json:2496-...	U06.discharged_by: kind=effect effect=net_read	keel_effect.net_read	predicate/extractor result
+C-CLS-157	clause-side	plugin/keel/clauses.json:2491	U06.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-158	clause-side	plugin/keel/clauses.json:2686-2689	U08.fingerprint: kind=effect effect=commit_signed	keel_effect.commit_signed	predicate/extractor result
+C-CLS-159	clause-side	plugin/keel/clauses.json:2690-...	U08.discharged_by: kind=effect effect=report_signature	keel_effect.report_signature	predicate/extractor result
+C-CLS-160	clause-side	plugin/keel/clauses.json:2685	U08.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-161	clause-side	plugin/keel/clauses.json:2880-2883	U09.fingerprint: kind=effect effect=head_switched	keel_effect.head_switched	predicate/extractor result
+C-CLS-162	clause-side	plugin/keel/clauses.json:2884-...	U09.discharged_by: any_of: kind=effect effect=report_ref | kind=effect effect=observed_read	keel_effect.report_ref, keel_effect.observed_read	predicate/extractor result
+C-CLS-163	clause-side	plugin/keel/clauses.json:2879	U09.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-164	clause-side	plugin/keel/clauses.json:3191-3194	U10.fingerprint: kind=effect effect=report_null	keel_effect.report_null	predicate/extractor result
+C-CLS-165	clause-side	plugin/keel/clauses.json:3195-...	U10.discharged_by: any_of: kind=effect effect=report_structured | kind=regex on=tool_name pattern=^Read$	keel_effect.report_structured, tool_name	predicate/extractor result
+C-CLS-166	clause-side	plugin/keel/clauses.json:3183-3190	U10.subject: on=[tool_input.command, tool_input.file_path], pattern captures a trailing .json path, group=1	tool_input.command, tool_input.file_path	predicate/extractor result
+C-CLS-167	clause-side	plugin/keel/clauses.json:3411-3414	U12.fingerprint: kind=effect effect=files_changed	keel_effect.files_changed	predicate/extractor result
+C-CLS-168	clause-side	plugin/keel/clauses.json:3415-...	U12.discharged_by: any_of: kind=regex on=tool_name pattern=^Grep$ | kind=regex on=tool_name pattern=^Read$ | kind=effect effect=report_paths	tool_name, keel_effect.report_paths	predicate/extractor result
+C-CLS-169	clause-side	plugin/keel/clauses.json:3408-3410	U12.subject: keyed on effect=files_changed (list-valued, KEYABLE_EFFECTS)	keel_effect.files_changed	predicate/extractor result
+C-CLS-170	clause-side	plugin/keel/clauses.json:3675-3678	U13.fingerprint: kind=effect effect=files_changed	keel_effect.files_changed	predicate/extractor result
+C-CLS-171	clause-side	plugin/keel/clauses.json:3679-...	U13.discharged_by: any_of: kind=regex on=tool_name pattern=^Read$ | kind=effect effect=report_paths	tool_name, keel_effect.report_paths	predicate/extractor result
+C-CLS-172	clause-side	plugin/keel/clauses.json:3672-3674	U13.subject: keyed on effect=files_changed (list-valued, KEYABLE_EFFECTS)	keel_effect.files_changed	predicate/extractor result
+C-CLS-173	clause-side	plugin/keel/clauses.json:3926-3929	U19.fingerprint: kind=effect effect=files_changed	keel_effect.files_changed	predicate/extractor result
+C-CLS-174	clause-side	plugin/keel/clauses.json:3930-...	U19.discharged_by: any_of: kind=regex on=tool_name pattern=^Grep$ | kind=regex on=tool_name pattern=^Read$ | kind=effect effect=report_paths	tool_name, keel_effect.report_paths	predicate/extractor result
+C-CLS-175	clause-side	plugin/keel/clauses.json:3923-3925	U19.subject: keyed on effect=files_changed (list-valued, KEYABLE_EFFECTS)	keel_effect.files_changed	predicate/extractor result
+C-CLS-176	clause-side	plugin/keel/clauses.json:4189-4200	U20.fingerprint: any_of: kind=effect effect=files_removed | kind=effect effect=head_reset	keel_effect.files_removed, keel_effect.head_reset	predicate/extractor result
+C-CLS-177	clause-side	plugin/keel/clauses.json:4201-...	U20.discharged_by: any_of: kind=effect effect=report_pass | kind=effect effect=report_fail	keel_effect.report_pass, keel_effect.report_fail	predicate/extractor result
+C-CLS-178	clause-side	plugin/keel/clauses.json:4188	U20.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-179	clause-side	plugin/keel/clauses.json:4538-4541	U24.fingerprint: kind=effect effect=net_out	keel_effect.net_out	predicate/extractor result
+C-CLS-180	clause-side	plugin/keel/clauses.json:4542-...	U24.discharged_by: kind=effect effect=report_nowarn	keel_effect.report_nowarn	predicate/extractor result
+C-CLS-181	clause-side	plugin/keel/clauses.json:4537	U24.subject: bare field session_id	session_id	predicate/extractor result
+C-CLS-182	clause-side	plugin/keel/clauses.json:4773-4776	U25.fingerprint: kind=effect effect=report_clean	keel_effect.report_clean	predicate/extractor result
+C-CLS-183	clause-side	plugin/keel/clauses.json:4777-...	U25.discharged_by: kind=effect effect=report_fail	keel_effect.report_fail	predicate/extractor result
+C-CLS-184	clause-side	plugin/keel/clauses.json:4772	U25.subject: bare field session_id	session_id	predicate/extractor result

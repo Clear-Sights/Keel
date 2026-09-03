@@ -1,0 +1,267 @@
+math_id	code_id	relation	evidence	auditor	verdict	signoff
+M-LAW-027	C-EFF-001	equal	code field is the verbatim EFFECTS['files_changed'] sentence itself, same statement, same domain			
+M-LAW-028	C-EFF-002	equal	code field is the verbatim EFFECTS['files_removed'] sentence itself, same statement, same domain			
+M-LAW-029	C-EFF-003	equal	code field is the verbatim EFFECTS['head_moved'] sentence itself, same statement, same domain			
+M-LAW-030	C-EFF-004	equal	code field is the verbatim EFFECTS['head_switched'] sentence itself, same statement, same domain			
+M-LAW-031	C-EFF-005	equal	code field is the verbatim EFFECTS['head_reset'] sentence itself, same statement, same domain			
+M-LAW-032	C-EFF-006	equal	code field is the verbatim EFFECTS['commit_signed'] sentence itself, same statement, same domain			
+M-LAW-033	C-EFF-007	equal	code field is the verbatim EFFECTS['remote_ref_moved'] sentence itself, same statement, same domain			
+M-LAW-034	C-EFF-008	equal	code field is the verbatim EFFECTS['remote_landed'] sentence itself, same statement, same domain			
+M-LAW-035	C-EFF-009	equal	code field is the verbatim EFFECTS['pids_gone'] sentence itself, same statement, same domain			
+M-LAW-036	C-EFF-010	equal	code field is the verbatim EFFECTS['pids_spawned'] sentence itself, same statement, same domain			
+M-LAW-037	C-EFF-011	equal	code field is the verbatim EFFECTS['pids_spawned_again'] sentence itself, same statement, same domain			
+M-LAW-038	C-EFF-012	equal	code field is the verbatim EFFECTS['net_out'] sentence itself, same statement, same domain			
+M-LAW-039	C-EFF-013	equal	code field is the verbatim EFFECTS['report_null'] sentence itself, same statement, same domain			
+M-LAW-040	C-EFF-014	equal	code field is the verbatim EFFECTS['report_pass'] sentence itself, same statement, same domain			
+M-LAW-041	C-EFF-015	equal	code field is the verbatim EFFECTS['report_clean'] sentence itself, same statement, same domain			
+M-LAW-042	C-EFF-016	equal	code field is the verbatim EFFECTS['report_fail'] sentence itself, same statement, same domain			
+M-LAW-043	C-EFF-017	equal	code field is the verbatim EFFECTS['report_ref'] sentence itself, same statement, same domain			
+M-LAW-044	C-EFF-018	equal	code field is the verbatim EFFECTS['report_paths'] sentence itself, same statement, same domain			
+M-LAW-045	C-EFF-019	equal	code field is the verbatim EFFECTS['named_paths'] sentence itself, same statement, same domain			
+M-LAW-046	C-EFF-020	equal	code field is the verbatim EFFECTS['named_pids'] sentence itself, same statement, same domain			
+M-LAW-047	C-EFF-021	equal	code field is the verbatim EFFECTS['report_pids'] sentence itself, same statement, same domain			
+M-LAW-048	C-EFF-022	equal	code field is the verbatim EFFECTS['report_self'] sentence itself, same statement, same domain			
+M-LAW-049	C-EFF-023	equal	code field is the verbatim EFFECTS['report_structured'] sentence itself, same statement, same domain			
+M-LAW-050	C-EFF-024	equal	code field is the verbatim EFFECTS['report_signature'] sentence itself, same statement, same domain			
+M-LAW-051	C-EFF-025	equal	code field is the verbatim EFFECTS['report_nowarn'] sentence itself, same statement, same domain			
+M-LAW-052	C-EFF-026	equal	code field is the verbatim EFFECTS['net_read'] sentence itself, same statement, same domain			
+M-LAW-053	C-EFF-027	equal	code field is the verbatim EFFECTS['report_after_change'] sentence itself, same statement, same domain			
+M-LAW-054	C-EFF-028	equal	code field is the verbatim EFFECTS['report_listing'] sentence itself, same statement, same domain			
+M-LAW-055	C-EFF-029	equal	code field is the verbatim EFFECTS['observed_read'] sentence itself, same statement, same domain			
+M-LAW-056	C-EFF-030	equal	code field is the verbatim EFFECTS['remote_read'] sentence itself, same statement, same domain			
+M-LAW-050	C-EFF-031	instance	one concrete pattern (PGP/SSH header, 'Good signature', gpgsig) instantiating 'signature block or verified-signature datum'			
+M-LAW-051	C-EFF-032	instance	concrete pattern for what counts as a 'warning line' feeding report_nowarn			
+M-LAW-040	C-EFF-033	instance	concrete pattern set instantiating 'a test-report datum with no failures'			
+M-LAW-041	C-EFF-034	instance	concrete pattern set instantiating 'a scanner-report datum with no findings'			
+M-LAW-042	C-EFF-035	instance	concrete pattern set instantiating 'a report datum with failures or findings'			
+M-LAW-043	C-EFF-036	instance	tokenizer feeding the guard-side ref/path/pid matching (report_ref/report_paths/report_pids); no single word-boundary rule stated in text			
+M-LAW-047	C-EFF-037	equal	LISTING_FLOOR=2 matches text's 'at least two pids' exactly			
+M-LAW-043	C-EFF-038	near	text says 'a ref name or commit id'; code additionally requires an ABBREV_FLOOR(7)+ hex prefix before treating a token as a commit id, an unstated minimum length narrowing the domain			
+-	C-EFF-039	none	scheduling throttle for remote polling cadence; no math element states a retry interval (candidate: implementation detail, not REMOVE-worthy)			
+M-LAW-055	C-EFF-040	instance	names the artifact file ('observed.json') the observed_read law refers to			
+M-LAW-056	C-EFF-041	instance	names the artifact file ('remote.json') the remote_read law refers to			
+-	C-EFF-042	none	performance budget for the non-repo fallback walk; no math element states a walk cap (implementation necessity)			
+-	C-EFF-043	none	per-git-call timeout budget; no math element states a timeout (implementation necessity)			
+M-LAW-035	C-EFF-044	instance	field index used to read a process start time, the mechanism 'reused pid with different start time = different process' relies on for pids_gone			
+M-LAW-036	C-EFF-045	instance	field index used to read process-session id, the lineage mechanism 'in its tree, or one of its process sessions' relies on for pids_spawned			
+-	C-EFF-046	none	safety cap against a cyclic/stale /proc read; no math element states an ancestry walk limit (implementation necessity)			
+M-LAW-028	C-EFF-047	instance	the empty-blob sha used to detect 'has none' (emptied) as one instantiation of files_removed's content-gone case			
+-	C-EFF-048	none	git subprocess invocation plumbing; no math element states how git is called (implementation infrastructure underlying most EFFECTS fields)			
+-	C-EFF-049	none	git-unreachable/timeout failure path returning None; implements the module's general NOT-EVALUABLE philosophy (stated in the docstring, not entered as its own math row)			
+-	C-EFF-050	none	git nonzero-exit failure path returning None; same NOT-EVALUABLE philosophy, not a distinct math row			
+-	C-EFF-051	none	git success path returning stdout; plumbing, no math element			
+-	C-EFF-052	none	resolves repository root for cwd; infrastructure feeding files_changed/removed/head_moved etc., not itself a stated law			
+M-LAW-027	C-EFF-053	instance	builds the private-index tree object that files_changed/files_removed are diffed against			
+-	C-EFF-054	none	index-file filesystem failure path returning None; infra failure branch			
+-	C-EFF-055	none	git add -A failure path returning None; infra failure branch			
+-	C-EFF-056	none	write-tree success/failure return; infra plumbing			
+M-LAW-027	C-EFF-057	near	text: 'a file has different content after the act'; the non-repo fallback compares only (size, mtime_ns) as a proxy for content, which can miss a same-size content edit or false-flag a mtime-only touch			
+M-LAW-027	C-EFF-058	near	excludes .git/node_modules/__pycache__ from the non-repo walk; text's stated exclusions are gitignored paths and paths outside root, not these specific directory names			
+-	C-EFF-059	none	per-file lstat failure, skip; infra failure branch			
+-	C-EFF-060	none	records the (size, mtime_ns) signature per path; mechanism for the near already noted at C-EFF-057			
+M-LAW-027	C-EFF-061	near	aborts and returns None past WALK_CAP; an unstated cap causing NOT-EVALUABLE beyond the text's stated gitignore/outside-root limits			
+-	C-EFF-062	none	outer os.walk failure path returning None; infra failure branch			
+M-LAW-029	C-EFF-063	instance	reads the ref table and HEAD sha that head_moved (and head_switched/head_reset/commit_signed/remote_ref_moved) are computed from			
+-	C-EFF-064	none	per-line for-each-ref parsing; mechanism detail			
+M-LAW-029	C-EFF-065	instance	resolves HEAD via rev-parse, storing '' for an unborn HEAD; the concrete HEAD read head_moved compares			
+-	C-EFF-066	none	reads and splits one /proc/<pid>/stat line after the comm-closing paren; low-level parsing infra			
+-	C-EFF-067	none	pid unreadable -> None; infra failure branch			
+M-LAW-035	C-EFF-068	instance	one pass building the pid->(start,ppid,sid) table that pids_gone and pids_spawned are computed against			
+-	C-EFF-069	none	no /proc -> None; infra failure branch			
+-	C-EFF-070	none	skips non-pid directory entries; infra detail			
+M-LAW-035	C-EFF-071	near	text says 'running'; code additionally excludes zombie-state entries and short/missing stat fields, an unstated narrowing of what counts as running (reasonable, but not licensed by the one-line text)			
+-	C-EFF-072	none	stores the parsed pid tuple; mechanism detail			
+M-LAW-036	C-EFF-073	instance	walks ppid chains to find every current descendant of the session root, the lineage test pids_spawned assignment relies on			
+M-LAW-036	C-EFF-074	near	text: assigned '...in its tree'; code additionally caps the ancestry walk at _ANCESTRY_CAP hops, silently dropping a legitimately deep descendant rather than testing lineage unconditionally			
+-	C-EFF-075	none	walks this process's own ppid chain; infra used to compute the exclusion set			
+-	C-EFF-076	none	stops the chain walk at a parse failure or pid<=1; infra failure branch			
+M-LAW-036	C-EFF-077	instance	locates the session's root pid (2 ancestors up), the 'its tree' anchor lineage is measured from			
+M-LAW-035	C-EFF-078	near	text: process 'running before the act is not running after'; code additionally excludes self + up to 7 ancestor pids from observation entirely, an implementation exclusion set not licensed by the text			
+M-LAW-038	C-EFF-079	instance	reads the host's cumulative TCP ActiveOpens counter that net_out's movement test is computed from			
+-	C-EFF-080	none	unreadable /proc/net/snmp -> None; infra failure branch			
+-	C-EFF-081	none	locates the Tcp: header row/column; parsing detail			
+-	C-EFF-082	none	int-parse failure -> None; infra failure branch			
+-	C-EFF-083	none	no Tcp: line found -> None; infra failure branch			
+M-LAW-036	C-EFF-084	instance	decides whether a pid is assigned to this session 'by lineage: in its tree, or in one of its process sessions'			
+-	C-EFF-085	none	already-known-descendant case; mechanism detail of C-EFF-084			
+-	C-EFF-086	none	session-id 0 (kernel thread) excluded; mechanism detail of C-EFF-084			
+-	C-EFF-087	none	session-id membership test; mechanism detail of C-EFF-084			
+M-LAW-038	C-EFF-088	instance	decides whether the net counter's movement is assignable to the act, implementing the text's NOT-EVALUABLE clause			
+M-LAW-038	C-EFF-089	equal	matches text exactly: ambient movement or an unmeasurable before/now value -> NOT-EVALUABLE (None), not False			
+M-LAW-038	C-EFF-090	equal	matches text: assigned iff the counter increased across the act			
+-	C-EFF-091	none	derives the session+agent private state directory path; infra plumbing			
+-	C-EFF-092	none	computes the pre-act snapshot file path; infra plumbing			
+-	C-EFF-093	none	keys the snapshot by hashed act id for concurrency (DL-06, not in this math slice); infra detail			
+-	C-EFF-094	none	falls back to a single shared snapshot slot when no act id; infra detail			
+M-LAW-028	C-EFF-095	instance	lists top-level gitignored entries, the set files_removed's 'vanished gitignored entry' clause is diffed against			
+M-LAW-031	C-EFF-096	instance	counts HEAD's reflog entries, the basis for head_reset's reflog-based 'reset:' detection			
+-	C-EFF-097	none	int-parse failure -> None; infra failure branch			
+-	C-EFF-098	none	top-level orchestrator recording the pre-act world; not one decision (schema: whole functions only count when they are one decision) -- its branches are marked individually			
+-	C-EFF-099	none	picks repo-root vs None by whether cwd is a directory; orchestration branch			
+M-LAW-034	C-EFF-100	near	text (remote_landed) doesn't mention polling cadence; code adds an unstated REMOTE_RETRY_S=60s gate before re-measuring the remote, an extra scheduling mechanism			
+-	C-EFF-101	none	reads current and remembered net counters; mechanism detail			
+M-LAW-038	C-EFF-102	instance	computes net_ambient, feeding net_out's stated NOT-EVALUABLE-on-ambient-movement clause			
+-	C-EFF-103	none	populates repo-derived snapshot fields when root is set; orchestration branch			
+M-LAW-027	C-EFF-104	near	non-repo fallback populates snap['walk'] via the size/mtime proxy noted as near at C-EFF-057, rather than a content comparison			
+-	C-EFF-105	none	computes the pre-act pid table/kin set when proc_table succeeded; orchestration branch			
+M-LAW-036	C-EFF-106	near	text: process 'did not exist before the act is still running after'; code additionally re-adds a remembered spawned pid across snapshots whose start time still matches, an extra persistence rule for reparented daemons not stated in the single-act text			
+-	C-EFF-107	none	computes the set of session ids among kin; mechanism detail			
+M-LAW-047	C-EFF-108	instance	records every currently-live pid, the pool report_pids's '>=2 alive pids' claim is checked against			
+-	C-EFF-109	none	writes the pre-act snapshot file when opens_act; infra I/O branch			
+M-LAW-055	C-EFF-110	instance	always writes observed.json from this snapshot, the artifact observed_read checks for			
+-	C-EFF-111	none	session-start measurement wrapper (opens_act=False); orchestration, no independent decision			
+-	C-EFF-112	none	loads persisted session memory; infra I/O			
+-	C-EFF-113	none	missing/invalid memory file -> default dict; infra failure branch			
+-	C-EFF-114	none	persists session memory; infra I/O			
+-	C-EFF-115	none	write failure silently ignored; best-effort infra			
+M-LAW-027	C-EFF-116	instance	computes the changed/removed path lists files_changed and files_removed are built from			
+-	C-EFF-117	none	missing tree sha -> (None,None) NOT-EVALUABLE; infra failure branch			
+-	C-EFF-118	none	identical trees -> ([],[]); infra shortcut			
+-	C-EFF-119	none	diff-tree call failed -> (None,None); infra failure branch			
+M-LAW-028	C-EFF-120	equal	matches text: a deleted path, or a modified path whose content is now the empty blob (content gone), is counted as removed			
+M-LAW-027	C-EFF-121	equal	matches text: a modified/type-changed/added path not caught by the emptied case is counted as changed (different content after)			
+M-LAW-027	C-EFF-122	near	non-repo diff of two (size,mtime) walk snapshots; same size/mtime-proxy near noted at C-EFF-057, applied as a delta			
+-	C-EFF-123	none	either snapshot None -> (None,None); infra failure branch			
+M-LAW-028	C-EFF-124	near	text: file 'has none/does not exist'; non-repo path infers 'emptied' via size==0 only, a weaker content-based proxy			
+M-LAW-027	C-EFF-125	near	text: 'different content'; non-repo path flags changed via a (size,mtime) signature difference, which can miss a same-signature content edit or flag a mtime-only touch as changed			
+M-LAW-028	C-EFF-126	near	removed = vanished paths plus emptied (size-proxy); same non-repo proxy limitation as C-EFF-124			
+-	C-EFF-127	none	orchestrator classifying stdout into report_* booleans; not one decision, branches marked individually			
+-	C-EFF-128	none	extracts text/stripped/operands from the event; mechanism detail			
+M-LAW-039	C-EFF-129	instance	detects whether the command's operands target a structured file (.json/.yaml/.yml/.toml), the 'reading a structured file' clause of report_null			
+M-LAW-040	C-EFF-130	instance	computes 'passed' as PASS-pattern matched and FAIL-pattern absent, one instantiation of 'printed a test-report datum with no failures'			
+M-LAW-039	C-EFF-131	near	text: 'null datum, or nothing, while reading a structured file'; code accepts a literal 'null' string unconditionally (not gated on reads_structured), wider than the stated domain which ties the empty case, not the null-literal case, to reading a structured file			
+M-LAW-040	C-EFF-132	equal	report_pass = passed, matches text directly			
+M-LAW-041	C-EFF-133	near	text: scanner report 'with no findings'; code additionally requires the FAIL pattern to be absent even when CLEAN matched, an unstated co-occurrence veto not in the one-line text			
+M-LAW-042	C-EFF-134	equal	report_fail = FAIL pattern matched, matches text directly			
+M-LAW-051	C-EFF-135	equal	report_nowarn = passed AND no warning line, matches text exactly ('report_pass, and the report carries no warning line')			
+M-LAW-050	C-EFF-136	equal	report_signature = SIGNATURE pattern matched, matches text directly			
+M-LAW-049	C-EFF-137	equal	report_structured = _is_structured(stripped), matches text directly			
+M-LAW-048	C-EFF-138	equal	report_self = _lists_itself(text,command), matches text directly			
+M-LAW-049	C-EFF-139	instance	decides whether stdout parses as non-null JSON, the concrete test for 'printed a JSON datum that is not null'			
+M-LAW-049	C-EFF-140	instance	fast-path char-class prefilter before attempting a JSON parse; an optimization consistent with the text, not itself stated			
+M-LAW-049	C-EFF-141	equal	parse failure -> False; parsed and not None -> True: matches text exactly			
+M-LAW-048	C-EFF-142	instance	defines what a 'segment' of the command is (split on control operators outside quotes), the unit report_self's 'whole segment of its own command' is measured in			
+-	C-EFF-143	none	closes an open quote span; sub-mechanism of the segment splitter, no separate math statement			
+-	C-EFF-144	none	handles a backslash-escape inside a double quote; sub-mechanism, no separate math statement			
+-	C-EFF-145	none	appends inside a quote / opens a new quote; sub-mechanism, no separate math statement			
+-	C-EFF-146	none	handles a backslash-escape outside a quote; sub-mechanism, no separate math statement			
+-	C-EFF-147	none	splits on a control operator outside a quote; sub-mechanism, no separate math statement			
+-	C-EFF-148	none	appends an ordinary character; sub-mechanism, no separate math statement			
+-	C-EFF-149	none	flushes the final buffered segment; sub-mechanism, no separate math statement			
+M-LAW-048	C-EFF-150	near	text: output 'contains a whole segment of its own command'; code additionally requires the segment be >=3 chars and compares literal text only, so a shell-expanded part like $$ is missed (a stated code-comment limit absent from the EFFECTS text)			
+-	C-EFF-151	none	non-str command or empty text -> False; infra guard			
+M-LAW-048	C-EFF-152	near	same >=3-char threshold noted at C-EFF-150 applied at the match site			
+-	C-EFF-153	none	no segment matched -> False; infra fallthrough			
+M-LAW-043	C-EFF-154	instance	orchestrates the guard-side effects (report_ref/report_paths/named_paths/named_pids/report_pids/report_listing); branches marked individually			
+-	C-EFF-155	none	tokenizes act output; mechanism already covered at C-EFF-036			
+-	C-EFF-156	none	defaults every guard-side key to None (NOT-EVALUABLE); infra default			
+M-LAW-043	C-EFF-157	near	quiet-gating matches the text's own 'act that changed no file/ref/process' clause exactly, but the ABBREV_FLOOR hex-prefix match adds an unstated minimum length for what counts as 'a commit id', narrowing beyond the one-line text			
+-	C-EFF-158	none	lists worktree paths via ls-tree when a repo tree is known; mechanism detail			
+-	C-EFF-159	none	falls back to the non-repo walk's path keys; mechanism detail			
+-	C-EFF-160	none	builds a 'held' set of paths/basenames/ancestor-dirs that is computed but not used beyond registration per the code summary; dead computation, candidate REMOVE			
+M-LAW-045	C-EFF-161	near	text: 'the worktree paths that report named, in full'; code matches a token by exact path, path-suffix, basename, or directory-prefix -- basename/prefix matches are broader than a literal named path (a bare filename common to many directories pays any of them)			
+M-LAW-045	C-EFF-162	equal	named_paths = the matched set when quiet, else empty, matches text's 'what a demand keyed on a changed path is paid by' under the same quiet gating as report_paths			
+M-LAW-044	C-EFF-163	equal	report_paths = quiet AND some path named, matches text exactly			
+M-LAW-047	C-EFF-164	equal	report_pids/named_pids/report_listing computed together: >=LISTING_FLOOR claimed live pids, the named set, and listing-excludes-self -- matches report_pids/named_pids/report_listing text as one bundle (M-LAW-046, M-LAW-054 also apply)			
+M-LAW-034	C-EFF-165	instance	measures remote tracking-branch tips, the comparison basis for remote_landed, and writes remote.json for remote_read			
+-	C-EFF-166	none	git remote unreachable -> None; infra failure branch			
+-	C-EFF-167	none	lists origin's heads and parses tip shas; mechanism detail			
+-	C-EFF-168	none	remote.json write failure -> None, fails closed (a README guard-philosophy pattern, not itself EFFECTS text); infra failure branch			
+-	C-EFF-169	none	success path returning tips; infra plumbing			
+M-LAW-055	C-EFF-170	instance	writes observed.json: head, branch, tree, dirty/paths, refs, pids -- the artifact observed_read validates			
+-	C-EFF-171	none	initializes the output document; mechanism detail			
+M-LAW-029	C-EFF-172	instance	populates head/branch from the ref table underlying head_moved			
+M-LAW-027	C-EFF-173	instance	populates dirty paths via a HEAD-to-snapshot diff, mirroring the files_changed basis			
+-	C-EFF-174	none	elif populates paths from the non-repo walk; mechanism detail			
+-	C-EFF-175	none	write failure silently ignored; best-effort infra			
+M-LAW-055	C-EFF-176	instance	orchestrates whether a host Read actually returned one of Keel's own artifacts unmodified; branches marked individually			
+-	C-EFF-177	none	missing/empty file_path -> False; infra guard			
+-	C-EFF-178	none	host-reported read error -> False; infra guard			
+-	C-EFF-179	none	host error text pattern -> False; infra guard			
+-	C-EFF-180	none	path doesn't resolve to the expected target file -> False; infra guard			
+-	C-EFF-181	none	target read/parse failure -> False; infra guard			
+-	C-EFF-182	none	parsed JSON not a dict -> False; infra guard			
+M-LAW-055	C-EFF-183	near	text: returned 'as written'; code additionally rejects when the caller's cwd resolves to a different repo root than the artifact's (DL-11), an unstated cross-worktree scoping check narrower than a plain equality-of-content test			
+M-LAW-056	C-EFF-184	equal	for REMOTE, validity is whether doc['tips'] is a dict, matching text's 'with tips present'			
+M-LAW-055	C-EFF-185	near	text: returned 'as written'; code additionally rejects when the event's session_id disagrees with the artifact's recorded session, an unstated session-scoping check			
+M-LAW-055	C-EFF-186	equal	final OBSERVED check: 'head' is a key of the doc, matching 'Keel's own worktree measurement (observed.json), as written'			
+M-LAW-055	C-EFF-187	instance	builds the full EFFECTS record for a Read tool_use: everything false/empty except observed_read/remote_read			
+-	C-EFF-188	none	initializes every key False; mechanism detail			
+-	C-EFF-189	none	overrides list-valued keys to []; mechanism detail			
+M-LAW-055	C-EFF-190	equal	observed_read computed via _artifact_read, matches text directly			
+M-LAW-056	C-EFF-191	equal	remote_read computed via _artifact_read, matches text directly			
+-	C-EFF-192	none	top-level PostToolUse orchestrator computing the whole EFFECTS record; not one decision, branches marked individually			
+-	C-EFF-193	none	initializes every key to None (NOT-EVALUABLE default); infra default matching the module's general philosophy			
+-	C-EFF-194	none	extracts tool_input/tool_response dicts; mechanism detail			
+-	C-EFF-195	none	merges in report_effects()'s booleans; already covered at C-EFF-127..138			
+-	C-EFF-196	none	reads the act id; mechanism detail			
+-	C-EFF-197	none	resolves the pre-act snapshot path, keyed or shared-fallback; mechanism detail			
+-	C-EFF-198	none	no snapshot found -> not_evaluable, everything else None; implements the module's general NOT-EVALUABLE philosophy, not a distinct math row			
+-	C-EFF-199	none	snapshot cleanup failure ignored; best-effort infra			
+-	C-EFF-200	none	loads session memory; infra I/O			
+-	C-EFF-201	none	reads the pre-act root; mechanism detail			
+-	C-EFF-202	none	branches to repo-based computation when root is set; orchestration			
+M-LAW-027	C-EFF-203	instance	rebuilds the current worktree tree object to diff against the pre-act tree			
+M-LAW-027	C-EFF-204	instance	computes changed/removed via _tree_delta; already covered at C-EFF-116..121			
+-	C-EFF-205	none	stores the pre-image tree sha for later revert; not one of the 30 EFFECTS keys, infra beyond the closed set			
+-	C-EFF-206	none	extracts after/before ref tables; mechanism detail			
+-	C-EFF-207	none	branches to ref-comparison computation when both tables present; orchestration			
+M-LAW-029	C-EFF-208	equal	head_moved = old HEAD sha != new HEAD sha, matches text exactly			
+M-LAW-033	C-EFF-209	equal	remote_ref_moved = remote-tracking refs whose sha differs before/after, matches text exactly			
+M-LAW-034	C-EFF-210	instance	records that a remote ref moved so the session-end check asks the remote regardless of net activity, feeding remote_landed's session-scoped check			
+-	C-EFF-211	none	defaults head_reset/commit_signed/head_switched False before finer checks; infra default			
+-	C-EFF-212	none	branches to finer HEAD-move classification when HEAD actually moved; orchestration			
+M-LAW-031	C-EFF-213	equal	head_reset = new_head ancestor-of old_head AND (changed or removed) truthy, matches text's first disjunct exactly			
+-	C-EFF-214	none	reads the new commit's body for signature scanning; mechanism detail			
+M-LAW-030	C-EFF-215	instance	tests whether new_head already existed among pre-act ref tips, the concrete 'already existed before' test			
+M-LAW-030	C-EFF-216	equal	head_switched = existed, matches text's first disjunct exactly			
+M-LAW-032	C-EFF-217	equal	commit_signed = not existed (act created it) AND body contains a gpgsig line, matches text exactly			
+-	C-EFF-218	none	branches to reflog-based re-classification when the reflog count increased; orchestration			
+-	C-EFF-219	none	reads the newest reflog subject lines; mechanism detail			
+M-LAW-031	C-EFF-220	equal	a reflog 'reset:' subject sets head_reset=True, matches text's second disjunct ('recorded a reset ... whatever it moved back to')			
+M-LAW-030	C-EFF-221	equal	a reflog 'checkout:' subject with HEAD unmoved sets head_switched=True, matches text's second disjunct ('HEAD ended where it began')			
+-	C-EFF-222	none	branches to also fold vanished gitignored entries into removed; orchestration			
+-	C-EFF-223	none	reads current top-level gitignored entries; mechanism detail			
+M-LAW-028	C-EFF-224	equal	extends removed with gitignored entries that vanished, matches text's second clause exactly			
+M-LAW-027	C-EFF-225	near	non-repo path computes changed/removed via the (size,mtime) walk-delta proxy, same near limitation noted at C-EFF-057/122			
+-	C-EFF-226	none	assigns files_changed/files_removed from the computed lists; mechanism detail			
+-	C-EFF-227	none	reads the current proc table and the pre-act pid map; mechanism detail			
+-	C-EFF-228	none	branches to pid-effect computation when both are available; orchestration			
+-	C-EFF-229	none	computes this process's own chain and the current descendants of the pre-act session root; mechanism detail			
+M-LAW-035	C-EFF-230	equal	pids_gone = pids tracked before now absent or restarted with a different start time, matches text exactly			
+-	C-EFF-231	none	extracts the pre-act alive/session-id sets; mechanism detail			
+M-LAW-036	C-EFF-232	equal	spawned = new pids (excluding this process's own chain) assigned to the session by lineage, matches text exactly			
+-	C-EFF-233	none	assigns pids_spawned from the computed set; mechanism detail			
+M-LAW-037	C-EFF-234	equal	pids_spawned_again = spawned nonempty AND session had already spawned one before, matches text exactly			
+-	C-EFF-235	none	updates spawn-count/remembered-pid memory when spawned is nonempty; session bookkeeping infra			
+M-LAW-038	C-EFF-236	instance	computes net_out via assigned_counter; already covered at C-EFF-088..090			
+M-LAW-072	C-EFF-237	instance	makes net_out=True sticky for the session; instantiates 'the host's connection counter has no lineage and is assigned by the idle gap' across the whole session, not just one act			
+M-LAW-038	C-EFF-238	near	text states NOT-EVALUABLE for one act's ambient movement; code additionally makes that None sticky across the session (never collapsing to False once seen), an unstated cross-act persistence rule			
+-	C-EFF-239	none	remembers where the next idle-gap measurement starts; mechanism detail			
+-	C-EFF-240	none	re-reads spawned for the guard-side 'still' computation; mechanism detail			
+-	C-EFF-241	none	defines 'quiet' as no file/ref/process change; feeds the already-marked guard-side laws (C-EFF-157/162/163)			
+-	C-EFF-242	none	merges in trace_effects()'s guard-side booleans; already covered at C-EFF-154..164			
+M-LAW-052	C-EFF-243	equal	net_read = net_out AND quiet AND not report_fail, matches text exactly			
+M-LAW-053	C-EFF-244	equal	report_after_change = report_pass AND a file changed since the last spawn, matches text exactly			
+-	C-EFF-245	none	sets the changed-since-spawn memory flag when files changed; session bookkeeping infra			
+-	C-EFF-246	none	clears the changed-since-spawn memory flag when a process spawned; session bookkeeping infra			
+M-LAW-055	C-EFF-247	equal	forces observed_read=remote_read=False on a PostToolUse delta, matching text: only a host Read of the artifact can set these true			
+-	C-EFF-248	none	persists updated session memory; infra I/O			
+M-LAW-034	C-EFF-249	instance	session-ending orchestrator computing remote_ref_moved/remote_landed once at session end; branches marked individually			
+-	C-EFF-250	none	loads slot/memory; infra I/O			
+-	C-EFF-251	none	initializes remote_ref_moved/remote_landed to None; infra default			
+M-LAW-034	C-EFF-252	instance	short-circuits to remote_ref_moved=[] remote_landed=True when nothing transmitted and no remote ref moved locally; vacuously consistent with the universally-quantified text but adds an unstated early-exit			
+-	C-EFF-253	none	resolves the repo root for cwd; mechanism detail			
+-	C-EFF-254	none	not a repository -> leave both None (NOT-EVALUABLE); infra guard			
+-	C-EFF-255	none	lists configured remotes; mechanism detail			
+M-LAW-034	C-EFF-256	instance	no remotes configured -> vacuously landed=True; same vacuous-truth pattern as C-EFF-252			
+-	C-EFF-257	none	reads local refs; mechanism detail			
+-	C-EFF-258	none	local refs unreadable -> not_evaluable; infra guard			
+-	C-EFF-259	none	collects the set of local ref shas; mechanism detail			
+-	C-EFF-260	none	loops over each configured remote listing its heads; orchestration			
+M-LAW-034	C-EFF-261	near	text doesn't state a fail-closed-on-first-unreachable-remote rule when multiple remotes exist; code returns not_evaluable immediately on the first unreachable remote rather than reporting per-remote or continuing			
+-	C-EFF-262	none	looks up the local tracking ref for a remote branch name; mechanism detail			
+M-LAW-033	C-EFF-263	equal	records a remote branch as moved when the local tracking ref disagrees with the remote's current sha, matches the remote_ref_moved definition applied at session end			
+M-LAW-034	C-EFF-264	equal	records a moved ref as unlanded when its remote sha is not among any local ref sha, matches text's 'equal to a local ref' test directly			
+-	C-EFF-265	none	assigns remote_ref_moved = moved list; mechanism detail			
+M-LAW-034	C-EFF-266	equal	remote_landed = not unlanded, matches text exactly: landed iff every moved head equals a local ref			

@@ -1,0 +1,45 @@
+id	kind	source	statement
+M-COV-001	Section	proofs/Coverings.v:26	Section Coverings.
+M-COV-003	Variable	proofs/Coverings.v:29	Variable Program : Type. (* the name of an invoked program *)
+M-COV-004	Definition	proofs/Coverings.v:32	Record Segment := { seg_argv : list Program }.
+M-COV-005	Variable	proofs/Coverings.v:34	Variable scan : Text -> list Segment. (* the ONE object every structural covering reads *)
+M-COV-006	Variable	proofs/Coverings.v:35	Variable mention : Text -> Text. (* the embedding e(c) = echo '<c>' *)
+M-COV-007	Variable	proofs/Coverings.v:36	Variable infix : Text -> Text -> Prop. (* infix c d : c occurs verbatim inside d *)
+M-COV-008	Hypothesis	proofs/Coverings.v:39	Hypothesis mention_preserves : forall c, infix c (mention c).
+M-COV-009	Variable	proofs/Coverings.v:43	Variable quoting_program : Program.
+M-COV-010	Hypothesis	proofs/Coverings.v:44-45	Hypothesis scan_mention_single : forall c, scan (mention c) = [ {| seg_argv := [quoting_program] |} ].
+M-COV-012	Definition	proofs/Coverings.v:51	Definition mention_immune (P : Covering) : Prop := forall c, ~ P (mention c).
+M-COV-014	Definition	proofs/Coverings.v:60	Definition non_vacuous (P : Covering) : Prop := exists c, P c.
+M-COV-016	Definition	proofs/Coverings.v:74-76	Definition structural (wanted : Program -> Prop) : Covering := fun c => exists s p rest, In s (scan c) /\ seg_argv s = p :: rest /\ wanted p.
+M-COV-017	Theorem	proofs/Coverings.v:80-81	Theorem structural_immune : forall wanted, ~ wanted quoting_program -> mention_immune (structural wanted).
+M-COV-018	Corollary	proofs/Coverings.v:93-95	Corollary textual_and_structural_incompatible : forall wanted, ~ wanted quoting_program -> non_vacuous (structural wanted) -> ~ textual (structural wanted).
+M-COV-019	Definition	proofs/Coverings.v:108-109	Definition rename (r : Program -> Program) (s : Segment) : Segment := {| seg_argv := map r (seg_argv s) |}.
+M-COV-023	Theorem	proofs/Coverings.v:150-151	Theorem topology_is_name_agnostic : forall n, name_agnostic (fun segs => length segs = n).
+M-COV-026	Theorem	proofs/Coverings.v:175-177	Theorem effect_separates_same_segments : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' -> forall segs, effect E d segs /\ ~ effect E d
+M-COV-027	Theorem	proofs/Coverings.v:190-192	Theorem nominal_monotone : forall (V W : Program -> Prop), (forall p, V p -> W p) -> forall c, structural V c -> structural W c.
+M-COV-028	Variable	proofs/Coverings.v:223	Variable Datum : Type.
+M-COV-029	Variable	proofs/Coverings.v:224	Variable claimed : Text -> option Datum. (* what the report SAYS the run produced *)
+M-COV-030	Variable	proofs/Coverings.v:225	Variable observed : Text -> option Datum. (* what the trace shows it DID produce *)
+M-COV-032	Theorem	proofs/Coverings.v:237-240	Theorem positive_needs_no_vocabulary : forall (f : Text -> Text), (forall c, claimed (f c) = claimed c) -> (forall c, observed (f c) = observed c) -> forall c, 
+M-COV-033	Theorem	proofs/Coverings.v:251-252	Theorem false_claim_always_rejected : forall c d d', claimed c = Some d -> observed c = Some d' -> d <> d' -> ~ positive c.
+M-COV-034	Corollary	proofs/Coverings.v:262-263	Corollary no_claim_is_not_a_pass : forall c, claimed c = None -> ~ positive c.
+M-COV-035	Variable	proofs/Coverings.v:279	Variable Event : Type.
+M-COV-036	Variable	proofs/Coverings.v:280	Variable isX : Event -> Prop.
+M-COV-037	Variable	proofs/Coverings.v:280	Variable isL : Event -> Prop.
+M-COV-038	Inductive	proofs/Coverings.v:287-289	Inductive violates : list Event -> Prop := violates_here | violates_later.
+M-COV-043	Corollary	proofs/Coverings.v:316-317	Corollary out_of_order_is_rejected : forall l x, isL l -> isX x -> ~ backward (l :: x :: nil).
+M-COV-044	Definition	proofs/Coverings.v:323-324	Definition forward (t : list Event) : Prop := forall e, In e t -> isX e -> exists q, In q t /\ isL q.
+M-COV-045	Corollary	proofs/Coverings.v:326-327	Corollary forward_only_admits_the_violation : forall e, isL e -> (forall p, ~ isX p) -> forward (e :: nil).
+M-CLS-065	Inductive	proofs/Clauses.v:74-111	Inductive EffectSide := <37 constructors, one per clause-side instantiating class effect>.
+M-LAW-059	Law	proofs/Coverings.v:62-64	Theorem 1's consequence: a textual covering that fires at all is defeated by a mention for every command it accepts, not merely the strings someone thought to t
+M-LAW-060	Law	proofs/Coverings.v:142-149	Theorem 4's consequence: C09 ("the checker's own pid is excluded from what it lists") is a topological fact and C08 ("the exit status was non-zero") is an effec
+M-LAW-062	Law	proofs/Coverings.v:245-250	Theorem 7's consequence: the evasion set is not merely bounded, it is EMPTY -- contrast Theorem 1, where it is unbounded -- which is the whole argument for pref
+M-LAW-063	Law	proofs/Coverings.v:114-126	Theorem 3's consequence: a nominal covering with any name in and any name out is never name-agnostic; the boundary is exact and this is stated as "Not hard: abs
+M-LAW-064	Law	README.md:90-96	A measured scoping limit (2026-08-14, observed, not theorised): a nested claude -p invocation reported the SAME session_id as the session that launched it, with
+M-LAW-066	Law	README.md:159-161	The ledger constrains an honest-but-forgetful agent, not a forging one: its hash chain detects altered rows and broken or missing hashes, but not deletion of a 
+M-LAW-071	Law	README.md:188-197	No occasion reads a program's name: before the act, the name is the only thing that distinguishes one command from another (Coverings.v, Theorem 3), so an occas
+M-LAW-073	Law	README.md:286-293	U25's occasion is a clean scan report in the call's output, whatever printed it; it is discharged only by a test invocation whose command text contains prefix o
+M-LAW-074	Law	README.md:316-320	proofs/Coverings.v proves, relative to a scanner with two stated properties and with zero axioms: a covering over the raw command text is never mention-immune (
+M-LAW-075	Law	README.md:320-321	A covering over the pipe topology is name-agnostic (Theorem 4).
+M-LAW-076	Law	README.md:321-322	A positive obligation that compares the run's own datum has an empty evasion set (Theorem 7).
+M-LAW-077	Law	README.md:322-323	A covering over what the act did reads no segment, so it is name-agnostic and separates byte-identical commands by their effects (Theorem 8).

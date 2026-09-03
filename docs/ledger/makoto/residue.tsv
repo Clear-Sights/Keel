@@ -1,0 +1,39 @@
+id	side	kind	source	statement_or_what
+L01	math	Law	README.md:5-9	makoto watches Claude's own tool calls and blocks ones that fake a check, holding claimed words against the session's own record
+L03	math	Law	README.md:13-16	makoto judges the agent against its own utterances/record, never the world's truth; no facts held, only kept/whole/honored words
+L08	math	Law	README.md:266-270	makoto has no non-blocking tier; a warning/disabled resting state is itself an illusory word, removed in 2026-06-02 warning-tier-elimination
+L09	math	Law	README.md:279-293	Named exceptions fire at level=advisory: gate.self_wired, gate.canon_fingerprints_advisory, gate.relative_path_citation, gate.plan_item_drift
+L16	math	Law	self-defense-asymmetry-followup.md:1-9	The self-defense asymmetry (settings.json vector) is OPEN, not closed by downgrading to plugin-only, for two independent reasons found by reading actual code/install state
+L17	math	Law	self-defense-asymmetry-followup.md:12-25	This repo's live hook wiring is legacy settings.json (not plugin-only); Assay has no entry in this settings.json at all
+L34	math	Law	vocab.py:44	fire_level on PreCheck is "by convention -- no longer runtime-checked here" (README:274-277 states the allowed set lives in tests/_toml_pattern_fixture.py, enforced by tests/test_stop_gate_level_invariant.py, not at load)
+C03	code	branch	claimedRunningAbsent.py:77-79	a running-claim match inside a quoted/fenced span is skipped (not the agent's own prose)
+C04	code	branch	claimedRunningAbsent.py:80-82	negated or forward-framed clause before the match voids it
+C05	code	function	claimedRunningAbsent.py:87-111	_bash_postuse_calls: yields (cmd,result,is_failure) for settled Bash terminals only, PostToolUse/PostToolUseFailure
+C06	code	branch	claimedRunningAbsent.py:96-98	an undecodable history row yields (None,None,None) marker instead of being dropped
+C08	code	branch	claimedRunningAbsent.py:140-141	verdict is None but an undecodable row was seen -> return False (fail-open silence, never None)
+C14	code	field	claimedRunningAbsent.py:183-184	run= lambda reads c.text and c.history_all_agents exactly (matches declared eats)
+C16	code	function	claimedShippedAbsent.py:35-89	pushed_tip_matches_remote: compares local refs/heads/<branch> tip to origin via ls-remote, git subprocess calls, 3s timeouts
+C18	code	branch	claimedShippedAbsent.py:54-62	no branch extracted -> fall back to git symbolic-ref HEAD; empty -> NOT_EVALUABLE "names no branch and HEAD is not on one"
+C19	code	branch	claimedShippedAbsent.py:73-74	subprocess exception -> NOT_EVALUABLE "git observation unavailable"
+C20	code	branch	claimedShippedAbsent.py:79-81	local ref missing/unresolvable -> NOT_EVALUABLE "local refs/heads/<branch> unavailable"
+C25	code	function	claimedShippedAbsent.py:115-140	_shipped_claim: walks EVERY candidate claim match by advancing start; skips quoted/fenced and negated/forward-framed clauses
+C26	code	function	claimedShippedAbsent.py:143-168	_response_succeeded: parses JSON-string responses; fails closed on missing/empty/interrupted/nonzero-exit/error-field responses
+C27	code	function	claimedShippedAbsent.py:171-231	_successful_remote_mutation: true iff pooled history has a completed successful git push (explicit exit 0) or a closed-set remote-mutating tool call with merged:true for merges
+C30	code	function	claimedShippedAbsent.py:255-272	_attempted_remote_mutation: true iff any closed-set tool name OR any Bash row where _command_pushes_git, regardless of settlement/success
+C33	code	branch	claimedShippedAbsent.py:295-296	_successful_remote_mutation(history) true -> continue (claim upheld)
+C35	code	eats declaration	claimedShippedAbsent.py:308-311	CHECK gate.claimed_shipped: applies_at=Stop, posture=BLOCK, may_block=True, tests=CLAIM_VS_HISTORY, eats={text,history_all_agents,cwd}
+C37	code	constant	verifierExitMasking.py:52	_WRAPPERS = {sudo,env,time,nice,exec,command,builtin}
+C38	code	constant	verifierExitMasking.py:55-58	_LAUNCHER_SUBCOMMANDS: poetry/uv/pdm/hatch/pipenv->run, pnpm->exec/dlx; delegate-to-runner launcher map
+C40	code	function	verifierExitMasking.py:145-163	_errexit_toggle: True=errexit off (+e/+eu/+ex/+o errexit), False=on (-e/-eo/-o errexit), None=not a toggle
+C41	code	function	verifierExitMasking.py:166-170	_pipefail_toggle: True/False for set pipefail toggles, else None
+C42	code	function	verifierExitMasking.py:173-175	_is_exit_zero_literal: argv is `true` (any spelling) or `:`
+C45	code	branch	verifierExitMasking.py:199-201	not PreToolUse or not Bash tool -> return None
+C49	code	branch	verifierExitMasking.py:240-241	operator is || and rest doesn't propagate failure -> reason "verifier failure masked by `|| ...`"
+C50	code	branch	verifierExitMasking.py:242-247	operator is && chained to a trailing || that doesn't propagate -> reason "verifier failure absorbed by the trailing `|| ...` branch"
+C55	code	regex	verifierExitMasking.py:96	_STATUS_CAPTURE_RX = \$\?
+C56	code	eats declaration	verifierExitMasking.py:273	CHECK content.verifier_exit_masking: applies_at=Pre, posture=BLOCK, eats={current_event,pattern}, tests=PATTERN_MATCH
+C59	code	function	test_check_law_eats.py:32-72	_walk_reads: AST walk collecting Attribute/getattr reads of the field set, following same-module callee calls (memoized by seen), restricted to context_names when known
+C60	code	branch	test_check_law_eats.py:136-142	edge=="Pre": derive from the module's `predicate` function (or its factory closure) over PRE_CONTEXT_FIELDS
+C61	code	branch	test_check_law_eats.py:145-155	edge!="Pre": derive from the CHECK's `run=` callable — a same-module named function, a lambda, or a resolved module-level factory function
+C62	code	branch	test_check_law_eats.py:162-167	if the module imports+calls _discharge_kwargs, DISCHARGE_EATS fields are unioned into the derived set
+C69	code	field	vocab.py:60-71	Finding dataclass: pattern_id/file/line/level/message/retry_hint/snippet/source_event_id (stamped centrally at dispatch, not by predicates)

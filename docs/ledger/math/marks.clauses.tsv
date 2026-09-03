@@ -1,0 +1,239 @@
+math_id	code_id	relation	evidence	auditor	verdict	signoff
+-	C-CLS-001	none	POINTS.md anchor regex is doc-tooling; no math element speaks of anchor fragments. Carriage.
+M-LAW-014	C-CLS-002	instance	_EVENTS enumerates the domain CLAUSE-EVENT-UNKNOWN checks membership against.
+-	C-CLS-003	none	_NON_ENFORCING lists routed-but-non-enforcing events with prose reasons; no math statement covers this dispatcher carve-out. Carriage.
+M-COV-002	C-CLS-004	instance	COMMAND_FIELD names the one field read as the raw command (Text); code narrows the general Text domain to one JSON path.
+M-LAW-004	C-CLS-005	instance	event_key implements the key_from extraction (bare/on/pattern/group) that CLAUSE-KEY-FROM-INVALID validates the shape of.
+-	C-CLS-006	none	_PROBE_CACHE is a memoization detail with no corresponding math statement. Carriage.
+-	C-CLS-007	none	reset_probe_cache is test-scope plumbing; not a math element. Carriage.
+-	C-CLS-008	none	_run_probe's cache-hit/miss branching is a performance detail, not a stated law. Carriage.
+M-LAW-005	C-CLS-009	near	Treats a subprocess exec failure (OSError/Timeout/ValueError) as None/not-evaluable; CLAUSE-PROBE-INVALID only validates probe *shape*, not runtime execution failure -- an added case.
+M-LAW-005	C-CLS-010	near	Treats nonzero probe returncode as not-evaluable; same gap as above, an added runtime case beyond the shape law.
+M-LAW-005	C-CLS-011	instance	Implements expect=='empty' as one of the valid expect shapes the law requires to compile/validate.
+M-LAW-005	C-CLS-012	instance	Implements expect=='nonempty', the second valid expect shape.
+M-LAW-005	C-CLS-013	instance	Implements expect as a compiled regex object, the third valid expect shape (regex.search).
+-	C-CLS-014	none	Event-name gate on _base_predicate is host-dispatch plumbing; no covering/name-agnosticism statement addresses it. Carriage.
+-	C-CLS-015	none	Tool-name allowlist gate is the same kind of dispatch plumbing as C-CLS-014. Carriage.
+-	C-CLS-016	none	any_of boolean composition is a code-only combinator; Coverings.v defines no algebra over coverings. Carriage (needed expressiveness the math does not speak about).
+-	C-CLS-017	none	all_of boolean composition, same reasoning as any_of. Carriage.
+M-CLS-001	C-CLS-018	equal	kind=='always' -> True is exactly the always/always fingerprint class the SIDE laws (e.g. A01_fingerprint) declare.
+M-COV-024	C-CLS-019	instance	Resolves keel_effect.<effect>, i.e. evaluates the world-derived datum E(d) that Definition effect abstracts over.
+M-CLS-103	C-CLS-019	instance	This is the runtime evaluation the Theorem (effect sides read the world, not the command) is stated about.
+-	C-CLS-020	none	Missing predicate.on -> False is a generic field-access default, not a covering statement. Carriage.
+M-COV-021	C-CLS-021	near	kind=='tool' checks equality against a fixed, finite host tool_name enumeration; nominal_segs is stated over an arbitrary Program name space, a wider/different domain than the closed host-tool enum.
+M-COV-031	C-CLS-022	near	kind=='nonzero' checks one int field != 0 as a success/failure proxy; positive is defined as claimed=observed equality over two independent data sources -- narrower and structurally different.
+M-COV-013	C-CLS-023	instance	Delegates to _regex_predicate over the raw command text, the machinery that implements a textual covering (Definition textual).
+-	C-CLS-024	none	Unknown predicate kind -> False is a default-deny fallback; no math element states this case. Carriage.
+M-COV-013	C-CLS-025	instance	Pattern-does-not-match -> False is the negative case of the textual covering's membership test.
+M-COV-013	C-CLS-026	near	The `unless` exclusion list adds an exception carve-out to pattern matching; Definition textual (P c -> infix c d -> P d) states no such exception.
+M-COV-024	C-CLS-027	near	Adds an observability-uncertain outcome (effect present but recorded None) that the pure Definition effect (fun _ => E d) does not model.
+-	C-CLS-028	none	Cheap gate short-circuit before running a probe is a performance ordering, not a covering statement. Carriage.
+M-LAW-006	C-CLS-029	instance	Executes predicate.probe via the validated, allowlisted read-only probe path.
+M-LAW-038	C-CLS-030	near	Generalizes the NOT-EVALUABLE stated limit (given only for net_out) to any effect recorded as unmeasured; the law is stated for one effect, code applies the idea to all.
+M-LAW-057	C-CLS-031	instance	NOT-EVALUABLE on the occasion side is treated as True (fail toward the demand) -- the stated asymmetry that an occasion miss must not silently let the costly act proceed unguarded.
+M-COV-011	C-CLS-032	equal	Returns the measured predicate result unchanged: exactly Covering := Text -> Prop applied to one command.
+-	C-CLS-033	none	discharged_by is None -> False is a runtime default for "no guard side declared"; not itself a stated law (distinct from CLAUSE-GUARD-ALWAYS, which forbids kind==always). Carriage.
+M-LAW-057	C-CLS-034	equal	NOT-EVALUABLE on the guard side is passed through as falsy: exactly the stated fail direction -- a guard miss fails to discharge, cheap and visible, never proceeds silently.
+-	C-CLS-035	none	_matches_a_tool_enum is closure-derivation support machinery; no math element defines "closure". Carriage.
+-	C-CLS-036	none	Non-dict predicate -> 'absent' is input-shape validation, not a covering classification. Carriage.
+M-COV-013	C-CLS-037	near	Extends "textual" to a composed (any_of/all_of) predicate whose branches include a textual one; Definition textual is stated over a single predicate, not a composition.
+M-COV-021	C-CLS-038	near	Extends "nominal" to a composed predicate with a nominal branch; nominal_segs is likewise stated single-predicate, not compositional.
+-	C-CLS-039	none	Single-distinct-branch-class collapse rule is classifier bookkeeping with no direct math statement. Carriage (enables C-CLS-153/176 to classify correctly as pure `effect`).
+M-CLS-004	C-CLS-040	instance	Multiple distinct agnostic branch classes -> 'composed' is exactly the class the composed SIDE laws (e.g. A02_discharged_by) declare.
+M-LAW-008	C-CLS-041	instance	Multiple distinct branch classes not all agnostic -> 'unclassified' is what feeds CLAUSE-SIDE-UNCLASSIFIED's refusal.
+-	C-CLS-042	none	No-branches-own-kind passthrough is classifier bookkeeping. Carriage.
+M-LAW-008	C-CLS-043	instance	No branches, no own kind -> 'unclassified' is the same terminal case CLAUSE-SIDE-UNCLASSIFIED refuses.
+M-CLS-001	C-CLS-044	equal	kind=='always' -> 'always' is exactly the class= always designation used across the SIDE laws.
+M-COV-024	C-CLS-045	equal	kind=='effect' -> 'effect' assigns exactly the class Definition effect instantiates.
+M-CLS-006	C-CLS-046	equal	kind=='tool' -> 'tool-enum' is exactly the tool-enum class the SIDE laws (e.g. A02_discharged_by_branch1) declare.
+M-CLS-006	C-CLS-047	instance	regex on=tool_name is a second, equivalent route to the same tool-enum class as C-CLS-046.
+M-LAW-007	C-CLS-048	instance	regex on=COMMAND_FIELD -> 'textual' is precisely the classification CLAUSE-TEXT-COVERING refuses on fingerprint/activated_by/discharged_by.
+M-COV-021	C-CLS-049	instance	kind in (program,pipeline) -> 'nominal' assigns the class nominal_segs is defined over (a program-name predicate).
+M-COV-031	C-CLS-050	instance	kind=='nonzero' -> 'positive' assigns the class Definition positive names, though (see C-CLS-022) the underlying test differs from the claimed/observed equality.
+M-LAW-008	C-CLS-051	instance	Any other kind -> 'unclassified' is the general catch-all CLAUSE-SIDE-UNCLASSIFIED refuses.
+M-COV-020	C-CLS-052	equal	AGNOSTIC_CLASSES is exactly the enumerated set of classes licensed as name-agnostic across the theorems (always/tool-enum/effect/positive/composed).
+M-COV-020	C-CLS-053	near	Assigns a 'host' closure to tool-enum sides; Coverings.v proves name-agnosticism (Thm 4/8) but states no "closure" (host/world/datum) dimension -- a code-only refinement.
+M-COV-020	C-CLS-054	near	Composed-with-tool_name-branch -> 'host' closure: same code-only closure refinement as C-CLS-053.
+M-COV-020	C-CLS-055	near	Composed-with-no-tool_name-branch -> 'world' closure: same code-only closure refinement.
+M-COV-025	C-CLS-056	instance	class=='effect' -> 'world' closure matches Theorem effect_is_name_agnostic's world-derived datum.
+M-COV-031	C-CLS-057	instance	class=='positive' -> 'datum' closure matches Definition positive's claimed/observed datum comparison.
+-	C-CLS-058	none	Other classes (always/nominal/unclassified/absent) pass through unchanged; no closure statement applies. Carriage.
+M-LAW-017	C-CLS-059	equal	KEYABLE_EFFECTS is exactly the enumerated set CLAUSE-SUBJECT-UNKEYABLE-EFFECT checks membership against.
+-	C-CLS-060	none	subject_fields is a generic field-list extraction utility with no direct math statement. Carriage.
+-	C-CLS-061	none	_fixture_event synthesizes a test event from a predicate; fixture-construction machinery, not itself a law. Carriage (supports the fixture laws already marked on their own rows).
+M-LAW-005	C-CLS-062	instance	PROBE_TIMEOUT_CEILING_MS is the ceiling CLAUSE-PROBE-INVALID checks timeout_ms against.
+M-LAW-001	C-CLS-063	equal	Refuses an effect leaf naming an effect absent from EFFECTS; same quantifier (any leaf), same fail direction (raise), same domain (effect leaves) as the law.
+M-LAW-002	C-CLS-064	equal	Refuses a nonzero leaf whose `on` does not start with tool_response.; matches the law's stated domain and fail direction exactly.
+M-LAW-003	C-CLS-065	equal	Refuses a regex-kind predicate whose pattern or any unless entry fails to compile; matches the law verbatim.
+M-LAW-004	C-CLS-066	equal	Refuses key_from that is not a nonempty string or dict-with-nonempty-on, exactly the base case the law states.
+M-LAW-004	C-CLS-067	instance	Refuses a key_from.pattern that fails to compile -- one sub-case of the general key_from-invalid law.
+M-LAW-004	C-CLS-068	instance	Refuses a key_from.group that is not int-or-string -- the other sub-case of the same law.
+M-LAW-005	C-CLS-069	equal	Refuses a probe whose cmd/timeout_ms/expect fail the structural shape; matches the law's stated domain exactly.
+M-LAW-006	C-CLS-070	instance	Refuses a probe whose argv[0] carries a path separator -- one half of the CLAUSE-PROBE-MUTATING check.
+M-LAW-006	C-CLS-071	instance	Refuses a probe whose whole argv is not in the read-only allowlist -- the other half of the same law (the basename-normalisation gap the law's evidence cites).
+M-LAW-005	C-CLS-072	instance	Refuses a probe expect.regex that fails to compile -- one shape sub-case of the probe-invalid law.
+M-LAW-006	C-CLS-073	equal	_READ_ONLY_PROBES is exactly the single-entry allowlist (git status --porcelain) CLAUSE-PROBE-MUTATING checks membership against.
+-	C-CLS-074	none	Leaf extraction with no branches is an AST-walk helper, not a math statement. Carriage.
+-	C-CLS-075	none	Leaf extraction across branches, same AST-walk helper. Carriage.
+M-COV-020	C-CLS-076	equal	AGNOSTIC_OCCASIONS aliases AGNOSTIC_CLASSES for the occasion-side reading -- the same licensed set, same domain.
+M-LAW-018	C-CLS-077	near	Terminal-clause special case (fixtures graded against discharged_by instead of fingerprint) is a code-only carve-out the fixture-positive law does not state.
+M-LAW-018	C-CLS-078	instance	Otherwise fixtures are graded against the fingerprint itself -- the ordinary case the law covers.
+-	C-CLS-079	none	Looping over the three sides is control-flow scaffolding around the laws already marked individually. Carriage.
+M-LAW-007	C-CLS-080	equal	Refuses any side classified 'textual'; matches CLAUSE-TEXT-COVERING's domain and fail direction exactly (no exemption to write).
+M-COV-015	C-CLS-080	instance	Is the code enforcement of Theorem textual_never_immune's practical consequence for the fingerprint/activated_by/discharged_by sides.
+M-LAW-008	C-CLS-081	equal	Refuses any side classified 'unclassified'; matches CLAUSE-SIDE-UNCLASSIFIED verbatim.
+M-LAW-009	C-CLS-082	equal	Refuses a fingerprint/activated_by side outside AGNOSTIC_CLASSES; matches CLAUSE-OCCASION-NOMINAL's domain and fail direction.
+M-COV-022	C-CLS-082	instance	Enforces, for the occasion side, the consequence of name_agnostic_cannot_separate_by_name.
+M-LAW-010	C-CLS-083	equal	Refuses a discharged_by side outside AGNOSTIC_CLASSES; matches CLAUSE-GUARD-NOMINAL verbatim.
+M-LAW-011	C-CLS-084	equal	Refuses discharged_by of kind=='always'; matches CLAUSE-GUARD-ALWAYS verbatim (a guard paid by any act observes nothing).
+M-LAW-012	C-CLS-085	equal	Refuses activated_by set without fixtures_activate; matches CLAUSE-NO-ACTIVATION-FIXTURES verbatim.
+M-LAW-013	C-CLS-086	equal	Loop refusing any activation fixture that fails activated_by; matches CLAUSE-ACTIVATION-FIXTURE-MISS's per-fixture universal quantifier.
+M-LAW-014	C-CLS-087	equal	Refuses clause.event outside the five in _EVENTS; matches CLAUSE-EVENT-UNKNOWN verbatim.
+M-LAW-015	C-CLS-088	equal	Refuses a clause missing fixtures_pos or fixtures_neg; matches CLAUSE-NO-FIXTURES verbatim.
+-	C-CLS-089	none	Compiling the three sides before fixture grading is sequencing scaffolding around the compile-time laws already marked. Carriage.
+M-LAW-016	C-CLS-090	equal	Refuses an effect-classified fingerprint whose event isn't PostToolUse; matches CLAUSE-EFFECT-EVENT verbatim (an effect occasion is observed after the act).
+-	C-CLS-091	none	Computing the discriminator is a plumbing call into _discriminator (already marked at C-CLS-077/078). Carriage.
+M-LAW-017	C-CLS-092	equal	Refuses a subject keyed on 'effect' whose value is not exactly one KEYABLE_EFFECTS entry; matches CLAUSE-SUBJECT-UNKEYABLE-EFFECT verbatim.
+M-LAW-018	C-CLS-093	equal	Loop refusing any positive fixture that fails the discriminator; matches CLAUSE-FIXTURE-POS-MISS's per-fixture quantifier.
+M-LAW-019	C-CLS-094	equal	Refuses a positive fixture matching the fingerprint but with no keyable subject operand; matches CLAUSE-FIXTURE-POS-UNKEYABLE verbatim.
+M-LAW-020	C-CLS-095	equal	Loop refusing any negative fixture that satisfies the discriminator; matches CLAUSE-FIXTURE-NEG-HIT's per-fixture quantifier.
+M-LAW-021	C-CLS-096	instance	discharged_by is None -> clause returned early, exempt from guard-fixture requirements; the domain CLAUSE-NO-GUARD-FIXTURES applies to (a discharged_by must exist) implicitly excludes this case.
+M-LAW-021	C-CLS-097	equal	Refuses a clause with discharged_by but missing fixtures_discharge/fixtures_no_discharge; matches CLAUSE-NO-GUARD-FIXTURES verbatim.
+M-LAW-022	C-CLS-098	equal	Loop refusing any discharge fixture that fails discharged_by; matches CLAUSE-GUARD-FIXTURE-MISS's per-fixture quantifier.
+M-LAW-023	C-CLS-099	equal	Loop refusing any no-discharge fixture that satisfies discharged_by; matches CLAUSE-GUARD-FIXTURE-HIT's per-fixture quantifier.
+M-LAW-024	C-CLS-100	equal	EXCUSE_FIELDS is exactly the three-field set CLAUSE-CARRIES-AN-EXCUSE checks membership against.
+M-LAW-024	C-CLS-101	equal	Refuses a raw row carrying any EXCUSE_FIELDS key; matches the law verbatim (those fields state in prose what the proof derives).
+M-LAW-025	C-CLS-102	equal	Refuses a clause list with a duplicate id; matches CLAUSE-ID-DUPLICATE verbatim.
+-	C-CLS-103	none	Sorting admitted clauses by id is presentation/determinism, not a stated law. Carriage.
+M-LAW-026	C-CLS-104	equal	Refuses a bundle whose top level is not a JSON list; matches CLAUSE-BUNDLE-INVALID verbatim.
+-	C-CLS-105	none	load_bundle is an orchestration function that calls into laws already marked individually (parse/load/admit/unique). Carriage.
+-	C-CLS-106	none	default_bundle names a file path; no math statement addresses the bundle's location. Carriage.
+-	C-CLS-107	near	load_default's "no loose-file fallback" is a stated design choice (only one shipped table is trusted) that has no corresponding CLAUSE-* law or Coverings.v theorem; candidate for a Law row in math.tsv, or accept as unmarked carriage.
+M-CLS-001	C-CLS-108	equal	A01.fingerprint kind=always matches SIDE A01_fingerprint: class=always closure=always exactly.
+M-CLS-002	C-CLS-109	equal	A01.discharged_by kind=effect effect=observed_read matches SIDE A01_discharged_by exactly.
+M-CLS-066	C-CLS-109	instance	Instantiates the EffectSide constructor A01_discharged_by.
+-	C-CLS-110	none	A01.subject is a bare session_id field; no side-class law governs subject extraction when it is not effect-keyed. Carriage.
+M-CLS-003	C-CLS-111	equal	A02.fingerprint kind=always matches SIDE A02_fingerprint exactly.
+M-CLS-004	C-CLS-112	equal	A02.discharged_by any_of{effect observed_read, tool-enum Glob, effect report_paths} matches SIDE A02_discharged_by: class=composed closure=host exactly.
+M-CLS-005	C-CLS-112	instance	Branch 0 (effect observed_read) matches BRANCH A02_discharged_by_branch0 exactly.
+M-CLS-006	C-CLS-112	instance	Branch 1 (regex tool_name=^Glob$) matches BRANCH A02_discharged_by_branch1 exactly.
+M-CLS-007	C-CLS-112	instance	Branch 2 (effect report_paths) matches BRANCH A02_discharged_by_branch2 exactly.
+M-CLS-067	C-CLS-112	instance	Branch 0 instantiates EffectSide constructor A02_discharged_by_branch0.
+M-CLS-068	C-CLS-112	instance	Branch 2 instantiates EffectSide constructor A02_discharged_by_branch2.
+-	C-CLS-113	none	A02.subject is a bare session_id field. Carriage.
+M-CLS-008	C-CLS-114	equal	A03.fingerprint kind=always matches SIDE A03_fingerprint exactly.
+M-CLS-009	C-CLS-115	equal	A03.discharged_by kind=effect effect=remote_read matches SIDE A03_discharged_by exactly.
+M-CLS-069	C-CLS-115	instance	Instantiates EffectSide constructor A03_discharged_by.
+-	C-CLS-116	none	A03.subject is a bare session_id field. Carriage.
+M-CLS-010	C-CLS-117	equal	C03.fingerprint kind=always matches SIDE C03-verify-what-returns_fingerprint exactly.
+M-CLS-011	C-CLS-118	equal	C03.activated_by regex tool_name=^(Agent|Task)$ matches SIDE C03..._activated_by: class=tool-enum closure=host exactly.
+M-CLS-012	C-CLS-119	equal	C03.discharged_by regex tool_name=^Read$ matches SIDE C03..._discharged_by: class=tool-enum closure=host exactly.
+-	C-CLS-120	none	C03.subject is a bare session_id field. Carriage.
+M-CLS-013	C-CLS-121	equal	C08.fingerprint kind=always matches SIDE C08-check-can-fail_fingerprint exactly.
+M-CLS-014	C-CLS-122	equal	C08.activated_by kind=effect effect=report_pass matches SIDE C08..._activated_by: class=effect closure=world effects=report_pass exactly.
+M-CLS-070	C-CLS-122	instance	Instantiates EffectSide constructor C08_check_can_fail_activated_by.
+M-LAW-004	C-CLS-123	instance	The key_from on activated_by extracts a correlation key -- one concrete use of the key_from shape CLAUSE-KEY-FROM-INVALID validates.
+M-CLS-015	C-CLS-124	equal	C08.discharged_by kind=effect effect=report_fail matches SIDE C08..._discharged_by: class=effect closure=world effects=report_fail exactly.
+M-CLS-071	C-CLS-124	instance	Instantiates EffectSide constructor C08_check_can_fail_discharged_by.
+M-LAW-004	C-CLS-125	instance	The key_from on discharged_by is the same validated shape as C-CLS-123, on the guard side.
+-	C-CLS-126	none	C08.subject is a bare session_id field. Carriage.
+M-CLS-016	C-CLS-127	equal	C09.fingerprint kind=effect effect=report_self matches SIDE C09-checker-excludes-self_fingerprint exactly.
+M-CLS-072	C-CLS-127	instance	Instantiates EffectSide constructor C09_checker_excludes_self_fingerprint.
+M-LAW-048	C-CLS-127	instance	report_self is the one effect stated (not proven) name-agnostic since its datum is read from the command text, not the world -- Theorem 8's proof does not cover this side.
+M-CLS-017	C-CLS-128	equal	C09.discharged_by kind=effect effect=report_listing matches SIDE C09-checker-excludes-self_discharged_by exactly.
+M-CLS-073	C-CLS-128	instance	Instantiates EffectSide constructor C09_checker_excludes_self_discharged_by.
+-	C-CLS-129	none	C09.subject is a bare session_id field. Carriage.
+M-CLS-018	C-CLS-130	equal	D01.fingerprint regex tool_name=^(Agent|Task)$ matches SIDE D01_fingerprint: class=tool-enum closure=host exactly.
+M-CLS-019	C-CLS-131	equal	D01.discharged_by regex tool_name=^(Read|Glob|Grep)$ matches SIDE D01_discharged_by exactly.
+-	C-CLS-132	none	D01.subject is a bare session_id field. Carriage.
+M-CLS-020	C-CLS-133	equal	P01.fingerprint regex tool_name=^ExitPlanMode$ matches SIDE P01_fingerprint exactly.
+M-CLS-021	C-CLS-134	equal	P01.discharged_by regex tool_name=^(Read|Glob|Grep)$ matches SIDE P01_discharged_by exactly.
+-	C-CLS-135	none	P01.subject is a bare session_id field. Carriage.
+M-CLS-022	C-CLS-136	equal	P02.fingerprint regex tool_name=^ExitPlanMode$ matches SIDE P02_fingerprint exactly.
+M-CLS-023	C-CLS-137	equal	P02.discharged_by regex tool_name=^AskUserQuestion$ matches SIDE P02_discharged_by exactly.
+-	C-CLS-138	none	P02.subject is a bare session_id field. Carriage.
+M-CLS-024	C-CLS-139	equal	T01.fingerprint kind=always matches SIDE T01_fingerprint exactly.
+M-CLS-025	C-CLS-140	equal	T01.discharged_by kind=effect effect=observed_read matches SIDE T01_discharged_by exactly.
+M-CLS-074	C-CLS-140	instance	Instantiates EffectSide constructor T01_discharged_by.
+-	C-CLS-141	none	T01.subject is a bare session_id field. Carriage.
+M-CLS-026	C-CLS-142	equal	T02.fingerprint kind=always matches SIDE T02_fingerprint exactly.
+M-CLS-027	C-CLS-143	equal	T02.activated_by kind=effect effect=remote_ref_moved matches SIDE T02_activated_by exactly.
+M-CLS-075	C-CLS-143	instance	Instantiates EffectSide constructor T02_activated_by.
+M-CLS-028	C-CLS-144	equal	T02.discharged_by kind=effect effect=remote_landed matches SIDE T02_discharged_by exactly.
+M-CLS-076	C-CLS-144	instance	Instantiates EffectSide constructor T02_discharged_by.
+-	C-CLS-145	none	T02.subject is a bare session_id field. Carriage.
+M-CLS-029	C-CLS-146	equal	U01.fingerprint kind=effect effect=pids_spawned matches SIDE U01_fingerprint exactly.
+M-CLS-077	C-CLS-146	instance	Instantiates EffectSide constructor U01_fingerprint.
+M-CLS-030	C-CLS-147	equal	U01.discharged_by kind=effect effect=report_pass matches SIDE U01_discharged_by exactly.
+M-CLS-078	C-CLS-147	instance	Instantiates EffectSide constructor U01_discharged_by.
+-	C-CLS-148	none	U01.subject is a bare session_id field, not keyed on the pids_spawned effect (CLAUSE-SUBJECT-UNKEYABLE-EFFECT does not require it to be). Carriage.
+M-CLS-031	C-CLS-149	equal	U02.fingerprint kind=effect effect=pids_spawned_again matches SIDE U02_fingerprint exactly.
+M-CLS-079	C-CLS-149	instance	Instantiates EffectSide constructor U02_fingerprint.
+M-CLS-032	C-CLS-150	equal	U02.discharged_by kind=effect effect=report_after_change matches SIDE U02_discharged_by exactly.
+M-CLS-080	C-CLS-150	instance	Instantiates EffectSide constructor U02_discharged_by.
+M-LAW-007	C-CLS-151	near	U02.subject reads tool_input.command via a regex to extract the --target token; a subject extractor reading the raw command is exempt from CLAUSE-TEXT-COVERING (only fingerprint/activated_by/discharged_by are classified/refused), yet Theorem 1's mention-immunity argument applies equally here -- a demand keyed on this subject can be evaded by mentioning.
+M-CLS-033	C-CLS-152	equal	U03.fingerprint kind=effect effect=pids_gone matches SIDE U03_fingerprint exactly.
+M-CLS-081	C-CLS-152	instance	Instantiates EffectSide constructor U03_fingerprint.
+M-CLS-034	C-CLS-153	equal	U03.discharged_by any_of{report_pids, observed_read} matches SIDE U03_discharged_by: effects=observed_read,report_pids exactly (single distinct branch class 'effect' keeps the side classified 'effect', not 'composed').
+M-CLS-082	C-CLS-153	instance	Instantiates EffectSide constructor U03_discharged_by.
+M-LAW-017	C-CLS-154	instance	U03.subject is keyed on effect=pids_gone, one of the KEYABLE_EFFECTS -- exactly what CLAUSE-SUBJECT-UNKEYABLE-EFFECT requires when a subject is effect-keyed.
+M-CLS-035	C-CLS-155	equal	U06.fingerprint kind=effect effect=net_out matches SIDE U06_fingerprint exactly.
+M-CLS-083	C-CLS-155	instance	Instantiates EffectSide constructor U06_fingerprint.
+M-CLS-036	C-CLS-156	equal	U06.discharged_by kind=effect effect=net_read matches SIDE U06_discharged_by exactly.
+M-CLS-084	C-CLS-156	instance	Instantiates EffectSide constructor U06_discharged_by.
+-	C-CLS-157	none	U06.subject is a bare session_id field. Carriage.
+M-CLS-037	C-CLS-158	equal	U08.fingerprint kind=effect effect=commit_signed matches SIDE U08_fingerprint exactly.
+M-CLS-085	C-CLS-158	instance	Instantiates EffectSide constructor U08_fingerprint.
+M-CLS-038	C-CLS-159	equal	U08.discharged_by kind=effect effect=report_signature matches SIDE U08_discharged_by exactly.
+M-CLS-086	C-CLS-159	instance	Instantiates EffectSide constructor U08_discharged_by.
+-	C-CLS-160	none	U08.subject is a bare session_id field. Carriage.
+M-CLS-039	C-CLS-161	equal	U09.fingerprint kind=effect effect=head_switched matches SIDE U09_fingerprint exactly.
+M-CLS-087	C-CLS-161	instance	Instantiates EffectSide constructor U09_fingerprint.
+M-CLS-040	C-CLS-162	equal	U09.discharged_by any_of{report_ref, observed_read} matches SIDE U09_discharged_by: effects=observed_read,report_ref exactly.
+M-CLS-088	C-CLS-162	instance	Instantiates EffectSide constructor U09_discharged_by.
+-	C-CLS-163	none	U09.subject is a bare session_id field. Carriage.
+M-CLS-041	C-CLS-164	equal	U10.fingerprint kind=effect effect=report_null matches SIDE U10_fingerprint exactly.
+M-CLS-089	C-CLS-164	instance	Instantiates EffectSide constructor U10_fingerprint.
+M-CLS-042	C-CLS-165	equal	U10.discharged_by any_of{effect report_structured, tool-enum Read} matches SIDE U10_discharged_by: class=composed closure=host exactly.
+M-CLS-043	C-CLS-165	instance	Branch 0 (effect report_structured) matches BRANCH U10_discharged_by_branch0 exactly.
+M-CLS-044	C-CLS-165	instance	Branch 1 (tool-enum Read) matches BRANCH U10_discharged_by_branch1 exactly.
+M-CLS-090	C-CLS-165	instance	Branch 0 instantiates EffectSide constructor U10_discharged_by_branch0.
+M-LAW-007	C-CLS-166	near	U10.subject reads tool_input.command (and file_path) via regex to capture a trailing .json path; same subject-extraction gap as C-CLS-151, though file_path is also a candidate source here, softening the mention-evasion risk.
+M-CLS-045	C-CLS-167	equal	U12.fingerprint kind=effect effect=files_changed matches SIDE U12_fingerprint exactly.
+M-CLS-091	C-CLS-167	instance	Instantiates EffectSide constructor U12_fingerprint.
+M-CLS-046	C-CLS-168	equal	U12.discharged_by any_of{tool-enum Grep, tool-enum Read, effect report_paths} matches SIDE U12_discharged_by: class=composed closure=host exactly.
+M-CLS-047	C-CLS-168	instance	Branch 0 (tool-enum Grep) matches BRANCH U12_discharged_by_branch0 exactly.
+M-CLS-048	C-CLS-168	instance	Branch 1 (tool-enum Read) matches BRANCH U12_discharged_by_branch1 exactly.
+M-CLS-049	C-CLS-168	instance	Branch 2 (effect report_paths) matches BRANCH U12_discharged_by_branch2 exactly.
+M-CLS-092	C-CLS-168	instance	Branch 2 instantiates EffectSide constructor U12_discharged_by_branch2.
+M-LAW-017	C-CLS-169	instance	U12.subject is keyed on effect=files_changed, one of the KEYABLE_EFFECTS.
+M-CLS-050	C-CLS-170	equal	U13.fingerprint kind=effect effect=files_changed matches SIDE U13_fingerprint exactly.
+M-CLS-093	C-CLS-170	instance	Instantiates EffectSide constructor U13_fingerprint.
+M-CLS-051	C-CLS-171	equal	U13.discharged_by any_of{tool-enum Read, effect report_paths} matches SIDE U13_discharged_by: class=composed closure=host exactly.
+M-CLS-052	C-CLS-171	instance	Branch 0 (tool-enum Read) matches BRANCH U13_discharged_by_branch0 exactly.
+M-CLS-053	C-CLS-171	instance	Branch 1 (effect report_paths) matches BRANCH U13_discharged_by_branch1 exactly.
+M-CLS-094	C-CLS-171	instance	Branch 1 instantiates EffectSide constructor U13_discharged_by_branch1.
+M-LAW-017	C-CLS-172	instance	U13.subject is keyed on effect=files_changed, one of the KEYABLE_EFFECTS.
+M-CLS-054	C-CLS-173	equal	U19.fingerprint kind=effect effect=files_changed matches SIDE U19_fingerprint exactly.
+M-CLS-095	C-CLS-173	instance	Instantiates EffectSide constructor U19_fingerprint.
+M-CLS-055	C-CLS-174	equal	U19.discharged_by any_of{tool-enum Grep, tool-enum Read, effect report_paths} matches SIDE U19_discharged_by: class=composed closure=host exactly.
+M-CLS-056	C-CLS-174	instance	Branch 0 (tool-enum Grep) matches BRANCH U19_discharged_by_branch0 exactly.
+M-CLS-057	C-CLS-174	instance	Branch 1 (tool-enum Read) matches BRANCH U19_discharged_by_branch1 exactly.
+M-CLS-058	C-CLS-174	instance	Branch 2 (effect report_paths) matches BRANCH U19_discharged_by_branch2 exactly.
+M-CLS-096	C-CLS-174	instance	Branch 2 instantiates EffectSide constructor U19_discharged_by_branch2.
+M-LAW-017	C-CLS-175	instance	U19.subject is keyed on effect=files_changed, one of the KEYABLE_EFFECTS.
+M-CLS-059	C-CLS-176	equal	U20.fingerprint any_of{files_removed, head_reset} matches SIDE U20_fingerprint: effects=files_removed,head_reset exactly (single distinct branch class keeps it classified 'effect').
+M-CLS-097	C-CLS-176	instance	Instantiates EffectSide constructor U20_fingerprint.
+M-CLS-060	C-CLS-177	equal	U20.discharged_by any_of{report_pass, report_fail} matches SIDE U20_discharged_by: effects=report_fail,report_pass exactly.
+M-CLS-098	C-CLS-177	instance	Instantiates EffectSide constructor U20_discharged_by.
+-	C-CLS-178	none	U20.subject is a bare session_id field. Carriage.
+M-CLS-061	C-CLS-179	equal	U24.fingerprint kind=effect effect=net_out matches SIDE U24_fingerprint exactly.
+M-CLS-099	C-CLS-179	instance	Instantiates EffectSide constructor U24_fingerprint.
+M-CLS-062	C-CLS-180	equal	U24.discharged_by kind=effect effect=report_nowarn matches SIDE U24_discharged_by exactly.
+M-CLS-100	C-CLS-180	instance	Instantiates EffectSide constructor U24_discharged_by.
+-	C-CLS-181	none	U24.subject is a bare session_id field. Carriage.
+M-CLS-063	C-CLS-182	equal	U25.fingerprint kind=effect effect=report_clean matches SIDE U25_fingerprint exactly.
+M-CLS-101	C-CLS-182	instance	Instantiates EffectSide constructor U25_fingerprint.
+M-CLS-064	C-CLS-183	equal	U25.discharged_by kind=effect effect=report_fail matches SIDE U25_discharged_by exactly.
+M-CLS-102	C-CLS-183	instance	Instantiates EffectSide constructor U25_discharged_by.
+-	C-CLS-184	none	U25.subject is a bare session_id field. Carriage.

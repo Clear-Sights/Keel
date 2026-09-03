@@ -1,0 +1,48 @@
+math_id	code_id	relation	evidence	auditor	verdict	signoff
+L06	C09	instance	README's one-line trigger gated by the no-claim early return at :152-153; one half of a compound law	review	confirm	
+L06	C10	instance	no lifecycle evidence -> Finding (:155-164) is the 'contradicted by session's own Bash record' case	review	confirm	
+L06	C11	instance	latest lifecycle call failed -> Finding (:165-174) is the other half of the README one-liner	review	confirm	
+L10	C10	instance	CATALOG:18 states TWO disjuncts ('no lifecycle call ran' OR 'latest ended in error'); C10 is only the first, so it instantiates the law, it is not equal to it	review	amend	
+L10	C11	instance	C11 is the second disjunct of the same two-disjunct CATALOG:18 sentence; one branch cannot be equal to the compound statement	review	amend	
+L11	C07	near	the VERDICT at :136-139 reads only interrupted/exitCode/failure-terminal as stated; but the same element also applies _PROCESS_LIFECYCLE_CMD_RX at :134, a lexical filter the sentence omits	review	amend	
+L12	C65	near	the regex IS the broad open-world net, but the law's 'never a false-block source' is false in code: an unlisted launcher leaves verdict None (:142) and :155-164 FIRES on it	review	amend	
+L18	C01	instance	_running_claim is only the CLAIM half of the docstring's claim-AND-contradicted-evidence statement; the evidence half is C07/C10/C11	review	amend	
+L19	C02	near	code is narrower than the sentence: :72-74 requires the start verb OUTSIDE _code_spans, while docstring :29-33 says it need only co-occur 'anywhere in the same message'	review	amend	
+L20	C12	instance	clean exit -> None is one clause of a compound SCOPE law that also states Bash-only evidence and the direct-error rule (C07/C11)	review	amend	
+L21	C13	near	eats does declare history_all_agents, but the law's 'unlike every other gate' clause is false: claimedShippedAbsent.py:310 declares it too	review	amend	
+L22	C07	none	the 1-hour window is enforced upstream at dispatch.py:388 (_select_recent); no element of this module implements it	review	confirm	
+L23	C15	near	L23 is a SCOPE statement (remote mutations, not local liveness); the enum is only the tri-state comparison outcome, one mechanism inside that scope	review	amend	
+L24	C17	none	C17 fires on absent claim text or cwd - an input gap, not one of the law's enumerated unobservable-world cases (missing remote/network/branch, ambiguous output)	review	amend	
+L24	C21	instance	'origin or branch unavailable -> NOT_EVALUABLE' (:82-84) is one enumerated case of the compound law	review	amend	
+L24	C22	instance	ambiguous ls-remote (>1 answering ref, :85-87) is the case the docstring names verbatim, one disjunct of the law	review	confirm	
+L25	C24	equal	the frozenset at :107-112 IS the closed non-Bash set the law enumerates, member for member including both mcp__github__ spellings	review	confirm	
+L25	C28	near	the module docstring :101-106 says only that merge_pull_request is a shipping action; the merged:true requirement C28 adds is stated in CATALOG.md:21 (L14), not here	review	amend	
+L26	C31	instance	push-claim routing (:281-292) is one branch of the compound docstring; the non-push route (:295) and the loop over every claim are separate elements	review	amend	
+L26	C32	instance	evidence was wrong: C32 is the CONTINUE branch (no cwd AND no attempt -> outside a verdict). The 'attempt FIRES' half is the fall-through to :295/:297	review	amend	
+L26	C34	instance	the unbacked-claim Finding is the fail branch of the compound routing law, not the whole routing	review	amend	
+L14	C24	equal	closed non-Bash tool set membership is identical to CATALOG:21's enumeration, including the mcp__github__-qualified forms	review	confirm	
+L14	C29	near	evidence was wrong: :295 runs for EVERY claim, not only when cwd is absent. C29 is narrower than the law: it demands an EXPLICIT exitCode==0, so a push row with no exit code fails	review	amend	
+L15	C13	instance	eats={text,history_all_agents} is the code declaration of the cross-agent read CATALOG:21 states	review	confirm	
+L27	C47	instance	`|| true`/`; true` masking is one named disjunct of the docstring's exit-masking list	review	confirm	
+L27	C48	instance	trailing pipe without pipefail is another named disjunct	review	confirm	
+L27	C51	instance	$? captured but never returned is another named disjunct	review	confirm	
+L27	C53	instance	set +e around a runner is another named disjunct	review	confirm	
+L28	C43	equal	_propagates_failure IS the re-raise detector the law describes: exit/return non-0, bare exit/return, or `false`	review	confirm	
+L28	C52	equal	the if-wrapper branch fires only when not _propagates_failure(rest), the exact contrapositive of 'an if branch that re-raises never fires'	review	confirm	
+L29	C36	none	the redirection scope-cut is realized by the ABSENCE of any redirection branch; _LEAD_RUNNER_RX implements no part of it, so this pairing is not a real mark	review	amend	
+L30	C39	near	mis-pointed: the tokenize/command-position law is implemented by _normalized_segments (:118-142) and _shell_segments, absent from code.tsv. C39 implements L31's leading-command clause	review	amend	
+L31	C39	equal	launcher-prefix stripping (python -m / npx / poetry|uv|pdm|hatch|pipenv run / pnpm exec|dlx) then a leading-anchored match is exactly the stated rule	review	confirm	
+L31	C46	equal	non-runner leading command -> continue (:225) is the 'legit masks on non-runners never fire' law in code form	review	confirm	
+L35	C57	instance	the `eats` dataclass field is the concrete instantiation of the declared-signature law	review	confirm	
+L36	C58	equal	test_check_declares_exactly_what_it_eats asserts derived==declared and reports undeclared/overdeclared, exactly the stated law	review	confirm	
+L32	C63	instance	_RUNNING_CLAIM_RX is one L0 lexicon entry the purpose statement governs; true source is vocab.py:413-416, not 105-114 as code.tsv records	review	amend	
+L32	C64	instance	_PROCESS_START_VERB_RX likewise; true source vocab.py:426-429, not 116-121	review	amend	
+L32	C66	instance	_SHIPPED_ACTION_CLAIM_RX likewise; true source vocab.py:506-511, not 453-464	review	amend	
+L32	C67	instance	_SHIPPED_STATE_CLAIM_RX likewise; true source vocab.py:518-525, not 466-478	review	amend	
+L33	C68	equal	PreCheck's field set is exactly the convenience-fixture dataclass the docstring names; true source vocab.py:37-47, not 52-57	review	amend	
+L02	C13	near	README's replay-tested/unmeasured-live-effect claim is project-level; tests='CLAIM_VS_HISTORY' pins only this check's evidence shape	review	confirm	
+L04	C44	instance	the predicate gated to PreToolUse+Bash (:199-201) is one instantiation of 'fires on every PreToolUse/PostToolUse/Stop'	review	confirm	
+L05	C54	instance	the unconditional level='error' Finding is one instance of 'every pre-check blocks, no warning tier'	review	confirm	
+L05	C13	instance	posture=BLOCK, may_block=True on a non-advisory gate is another instance of the same law	review	confirm	
+L07	C34	instance	C34 is the Finding branch of README:89's compound trigger; the claim half (C25/C66/C67) and evidence half (C27) are separate elements	review	amend	
+L13	C23	near	CATALOG:21's shipped-vs-liveness distinction is a scope statement; the sha comparison is the mechanism inside it, not the scope itself	review	confirm	
