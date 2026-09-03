@@ -61,14 +61,6 @@ from .ledger import Demand, Ledger, derive_id, legacy_state, state_dir
 # a comment to a pattern that accepts `--`.
 ALLOW = re.compile(r"^#\s*keel-allow:\s*(\S.*)$")
 
-# THE PRE-RENAME SPELLING, STILL HONOURED. The rename to `keel` changed the marker's name, so
-# every exemption already written in a user's scripts and notes stopped working -- and stopped
-# working SILENTLY, which is the part that matters: a marker that no longer parses is not a
-# marker, so the call was simply denied with no hint that a rename was the reason. Measured:
-# `ALLOW.search('# gyroscope-allow: approved')` returned False. Honouring the old spelling with a
-# message that names the rename is strictly better than either alternative -- refusing it strands
-# work for no gain, and honouring it quietly leaves the old name alive forever.
-ALLOW_LEGACY = re.compile(r"^#\s*gyroscope-allow:\s*(\S.*)$")
 
 
 # A COMMITMENT, not an exemption. A guard that is itself a Bash act cannot be recognised before
@@ -106,19 +98,16 @@ def _guard_marker(command) -> set[str]:
 
 
 def _allow_marker(command: str):
-    """`(spelling, reason)` from the command's leading comment header, or None.
+    """The exemption's stated reason, from the command's leading comment header, or None.
 
-    The reason travels with it because it is the auditable half: an exemption without one is not
-    an exemption, and both patterns refuse a marker with nothing after it. The spelling travels
-    with it so the caller can say something about the old one.
+    The reason is the auditable half: an exemption without one is not an exemption, and the
+    pattern refuses a marker with nothing after it. There is exactly ONE spelling; a second,
+    undocumented one is a way past all 24 clauses that no page names and no reader can count.
     """
     for line in _header(command):
         found = ALLOW.match(line)
         if found:
-            return "keel", found.group(1)
-        found = ALLOW_LEGACY.match(line)
-        if found:
-            return "gyroscope", found.group(1)
+            return found.group(1)
     return None
 
 
@@ -460,12 +449,6 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     # configuration choice -- it is the command, and a list implied there could be others.
     marker = _allow_marker(bypass) if isinstance(bypass, str) else None
     if marker is not None:
-        if marker[0] == "gyroscope":
-            # An allow that says so. `systemMessage` reaches the user, which is where a rename
-            # they have to act on belongs; the call itself is exempted exactly as before.
-            return {"systemMessage": "keel: `gyroscope-allow:` is the pre-rename spelling of this "
-                                     "marker. It still exempts the call; rename it to "
-                                     "`keel-allow:`."}
         return {}
     _watch_standing(table, ledger, event, session, agent)
     held, progress = _open_effect_denial(table, ledger, event, session, agent)

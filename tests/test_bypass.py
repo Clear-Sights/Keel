@@ -115,13 +115,15 @@ class TheAllowMarkerIsAHeaderNotAPayload(unittest.TestCase):
 class TheRenameOwesTheOldNameASentence(unittest.TestCase):
     """A hard rename may strand a user; it may not strand them quietly.
 
-    Renaming to `keel` broke two things that were already on people's machines, and broke both
-    without a word. `GYROSCOPE_STATE_DIR` stopped being read, so a session that still set it began
-    from an empty ledger and looked clean. `gyroscope-allow:` stopped parsing, so every exemption
-    already written became an ordinary command and got denied with no hint that a rename was the
-    cause. Both are asserted here in both directions -- the notice must appear when there is
-    something to say, and must NOT appear when there is not, because a warning that is always on
-    is a warning nobody reads.
+    Renaming to `keel` stopped `GYROSCOPE_STATE_DIR` being read, so a session that still set it
+    began from an empty ledger and looked clean. That is a NOTICE, and it stays: saying so costs
+    one sentence and is never a way past a clause. Asserted in both directions -- the notice must
+    appear when there is something to say, and must NOT appear when there is not, because a
+    warning that is always on is a warning nobody reads.
+
+    The rename's other casualty, the `gyroscope-allow:` exemption marker, is NOT handled by a
+    notice: an exemption is a way past all 24 clauses, so it is retired outright rather than
+    honoured with an apology. See `ThereIsExactlyOneExemptionSpelling`.
     """
 
     def setUp(self) -> None:
@@ -168,14 +170,6 @@ class TheRenameOwesTheOldNameASentence(unittest.TestCase):
         (self.root / "keel_state").mkdir()
         (self.root / "keel_state" / ledger_module.LEDGER_FILE).write_text("{}\n")
         self.assertNotIn("systemMessage", self._start())
-
-    def test_TEETH_the_pre_rename_marker_still_exempts_and_says_so(self) -> None:
-        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "r",
-                 "agent_id": "", "tool_input": {"command": "# gyroscope-allow: approved\nrm -rf b/"}}
-        out = dispatch.pre_tool_use(C.load_default(), Ledger(), event)
-        self.assertNotIn("hookSpecificOutput", out, f"the old spelling was denied: {out}")
-        self.assertIn("pre-rename", out.get("systemMessage", ""),
-                      f"the old spelling worked but said nothing: {out}")
 
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
         smoke_replace(self, PLUGIN / "keel" / "ledger.py",
@@ -267,40 +261,31 @@ class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
                       "the cut got no preserve list")
 
 
-class LegacyMarkerHasACheckableEnd(unittest.TestCase):
-    """`# gyroscope-allow:` disarms all 24 clauses exactly as `# keel-allow:` does. An exemption
-    with no stated end is a waiver that never expires, so this is its end, expressed as a check
-    that fails rather than as an intention: at major version 3 the legacy pattern must be gone.
-    Without this, the deprecation outlives its deadline by simply never being remembered."""
+class ThereIsExactlyOneExemptionSpelling(unittest.TestCase):
+    """`# gyroscope-allow:` was a second, undocumented spelling that exempted a Bash call from all
+    24 clauses exactly as `# keel-allow:` does, while the README named only one. An exemption the
+    pages do not name is one nobody can audit: a reader counting the ways a call can skip the table
+    would have counted one and been wrong.
 
-    REMOVED_AT_MAJOR = 3
+    It was kept on the argument that the plugin had shipped under the old name and removing it
+    would strand exemptions already written in users' scripts. The owner settled the fact: the
+    public repository is Keel, several tags carry that name, and there is no installed base to
+    strand. So the argument was empty and the pattern is gone.
 
-    def _shipped_version(self):
-        root = pathlib.Path(__file__).resolve().parents[1]
-        manifest = json.loads((root / "plugin" / ".claude-plugin" / "plugin.json").read_text())
-        return tuple(int(p) for p in manifest["version"].split(".")[:2])
+    This is the census that keeps it gone. A third spelling added later fails here rather than
+    passing unnoticed."""
 
-    def test_legacy_spelling_is_removed_at_its_declared_major(self):
-        major, _ = self._shipped_version()
-        legacy_present = dispatch.ALLOW_LEGACY is not None
-        if major >= self.REMOVED_AT_MAJOR:
-            self.assertFalse(
-                legacy_present,
-                "README declares `# gyroscope-allow:` removed at 3.0.0 and the shipped version "
-                f"is now {major}.x, but ALLOW_LEGACY is still live. Delete the pattern, its "
-                "branch in `_allow_marker`, the `gyroscope` arm in `pre_tool_use`, and the "
-                "README paragraph -- then delete this test.")
-        else:
-            self.assertTrue(
-                legacy_present,
-                "ALLOW_LEGACY was removed before its declared 3.0.0 deadline. This plugin shipped "
-                "publicly as gyroscope (v1.0.0, v1.1.0), so removing it early silently strands "
-                "exemptions already written in users' scripts -- the exact failure the marker "
-                "exists to prevent. Restore it, or move the declared end in the README first.")
-
-    def test_the_two_spellings_are_the_whole_exemption_surface(self):
-        """The census that makes the README's "there is no third" a measured claim rather than a
-        sentence: every module-level compiled pattern that exempts is one of these two."""
+    def test_the_allow_pattern_is_the_whole_exemption_surface(self):
         exempting = {name for name, val in vars(dispatch).items()
                      if isinstance(val, re.Pattern) and "allow" in name.lower()}
-        self.assertEqual(exempting, {"ALLOW", "ALLOW_LEGACY"}, exempting)
+        self.assertEqual(
+            exempting, {"ALLOW"},
+            f"a second exemption spelling exists: {sorted(exempting)}. Every way past the 24 "
+            "clauses must be named in README.md's Manual bypass section, or it cannot be audited.")
+
+    def test_the_retired_spelling_no_longer_exempts(self):
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "r",
+                 "agent_id": "", "tool_input": {"command": "# gyroscope-allow: approved\nrm -rf b/"}}
+        out = dispatch.pre_tool_use(C.load_default(), Ledger(), event)
+        self.assertIn("hookSpecificOutput", out,
+                      f"the retired spelling still exempted the call: {out}")

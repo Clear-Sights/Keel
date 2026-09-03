@@ -5,8 +5,9 @@ main thread. Mined mechanically (`mine.py`), then each candidate taken through t
 ADDING procedure: fix line written first, set beside every existing fix line in all families,
 tool-nouns struck, one discriminating input named, two-fixes-two-entries.
 
-The denominator is stated below, not only the hits: **31 incidents examined, 5 new entries, 3
-widenings, 23 incidents cited to entries that already carry them.** An incident that fires an
+The denominator is stated below, not only the hits: **32 incidents examined, 5 new entries, 3
+widenings, 24 incidents cited to entries that already carry them** -- one of the 24 being a
+defect this pass itself committed and then reverted. An incident that fires an
 existing entry is a success of the register, not a gap in it, and is recorded as such.
 
 ---
@@ -150,6 +151,7 @@ registered elsewhere. Re-check of D13's own id: an unlisted set is still caught 
 | A bound with slack (`<= 10`) satisfied equally by "deduplicated" and "never ran"; tests that never ran counted as passed | **B23**, **B2** |
 | An obligation discharged by an unrelated earlier act in the same session | **B28** |
 | A field built and never read; a check defined and never called | **B14** |
+| A hazard preserved for a user population never counted: the pre-rename exemption marker was kept on the argument that removing it would strand exemptions already written in users' scripts, inferred from old tags in the history rather than from any count of users. The owner supplied the fact — the public repository is Keel, the install base is nil — and the argument was empty. Cost a full build-and-revert cycle this turn. **B14's fix catches it exactly**: measure with and without, and without the shim nobody breaks. Cited, not added, per rule 2 | **B14** |
 | A hard-coded absolute path that published one machine's layout and made every corpus-backed check quietly not-evaluable elsewhere | **E7** |
 | A harness default silently reasserting itself over a standing instruction | **E4** |
 | Jobs failing in 3 seconds read as test failures when the cause was an exhausted budget | **E10** |
@@ -164,5 +166,13 @@ registered elsewhere. Re-check of D13's own id: an unlisted set is still caught 
 ## Applied
 
 **C2** and **B35** are not filed as observations. Both were fixed in this pass:
-`gate.claimed_running`'s vocabulary miss now answers NOT-EVALUABLE instead of blocking, and the
-undeclared bypass spelling is now declared on the page with a deadline that fails as a check.
+
+* `gate.claimed_running`'s vocabulary miss now answers NOT-EVALUABLE instead of blocking.
+* The undeclared bypass spelling `# gyroscope-allow:` is **removed**, and a census test now fails
+  if the dispatcher ever defines a second exemption pattern, so the README's "only spelling" is
+  measured rather than asserted.
+
+The second fix was built twice. The first build declared the marker and gave it a deadline,
+preserving it for users who would be stranded by its removal -- a population inferred from the
+repository's own old tags and never counted. That is the B14 row above, and it is why the entry's
+fix line is "count", not "look".
