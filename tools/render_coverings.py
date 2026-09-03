@@ -2,7 +2,7 @@
 """Instantiate the Coverings theory on every side of every shipped clause.
 
 `proofs/Coverings.v` proves what each CLASS of covering can be. This renders
-`proofs/Clauses.v`, which applies those results to the table as shipped -- one block per side
+`proofs/Clauses.v`, which applies those results to the table as shipped -- one line per side and one result per class
 of every clause -- so that the theorem is applied to `plugin/keel/clauses.json` rather than
 cited over it. The class of each side is read from `keel.clauses.classify_side`, the same
 function the loader admits rows by, so the proof and the product cannot disagree about what a
@@ -44,10 +44,6 @@ def coq_ident(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "_", text)
 
 
-def coq_string(text: str) -> str:
-    return '"' + text.replace('"', '""') + '"'
-
-
 def _leaves(predicate: dict) -> list[dict]:
     branches = (predicate.get("any_of") or []) + (predicate.get("all_of") or [])
     if not branches:
@@ -55,73 +51,71 @@ def _leaves(predicate: dict) -> list[dict]:
     return [leaf for sub in branches for leaf in _leaves(sub)]
 
 
-def side_block(clause_id: str, side: str, predicate: dict) -> list[str]:
-    name = coq_ident(f"{clause_id}_{side}")
+RESULTS = {
+    # class -> (enumeration, result, statement lines, proof lines). ONE result per class, quantified
+    # over an enumeration whose constructors are the sides of that class. The theorem's statement
+    # never mentioned the side -- 74 copies were byte-identical apart from their names -- so the
+    # per-side fact is MEMBERSHIP, which the enumeration carries and check_coq censuses from
+    # coqc's own index (`constr`), refusing an enumeration no result quantifies over.
+    "effect": ("EffectSide", "effect_sides_read_the_world_not_the_command", [
+        "  forall (s : EffectSide) (D : Type) (E : D -> Prop) (d d' : D), E d -> ~ E d' ->",
+        "    name_agnostic string (effect string E d)",
+        "    /\\ (forall segs, effect string E d segs /\\ ~ effect string E d' segs)."], [
+        "  intros s D E d d' Hd Hd'.",
+        "  split; [ exact (effect_is_name_agnostic string D E d)",
+        "         | exact (effect_separates_same_segments string D E d d' Hd Hd') ]."]),
+    "positive": ("PositiveSide", "positive_sides_reject_every_false_claim", [
+        "  forall (s : PositiveSide) (T D : Type) (cl ob : T -> option D) c d d',",
+        "    cl c = Some d -> ob c = Some d' -> d <> d' -> ~ positive T D cl ob c."], [
+        "  intros s T D cl ob. exact (false_claim_always_rejected T D cl ob)."]),
+}
+BOUNDARY = ("always", "tool-enum")  # no text is read: Theorem 1 has nothing to say, Theorem 3 is the edge
+
+
+def side_line(clause_id: str, side: str, predicate: dict, members: dict[str, list[str]],
+              branch: str | None = None) -> list[str]:
+    """One comment per side (and per branch of a composed one); the side joins its class."""
     cls = C.classify_side(predicate)
-    closure = C.derive_closure(predicate)
-    head = [f"  (* SIDE {clause_id}_{side} *)", f"  (* class={cls} closure={closure} *)"]
+    effects = sorted({leaf["effect"] for leaf in _leaves(predicate) if leaf.get("kind") == "effect"})
+    note = f" effects={','.join(effects)}" if cls == "effect" else ""
+    mark = f"SIDE {clause_id}_{side}" if branch is None else f"  BRANCH {branch}"
+    line = [f"  (* {mark} *) (* class={cls} closure={C.derive_closure(predicate)}{note} *)"]
     if cls == "composed":
-        lines = list(head)
         for i, leaf in enumerate(_leaves(predicate)):
-            lines += side_block(clause_id, f"{side}_branch{i}", leaf)[1:]
-        return lines
-    if cls == "tool-enum":
-        return head + [f"  (* reads tool_name, a closed host enum: no text, no vocabulary *)"]
-    if cls == "topology":
-        return head + [
-            f"  Theorem {name}_name_agnostic : forall n, name_agnostic string (fun segs => List.length segs = n).",
-            f"  Proof. exact (topology_is_name_agnostic string). Qed.",
-        ]
-    if cls == "always":
-        return head + ["  (* terminal: fires on every event of its surface; the Theorem 3 boundary *)"]
-    if cls == "effect":
-        effects = sorted({leaf["effect"] for leaf in _leaves(predicate) if leaf.get("kind") == "effect"})
-        return head + [
-            f"  (* effects: {', '.join(effects)} -- what the act did, read from the world, not the command *)",
-            f"  Theorem {name}_name_agnostic : forall (Delta : Type) (E : Delta -> Prop) (d : Delta),",
-            f"    name_agnostic string (effect string E d).",
-            f"  Proof. intros Delta E d. exact (effect_is_name_agnostic string Delta E d). Qed.",
-            f"  Theorem {name}_separates : forall (Delta : Type) (E : Delta -> Prop) (d d' : Delta), E d -> ~ E d' ->",
-            f"    forall segs, effect string E d segs /\ ~ effect string E d' segs.",
-            f"  Proof. intros Delta E d d'. exact (effect_separates_same_segments string Delta E d d'). Qed.",
-        ]
-    if cls == "positive":
-        return head + [
-            f"  Theorem {name}_rejects_false_claims : forall (D : Type) (cl ob : Text -> option D) c d d',",
-            f"    cl c = Some d -> ob c = Some d' -> d <> d' -> ~ positive Text D cl ob c.",
-            f"  Proof. intros D cl ob. exact (false_claim_always_rejected Text D cl ob). Qed.",
-        ]
-    raise SystemExit(f"{clause_id}.{side}: class {cls!r} has no instance; the loader should have refused it")
+            line += side_line(clause_id, f"{side}_branch{i}", leaf, members,
+                              coq_ident(f"{clause_id}_{side}_branch{i}"))
+        return line
+    if cls in RESULTS:
+        members.setdefault(cls, []).append(coq_ident(f"{clause_id}_{side}"))
+    elif cls not in BOUNDARY:
+        raise SystemExit(f"{clause_id}.{side}: class {cls!r} has no instance; the loader should have refused it")
+    return line
 
 
 def render(rows: list[dict]) -> str:
     out = [
         "(* GENERATED by tools/render_coverings.py from plugin/keel/clauses.json -- do not edit.",
-        "   One block per side of every shipped clause, instantiating proofs/Coverings.v on it.",
-        "   tools/check_coq.py compiles this and grades every result for axioms.",
-        "   PARAMETERS: Text scan mention *)",
-        "Require Import List String.",
-        "Import ListNotations.",
+        "   One line per side of every shipped clause; one enumeration and one result per class,",
+        "   instantiating proofs/Coverings.v on the sides of that class. tools/check_coq.py",
+        "   compiles this, grades every result for axioms, and censuses the sides from the index.",
+        "   PARAMETERS: *)",
+        "Require Import String.",
         "Require Import Coverings.",
-        "Open Scope string_scope.",
-        "",
-        "Section Instance.",
-        "  Variable Text : Type.",
-        "  Variable scan : Text -> list (Segment string).",
-        "  Variable mention : Text -> Text.",
         "",
     ]
-    results: list[str] = []
+    members: dict[str, list[str]] = {}
     for clause in rows:
         for side in SIDES:
             predicate = clause.get(side)
-            if not isinstance(predicate, dict):
-                continue
-            block = side_block(clause["id"], side, predicate)
-            out += block + [""]
-            results += re.findall(r"^\s*(?:Theorem|Lemma)\s+([A-Za-z_0-9']+)", "\n".join(block), re.M)
-    out += ["End Instance.", ""]
-    out += [f"Print Assumptions {r}." for r in results]
+            if isinstance(predicate, dict):
+                out += side_line(clause["id"], side, predicate, members)
+    out.append("")
+    for cls, idents in sorted(members.items()):
+        enum, name, statement, proof = RESULTS[cls]
+        out += [f"Inductive {enum} :="] + [f"  | {i}" for i in idents]
+        out[-1] += "."
+        out += ["", f"Theorem {name} :"] + statement + ["Proof."] + proof + ["Qed.", ""]
+    out += [f"Print Assumptions {RESULTS[cls][1]}." for cls in sorted(members)]
     return "\n".join(out) + "\n"
 
 

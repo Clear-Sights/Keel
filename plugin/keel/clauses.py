@@ -227,16 +227,22 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     #
     # A predicate carrying `any_of`/`all_of` and NO `kind` of its own is therefore a COMPOSITION
     # of whole predicates, each evaluated on its own terms.
-    if predicate.get("kind") is None:
-        if predicate.get("any_of"):
-            return any(_base_predicate(sub, event) for sub in predicate["any_of"])
-        if predicate.get("all_of"):
-            return all(_base_predicate(sub, event) for sub in predicate["all_of"])
+    # THE PREDICATE'S OWN `event`/`tools` FILTERS ARE CHECKED BEFORE ANY COMPOSITION RETURNS.
+    # A composed predicate still declares which surface it reads, and that declaration must
+    # bound its branches: a guard declaring `event=PostToolUse, tools=[Bash]` evaluated on a
+    # SessionStart/Read event is not live, whatever its `any_of` branches say on their own
+    # terms. Returning from the composition first let the declared surface be silently
+    # dropped -- the branches were evaluated on an event the predicate never claimed to cover.
     if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
         return False
     tools = predicate.get("tools")
     if tools and tools != ["*"] and event.get("tool_name") not in tools:
         return False
+    if predicate.get("kind") is None:
+        if predicate.get("any_of"):
+            return any(_base_predicate(sub, event) for sub in predicate["any_of"])
+        if predicate.get("all_of"):
+            return all(_base_predicate(sub, event) for sub in predicate["all_of"])
     kind = predicate.get("kind")
     if kind == "always":
         return True
@@ -374,9 +380,17 @@ def classify_side(predicate: Any) -> str:
         return "absent"
     kind = predicate.get("kind")
     branches = (predicate.get("any_of") or []) + (predicate.get("all_of") or [])
+    # THE PREDICATE'S OWN KIND IS COUNTED BEFORE ANY BRANCH IS. A side that carries a `kind` of
+    # its own AND branches is not just its branches: it reads its own `on`/`pattern` first, and a
+    # regex on `tool_input.command` is textual whether or not it also carries an `any_of`. Reading
+    # only the branches let a side smuggle a textual/nominal reading past the fence by attaching
+    # an agnostic branch to it -- the branches were classified, the predicate's own read never was.
+    own = _own_class(predicate) if kind is not None else None
     if branches:
         parts = {classify_side(dict(sub, kind=sub.get("kind", kind), on=sub.get("on", predicate.get("on"))))
                  for sub in branches}
+        if own is not None:
+            parts.add(own)
         if "textual" in parts:
             return "textual"
         if "nominal" in parts:
@@ -386,6 +400,14 @@ def classify_side(predicate: Any) -> str:
         if parts <= AGNOSTIC_CLASSES:
             return "composed"
         return "unclassified"
+    if own is not None:
+        return own
+    return "unclassified"
+
+
+def _own_class(predicate: dict[str, Any]) -> str:
+    """The class of a predicate's OWN `kind`, ignoring any branches it also carries."""
+    kind = predicate.get("kind")
     if kind == "always":
         return "always"
     if kind == "effect":
@@ -418,13 +440,22 @@ def derive_closure(predicate: Any) -> str:
     is nominal, and the loader refuses it.
     """
     cls = classify_side(predicate)
-    if cls in ("composed", "tool-enum"):
+    if cls == "tool-enum":
         return "host"
+    if cls == "composed":
+        # `host` only when SOME branch actually reads `tool_name` -- a closed host enum covers
+        # the act however the shell is spelled. A composed side with no such branch is still
+        # agnostic (every branch is), but nothing in it is a closed enum: the observer is what
+        # covers it, not the host.
+        return "host" if _matches_a_tool_enum(predicate) else "world"
     if cls == "effect":
         return "world"
     if cls == "positive":
         return "datum"
     return cls
+
+
+KEYABLE_EFFECTS = ("files_changed", "files_removed", "pids_gone")
 
 
 def subject_fields(spec: Any) -> list[str]:
@@ -489,6 +520,14 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
         if leaf.get("kind") == "effect" and leaf.get("effect") not in _effects.EFFECTS:
             raise ClauseError("CLAUSE-EFFECT-UNKNOWN",
                               f"{clause_id}: {leaf.get('effect')!r} is not an effect the observer measures")
+        # `nonzero` COMPARES A DATUM THE TRACE PRODUCED TO ONE THE REPORT STATES (Thm 6, 7) --
+        # that datum is the host's own `tool_response`, never a field the operator's command
+        # populates. A `nonzero` read of `tool_input.command` (or any other surface) is fixture
+        # bait: the fixture writes a number into a field no real event ever fills that way, so
+        # the row is admitted as a `positive` covering that is dead in production.
+        if leaf.get("kind") == "nonzero" and not str(leaf.get("on", "")).startswith("tool_response."):
+            raise ClauseError("CLAUSE-NONZERO-NOT-RESPONSE",
+                              f"{clause_id}: nonzero reads {leaf.get('on')!r}, not tool_response.*")
     if predicate.get("kind") == "regex":
         try:
             re.compile(predicate.get("pattern", ""))
@@ -544,7 +583,13 @@ def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
     branches = (predicate.get("any_of") or []) + (predicate.get("all_of") or [])
     if not branches:
         return [predicate]
-    return [leaf for sub in branches for leaf in _leaves(sub)]
+    # THE PREDICATE'S OWN KIND IS A LEAF TOO, not only its branches. A side that carries a
+    # `kind` of its own (e.g. an `effect` leaf) AND an `any_of` was scanned only through the
+    # branches, so an unknown or unmeasured effect named at the TOP level -- not inside a
+    # branch -- was invisible to both the CLAUSE-EFFECT-UNKNOWN admission check and the
+    # NOT-EVALUABLE scan in `_predicate`.
+    own = [predicate] if predicate.get("kind") is not None else []
+    return own + [leaf for sub in branches for leaf in _leaves(sub)]
 
 
 AGNOSTIC_OCCASIONS = AGNOSTIC_CLASSES
@@ -602,6 +647,13 @@ def _admit(clause: Clause) -> Clause:
                 "CLAUSE-GUARD-NOMINAL",
                 f"{clause.id}.{name}: names the program that discharges; a guard is a host "
                 f"tool call or an observed effect of the guard act, never a spelling")
+    # A GUARD OF `kind: always` IS PAID BY ANY ACT AT ALL: it observes nothing, so every act
+    # that reaches it discharges it. That is not a guard, it is a standing True wearing a
+    # guard's shape -- refused outright rather than carried as a covering with nothing to cover.
+    if isinstance(clause.discharged_by, dict) and clause.discharged_by.get("kind") == "always":
+        raise ClauseError(
+            "CLAUSE-GUARD-ALWAYS",
+            f"{clause.id}.discharged_by: a guard paid by any act observes nothing")
     if clause.activated_by is not None and not clause.fixtures_activate:
         raise ClauseError("CLAUSE-NO-ACTIVATION-FIXTURES", clause.id)
     for fixture in clause.fixtures_activate or []:
@@ -647,6 +699,12 @@ def _admit(clause: Clause) -> Clause:
         raise ClauseError("CLAUSE-EFFECT-EVENT",
                           f"{clause.id}: an effect occasion is observed after the act; declare PostToolUse")
     disc = _discriminator(clause)
+    if isinstance(clause.subject, dict) and "effect" in clause.subject:
+        # A subject keyed on a datum must name one the record carries as a LIST, or nothing
+        # could ever raise a demand under it and the clause would be silently unenforceable.
+        if clause.subject["effect"] not in KEYABLE_EFFECTS or len(clause.subject) != 1:
+            raise ClauseError("CLAUSE-SUBJECT-UNKEYABLE-EFFECT",
+                              f"{clause.id}: subject effect must be one of {KEYABLE_EFFECTS}")
     for fixture in clause.fixtures_pos:
         if not _base_predicate(disc, _fixture_event(disc, fixture)):
             raise ClauseError("CLAUSE-FIXTURE-POS-MISS", f"{clause.id}: {fixture!r}")
@@ -664,7 +722,7 @@ def _admit(clause: Clause) -> Clause:
         # one. `git clean -fd` and `find . -name '*.tmp' -delete` name no trailing-slash path, so
         # its extractor returned "" and the dispatcher allowed both -- a bulk delete passing the
         # clause written to stop it, with the fixture list asserting the opposite.
-        if isinstance(clause.subject, dict):
+        if isinstance(clause.subject, dict) and "effect" not in clause.subject:
             keyed = _fixture_event(clause.subject, fixture)
             fields = subject_fields(clause.subject)
             value = _resolve(keyed, fields[0] if fields else "")

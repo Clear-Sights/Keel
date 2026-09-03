@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import unittest
 
-from tests.plant_support import PLUGIN
+from tests.plant_support import PLUGIN, record
 
 SHIM = PLUGIN / "hooks" / "dispatch.sh"
 
@@ -39,14 +39,10 @@ class TheWriteSurfaceIsObserved(unittest.TestCase):
                                 f"{tool} is not matched at {moment}: the surface is unobserved")
 
     def test_a_rewrite_by_edit_raises_the_rewrite_demand(self) -> None:
-        from keel import effects
-        record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone",
-                                 "pids_spawned") else False for n in effects.EFFECTS}
-        record["remote_landed"] = None; record["files_changed"] = ["app.py"]
         self.assertEqual(self._hook(hook_event_name="PreToolUse", tool_name="Edit",
                                     tool_input={"file_path": "app.py", "old_string": "a", "new_string": "b"}), {})
         self._hook(hook_event_name="PostToolUse", tool_name="Edit",
-                   tool_input={"file_path": "app.py", "old_string": "a", "new_string": "b"}, keel_effect=record)
+                   tool_input={"file_path": "app.py", "old_string": "a", "new_string": "b"}, keel_effect=record(files_changed=["app.py"]))
         deny = self._hook(hook_event_name="PreToolUse", tool_name="Bash", tool_input={"command": "echo next"})
         reason = deny.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         self.assertEqual(deny.get("hookSpecificOutput", {}).get("permissionDecision"), "deny")

@@ -77,5 +77,5 @@ if [ -n "$out" ]; then
 fi
 [ "$status" -eq 0 ] && exit 0
 [ "$status" -eq 2 ] && exit 2
+# `fail_open` exits 0 itself: it IS the fail-open exit, so nothing follows it.
 fail_open "Python dispatcher failed"
-exit 0

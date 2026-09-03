@@ -84,7 +84,9 @@ class EverySideHasAClassAndAnInstance(unittest.TestCase):
                               capture_output=True, text=True)
         self.assertEqual(0, done.returncode, done.stdout + done.stderr)
         self.assertIn("axioms=0", done.stdout)
-        self.assertIn("sides=51", done.stdout)
+        # DERIVED from the loaded table. The census has one home, twelve lines up; restating it
+        # here made the grader's count agree with a literal rather than with the sides it graded.
+        self.assertIn(f"sides={len(_sides())}", done.stdout)
 
     def test_the_loader_refuses_an_authored_excuse(self) -> None:
         """Plant a `guard_vocabulary` back onto U03: the LOADER refuses the whole table."""

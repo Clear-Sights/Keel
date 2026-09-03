@@ -9,16 +9,12 @@ for a command to exempt itself, and each class below is one of those holes kept 
 
 from __future__ import annotations
 
-import contextlib
-import dataclasses
 import hashlib
-import io
 import json
 import os
 import pathlib
 import tempfile
 import unittest
-from datetime import date
 from unittest import mock
 
 from tests.plant_support import PLUGIN, smoke_replace
@@ -109,7 +105,7 @@ class TheAllowMarkerIsAHeaderNotAPayload(unittest.TestCase):
         smoke_replace(self, PLUGIN / "keel" / "dispatch.py",
                       b'        if not stripped.startswith("#"):\n'
                       b'            # Command text. Everything from here on is payload, not preamble.\n'
-                      b"            return None\n",
+                      b"            return\n",
                       b"", "tests.test_bypass.TheAllowMarkerIsAHeaderNotAPayload."
                       "test_TEETH_a_marker_in_a_heredoc_body_does_not",
                       "the heredoc body exempted the call")

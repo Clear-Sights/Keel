@@ -33,6 +33,7 @@ never a listing, so it cannot spend the guard; and no program is named on either
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from tests.plant_support import PLUGIN, smoke_replace
@@ -48,8 +49,8 @@ CLAUSES = PLUGIN / "keel" / "clauses.json"
 def _record(command: str, stdout: str, alive=(41, 42)) -> dict:
     """What the observer records for a listing act, computed by the observer's own readers."""
     record = effects.report_effects(stdout, command)
-    record.update(effects.trace_effects(stdout, {"alive": list(alive), "command": command},
-                                        None, quiet=True))
+    record.update(effects.trace_effects(stdout, {"alive": list(alive)}, None, quiet=True,
+                                        listed_self=record["report_self"]))
     return {"hook_event_name": "PostToolUse", "tool_name": "Bash",
             "tool_input": {"command": command}, "keel_effect": record}
 
@@ -62,7 +63,12 @@ class EveryGuardIsWitnessedInBothDirections(unittest.TestCase):
         un-witnessed guard. This cell asserts the enforcement is reachable from the product.
         """
         clauses = C.load_default()
-        self.assertEqual(len(clauses), 24)
+        # DERIVED from the shipped table, not a second writer of its size: a literal here was a
+        # third home for a number `test_effects` already declares, and it says nothing about the
+        # loader besides. Read off `clauses.json`, the same assertion also catches a loader that
+        # silently drops a row -- which is the way this population could go quiet.
+        self.assertEqual(len(json.loads(CLAUSES.read_text(encoding="utf-8"))), len(clauses))
+        self.assertTrue(clauses, "an empty table witnesses nothing")
         self.assertTrue(all(c.fixtures_discharge and c.fixtures_no_discharge for c in clauses))
 
     def test_TEETH_a_mention_never_discharges_C09(self) -> None:

@@ -30,7 +30,6 @@ import json
 import os
 import pathlib
 import re
-import shutil
 import subprocess
 import time
 from typing import Any
@@ -38,16 +37,16 @@ from typing import Any
 # name -> one sentence saying what the observation is. Closed. Read by the loader, the proof
 # renderer and the README; a clause naming anything else is refused at load.
 EFFECTS: dict[str, str] = {
-    "files_changed": "a file has different content after the act, or exists after it and did not before",
-    "files_removed": "a file that existed before the act does not exist after it",
+    "files_changed": "a file has different content after the act, or exists after it and did not before. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed",
+    "files_removed": "a file that had content before the act has none after it, or does not exist; a top-level gitignored entry that vanished is named too, by path only",
     "head_moved": "HEAD names a different commit after the act",
-    "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit",
-    "head_reset": "HEAD moved to an ancestor of where it was, and the worktree changed with it",
+    "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit; or the act recorded a checkout in HEAD's reflog and HEAD ended where it began",
+    "head_reset": "HEAD moved to an ancestor of where it was, and the worktree changed with it; or the act recorded a reset in HEAD's reflog, whatever it moved back to afterwards",
     "commit_signed": "the act created the commit HEAD now names, and that commit carries a signature",
     "remote_ref_moved": "a remote-tracking ref names a different commit after the act",
     "remote_landed": "every remote head this session moved is equal to a local ref (measured at the remote)",
     "pids_gone": "a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it",
-    "pids_spawned": "a process that did not exist before the act is still running after it, assigned to this session by lineage: in its tree, or in one of its process sessions",
+    "pids_spawned": "a process that did not exist before the act is still running after it (stated limit: a worker that exited before the act returned was never a process that outlived it, and is not observed), assigned to this session by lineage: in its tree, or in one of its process sessions",
     "pids_spawned_again": "pids_spawned, and this session had already spawned one before",
     "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act",
     "report_null": "the act printed a null datum, or nothing, while reading a structured file",
@@ -58,12 +57,14 @@ EFFECTS: dict[str, str] = {
     # check, or a report shape where no trace exists -- never by what it was called.
     "report_ref": "an act that changed no file, ref or process printed a ref name or commit id the ref snapshot holds",
     "report_paths": "an act that changed no file, ref or process printed a path the worktree snapshot holds",
+    "named_paths": "the worktree paths that report named, in full: what a demand keyed on a changed path is paid by",
+    "named_pids": "the live pids that report named: what a demand keyed on a gone pid is paid by",
     "report_pids": "the act printed at least two pids that were alive at the snapshot",
-    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself",
+    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself. The one effect whose datum is read from the command text, not the world: Theorem 8 covers a world-derived datum, so this side is stated, not proven, name-agnostic",
     "report_structured": "the act printed a JSON datum that is not null",
     "report_signature": "the act printed a signature block or a verified-signature datum",
     "report_nowarn": "report_pass, and the report carries no warning line",
-    "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network",
+    "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network. Stated limit (K13): the host counter cannot say what was reached, so a quiet connect to a closed port is a read; the trace refuses a mention, not a wasted call",
     "report_after_change": "report_pass on an act that ran after a file changed since the last spawn",
     "report_listing": "report_pids, and the output holds no segment of the act's own command: a listing that excluded the observer",
     "observed_read": "the host Read tool returned Keel's own worktree measurement (observed.json), as written",
@@ -143,18 +144,17 @@ def _repo_root(cwd: str) -> str | None:
 def worktree_tree(root: str, index: pathlib.Path) -> str | None:
     """The tree object of the ENTIRE worktree, untracked files included, via a private index.
 
-    `git add -A` into a copy of the real index, then `write-tree`: the real index is untouched,
+    `git add -A` into an EMPTY private index, then `write-tree`: the real index is untouched,
     and every blob is now in the object store, so a later `git show <tree>:<path>` recovers the
-    pre-image of anything the act changed or removed.
+    pre-image of anything the act changed or removed. The index starts empty on purpose. A copy
+    of the real one carries its stat cache, and any look (`git diff`, `git status`) refreshes
+    that cache: a modified, unstaged file is then cached as clean against its stale blob, and a
+    copy made after the look reported the old content, so the look itself read as a rewrite.
+    Nothing cached, nothing trusted: every file is hashed at every snapshot.
     """
-    located = _git(root, "rev-parse", "--git-path", "index")
-    real = pathlib.Path(root, located.strip()) if located else pathlib.Path("")
     try:
         index.parent.mkdir(parents=True, exist_ok=True)
-        if real.is_file():
-            shutil.copyfile(real, index)
-        elif index.exists():
-            index.unlink()
+        index.unlink(missing_ok=True)
     except OSError:
         return None
     env = {"GIT_INDEX_FILE": str(index)}
@@ -207,13 +207,53 @@ def _stat_fields(pid: int) -> list[str] | None:
     return stat.rsplit(")", 1)[-1].split()
 
 
-def process_session(pid: int) -> int | None:
-    """The process session (setsid group) a pid belongs to -- the lineage a daemonized worker
-    keeps after it is reparented away from this session's tree."""
-    fields = _stat_fields(pid)
-    if not fields or len(fields) <= _SID_AFTER_COMM or not fields[_SID_AFTER_COMM].isdigit():
+def proc_table() -> dict[int, tuple[str, int, int]] | None:
+    """ONE pass over /proc: pid -> (start time, parent, process session), for what is running.
+
+    Every caller wants a different projection of the same read -- the session's subtree, the
+    whole host, a pid's session -- and a function per projection re-read every process's stat
+    line two and three times per act. The start time is what makes a reused pid a new process.
+    A zombie is not running: it has ended and nobody has reaped it yet, and an orphaned worker
+    under a pid 1 that does not reap stays in /proc as one, so "still in /proc" is not "alive".
+    """
+    proc = pathlib.Path("/proc")
+    if not proc.is_dir():
         return None
-    return int(fields[_SID_AFTER_COMM])
+    table: dict[int, tuple[str, int, int]] = {}
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        fields = _stat_fields(int(entry.name))
+        if not fields or len(fields) <= _STARTTIME_AFTER_COMM or fields[0] == "Z":
+            continue
+        table[int(entry.name)] = (fields[_STARTTIME_AFTER_COMM], int(fields[1]),
+                                  int(fields[_SID_AFTER_COMM]) if fields[_SID_AFTER_COMM].isdigit() else 0)
+    return table
+
+
+def under(root: int, table: dict[int, tuple[str, int, int]]) -> dict[int, str]:
+    """pid -> start time for the processes of `table` whose ancestry reaches `root`."""
+    kin: dict[int, str] = {}
+    for pid, (start, _, _) in table.items():
+        cursor, hops = pid, 0
+        while cursor > 1 and hops < _ANCESTRY_CAP:
+            if cursor == root:
+                kin[pid] = start
+                break
+            cursor, hops = (table[cursor][1] if cursor in table else 1), hops + 1
+    return kin
+
+
+def _ancestry(hops: int) -> list[int]:
+    """This process and up to `hops` ancestors, nearest first. One walk, read two ways."""
+    chain, pid = [], os.getpid()
+    for _ in range(hops + 1):
+        chain.append(pid)
+        fields = _stat_fields(pid)
+        if not fields or len(fields) < 2 or int(fields[1]) <= 1:
+            break
+        pid = int(fields[1])
+    return chain
 
 
 def session_root() -> int:
@@ -227,66 +267,13 @@ def session_root() -> int:
     tree that the session ends is therefore unobserved; that boundary is the price of an
     observation that says something, and it is stated on the effect.
     """
-    pid = os.getpid()
-    for _ in range(2):
-        fields = _stat_fields(pid)
-        if not fields or len(fields) < 2:
-            break
-        parent = int(fields[1])
-        if parent <= 1:
-            break
-        pid = parent
-    return pid
-
-
-def pids(root: int | None = None) -> dict[int, str] | None:
-    """pid -> start time for every process under `root`, from /proc. The start time is what
-    makes a reused pid a new process."""
-    proc = pathlib.Path("/proc")
-    if not proc.is_dir():
-        return None
-    parents: dict[int, int] = {}
-    starts: dict[int, str] = {}
-    for entry in proc.iterdir():
-        if not entry.name.isdigit():
-            continue
-        fields = _stat_fields(int(entry.name))
-        if not fields or len(fields) <= _STARTTIME_AFTER_COMM:
-            continue
-        if fields[0] == "Z":
-            # A zombie is not running: it has ended and nobody has reaped it yet. An orphaned
-            # worker under a pid 1 that does not reap stays in /proc as one, so "still in
-            # /proc" is not "alive".
-            continue
-        parents[int(entry.name)] = int(fields[1])
-        starts[int(entry.name)] = fields[_STARTTIME_AFTER_COMM]
-    if root is None:
-        return starts
-    under: dict[int, str] = {}
-    for pid in starts:
-        cursor, hops = pid, 0
-        while cursor > 1 and hops < _ANCESTRY_CAP:
-            if cursor == root:
-                under[pid] = starts[pid]
-                break
-            cursor, hops = parents.get(cursor, 1), hops + 1
-    return under
+    return _ancestry(2)[-1]
 
 
 def _own_chain() -> set[int]:
     """This process and its ancestors: they are alive at one snapshot and gone at the next by
     construction, and they are never the act's doing."""
-    chain, pid = set(), os.getpid()
-    for _ in range(8):
-        chain.add(pid)
-        try:
-            stat = pathlib.Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
-            pid = int(stat.rsplit(")", 1)[-1].split()[1])
-        except (OSError, ValueError, IndexError):
-            break
-        if pid <= 1:
-            break
-    return chain
+    return set(_ancestry(7))
 
 
 def net_active_opens() -> int | None:
@@ -328,13 +315,12 @@ def net_active_opens() -> int | None:
 #     cost of a host that opens connections by itself is one demand per session, never a miss.
 
 
-def assigned_process(pid: int, before: dict[str, Any], in_tree: dict[int, str]) -> bool:
+def assigned_process(pid: int, sid: int, in_tree: dict[int, str], sids_then: set[int]) -> bool:
     if pid in in_tree:
         return True
-    sid = process_session(pid)
     if not sid:  # kernel threads carry session 0: no lineage, never this session's
         return False
-    return sid in set(before.get("sids") or [])
+    return sid in sids_then
 
 
 def assigned_counter(before: dict[str, Any], now: int | None) -> bool | None:
@@ -351,12 +337,43 @@ def _slot(state: pathlib.Path, session: str, agent: str) -> pathlib.Path:
     return state / f"effects-{key}"
 
 
-def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str, Any]:
-    """Record the world before the act. Written under the state dir for `delta` to read."""
+def _before_path(slot: pathlib.Path, act: str | None) -> pathlib.Path:
+    """The pre-image of ONE act. Keyed by the host's tool_use_id when it sends one: two acts
+    whose PreToolUse hooks both ran before either PostToolUse used to share a slot, so the
+    second snapshot overwrote the first, the first act was charged with the second's
+    effects, and the second found no snapshot at all (DL-06)."""
+    if act:
+        return slot / f"before-{hashlib.sha256(act.encode()).hexdigest()[:16]}.json"
+    return slot / "before.json"
+
+
+def _ignored(root: str) -> list[str] | None:
+    """Top-level gitignored entries, by name: the tree observer honours .gitignore, so their
+    content is unobserved, but their removal need not be."""
+    out = _git(root, "ls-files", "-o", "-i", "--exclude-standard", "--directory")
+    return sorted(line for line in out.splitlines() if line) if out is not None else None
+
+
+def _reflog_count(root: str) -> int | None:
+    out = _git(root, "rev-list", "-g", "--count", "HEAD")
+    try:
+        return int(out.strip()) if out is not None else None
+    except ValueError:
+        return None
+
+
+def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
+             opens_act: bool = True, act: str | None = None) -> dict[str, Any]:
+    """Record the world before the act. Written under the state dir for `delta` to read.
+
+    `opens_act=False` is the session start: the SAME measurement, written for the operator to
+    Read, leaving no pre-image behind -- there is no act for a `delta` to describe yet, and a
+    snapshot left there would let a PostToolUse with no PreToolUse report a clean act instead
+    of NOT-EVALUABLE.
+    """
     slot = _slot(state, session, agent)
     slot.mkdir(parents=True, exist_ok=True)
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
-    own_fields = _stat_fields(os.getpid()) or []
     memory = _memory(slot)
     if root and not memory.get("remote_measured") and (
             time.time() - float(memory.get("remote_tried", 0)) >= REMOTE_RETRY_S):
@@ -369,57 +386,42 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[st
         _remember(slot, memory)
     net_now = net_active_opens()
     net_after = memory.get("net_after")
-    snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root,
+    snap: dict[str, Any] = {"t": time.time(), "cwd": cwd, "root": root, "session": session,
                             "tree": None, "walk": None, "refs": None, "session_root": session_root(),
-                            "tick": own_fields[_STARTTIME_AFTER_COMM] if len(own_fields) > _STARTTIME_AFTER_COMM else None,
                             "pids": None, "sids": None, "alive": None, "net": net_now,
                             "net_ambient": (net_after is not None and net_now is not None
                                             and net_now != net_after)}
     if root:
-        snap["tree"] = worktree_tree(root, slot / "index.before")
+        snap["tree"] = worktree_tree(root, slot / "index")
         snap["refs"] = refs(root)
+        snap["ignored"] = _ignored(root)
+        snap["reflog"] = _reflog_count(root)
     elif os.path.isdir(cwd):
         snap["walk"] = walk_tree(cwd)
-    table = pids(snap["session_root"])
+    table = proc_table()
     if table is not None:
         own = _own_chain()
-        snap["pids"] = {str(p): s for p, s in table.items() if p not in own}
+        kin = under(snap["session_root"], table)
+        snap["pids"] = {str(p): s for p, s in kin.items() if p not in own}
         # Workers this session launched and orphaned (a daemon is reparented to pid 1 and
         # leaves the tree) stay this session's processes: remembered when spawned, watched
         # while they live.
-        everyone = pids()
         for pid, start in (memory.get("spawned") or {}).items():
-            if everyone is not None and everyone.get(int(pid)) == start:
+            if int(pid) in table and table[int(pid)][0] == start:
                 snap["pids"][pid] = start
-        sids = {process_session(p) for p in table} | {process_session(snap["session_root"])}
-        snap["sids"] = sorted(s for s in sids if s is not None)
-        snap["alive"] = sorted(everyone) if everyone is not None else None
-    (slot / "before.json").write_text(json.dumps(snap), encoding="utf-8")
+        sids = {table[p][2] for p in kin} | {table[snap["session_root"]][2]
+                                              if snap["session_root"] in table else 0}
+        snap["sids"] = sorted(x for x in sids if x)
+        snap["alive"] = sorted(table)
+    if opens_act:
+        _before_path(slot, act).write_text(json.dumps(snap), encoding="utf-8")
     write_observed(state, root, snap)
     return snap
 
 
 def observe(state: pathlib.Path, session: str, agent: str, cwd: str) -> None:
     """Write the artifacts without opening an act: the session start, before anything runs."""
-    slot = _slot(state, session, agent)
-    slot.mkdir(parents=True, exist_ok=True)
-    root = _repo_root(cwd) if os.path.isdir(cwd) else None
-    snap: dict[str, Any] = {"t": time.time(), "tree": None, "refs": None, "walk": None, "pids": None}
-    if root:
-        snap["tree"] = worktree_tree(root, slot / "index.before")
-        snap["refs"] = refs(root)
-        memory = _memory(slot)
-        if not memory.get("remote_measured"):
-            memory["remote_measured"] = observe_remote(state, root) is not None
-            memory["remote_tried"] = time.time()
-            memory["net_after"] = net_active_opens()
-            _remember(slot, memory)
-    elif os.path.isdir(cwd):
-        snap["walk"] = walk_tree(cwd)
-    table = pids(session_root())
-    if table is not None:
-        snap["pids"] = {str(p): s for p, s in table.items() if p not in _own_chain()}
-    write_observed(state, root, snap)
+    snapshot(state, session, agent, cwd, opens_act=False)
 
 
 def _memory(slot: pathlib.Path) -> dict[str, Any]:
@@ -437,29 +439,40 @@ def _remember(slot: pathlib.Path, memory: dict[str, Any]) -> None:
         pass
 
 
+EMPTY_BLOB = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
 def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list | None, list | None]:
     if not before or not after:
         return None, None
     if before == after:
         return [], []
-    out = _git(root, "diff-tree", "-r", "--name-status", "--no-renames", before, after)
+    out = _git(root, "diff-tree", "-r", "--raw", "--no-renames", before, after)
     if out is None:
         return None, None
     changed, removed = [], []
     for line in out.splitlines():
-        status, _, path = line.partition("\t")
-        if status[:1] in ("M", "T", "A"):
-            changed.append(path)
-        elif status.startswith("D"):
+        meta, _, path = line.partition("\t")
+        fields = meta.split()  # :mode mode sha_before sha_after status
+        if len(fields) < 5:
+            continue
+        status, was, now = fields[4][:1], fields[2], fields[3]
+        # A file emptied is a file whose content is gone (K17): the same loss as a deletion,
+        # under a different name, so it is observed as one.
+        if status == "D" or (status in ("M", "T") and now == EMPTY_BLOB and was != EMPTY_BLOB):
             removed.append(path)
+        elif status in ("M", "T", "A"):
+            changed.append(path)
     return changed, removed
 
 
 def _walk_delta(before: dict | None, after: dict | None) -> tuple[list | None, list | None]:
     if before is None or after is None:
         return None, None
-    changed = sorted(p for p, sig in after.items() if p not in before or tuple(sig) != tuple(before[p]))
-    removed = sorted(p for p in before if p not in after)
+    emptied = {p for p, sig in after.items() if p in before and sig[0] == 0 and before[p][0] != 0}
+    changed = sorted(p for p, sig in after.items()
+                     if p not in emptied and (p not in before or tuple(sig) != tuple(before[p])))
+    removed = sorted(set(p for p in before if p not in after) | emptied)
     return changed, removed
 
 
@@ -490,7 +503,36 @@ def _is_structured(stripped: str) -> bool:
         return False
 
 
-_SEGMENT_SPLIT = re.compile(r"\|\||&&|[|;\n]")
+def _segments(command: str) -> list[str]:
+    """The command's segments, split on control operators OUTSIDE quotes. A mention is one
+    segment: `echo 'ps aux | grep x'` must not yield `grep x'` (MATH-10: the theory's
+    scanner sees a mention as one segment, and the old regex split inside the quotes)."""
+    segs, buf, quote, i = [], [], None, 0
+    while i < len(command):
+        ch = command[i]
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = None
+            elif ch == "\\" and quote == '"' and i + 1 < len(command):
+                i += 1
+                buf.append(command[i])
+        elif ch in "'\"":
+            quote = ch
+            buf.append(ch)
+        elif ch == "\\" and i + 1 < len(command):
+            i += 1
+            buf.append(ch + command[i])
+        elif ch in "|;&\n":
+            if buf:
+                segs.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+        i += 1
+    if buf:
+        segs.append("".join(buf))
+    return segs
 
 
 def _lists_itself(text: str, command: Any) -> bool:
@@ -503,7 +545,7 @@ def _lists_itself(text: str, command: Any) -> bool:
     """
     if not isinstance(command, str) or not text:
         return False
-    for segment in _SEGMENT_SPLIT.split(command):
+    for segment in _segments(command):
         segment = segment.strip()
         if len(segment) >= 3 and segment in text:
             return True
@@ -513,10 +555,12 @@ def _lists_itself(text: str, command: Any) -> bool:
 _TOKEN = re.compile(r"[A-Za-z0-9_./-]+")
 
 
-def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bool) -> dict[str, Any]:
+def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bool,
+                  listed_self: bool = False) -> dict[str, Any]:
     """The guard effects a trace can check: a datum the report states equals one the world holds."""
     tokens = set(_TOKEN.findall(text or ""))
-    out: dict[str, Any] = {"report_ref": None, "report_paths": None, "report_pids": None}
+    out: dict[str, Any] = {"report_ref": None, "report_paths": None, "report_pids": None,
+                           "named_paths": None, "named_pids": None}
     refs_then = before.get("refs")
     if refs_then is not None:
         names = {n.split("/", 2)[-1] for n in refs_then if n.startswith(("refs/heads/", "refs/remotes/"))}
@@ -541,14 +585,27 @@ def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bo
             parts = path.split("/")
             for i in range(1, len(parts)):
                 held.add("/".join(parts[:i]))
-        out["report_paths"] = quiet and any(
-            t.removeprefix("./").rstrip("/") in held or t.rsplit("/", 1)[-1] in held for t in tokens)
+        # The named paths are kept in FULL, resolved from a basename or a prefix the report
+        # printed, so a demand keyed on `src/main.py` is paid by `git diff` printing
+        # `a/src/main.py` and by `ls src` printing `main.py`, and by nothing that printed
+        # neither (AG-10: a constant payload must not pay a keyed demand).
+        named = set()
+        for t in tokens:
+            t = t.removeprefix("./").rstrip("/")
+            base = t.rsplit("/", 1)[-1]
+            for path in paths:
+                if path and (path == t or path.endswith("/" + t) or path.rsplit("/", 1)[-1] == base
+                             or (t and path.startswith(t + "/"))):
+                    named.add(path)
+        out["named_paths"] = sorted(named) if quiet else []
+        out["report_paths"] = quiet and bool(named)
     alive = before.get("alive")
     if alive is not None:
         live = set(alive)
         claimed = {int(t) for t in tokens if t.isdigit() and int(t) in live}
+        out["named_pids"] = sorted(claimed)
         out["report_pids"] = len(claimed) >= LISTING_FLOOR
-        out["report_listing"] = out["report_pids"] and not _lists_itself(text, before.get("command"))
+        out["report_listing"] = out["report_pids"] and not listed_self
     return out
 
 
@@ -580,7 +637,8 @@ def observe_remote(state: pathlib.Path, root: str) -> dict[str, Any] | None:
 
 def write_observed(state: pathlib.Path, root: str | None, snap: dict[str, Any]) -> None:
     """Keel's own worktree measurement, written for the operator to Read (A01/A02/T01's datum)."""
-    doc: dict[str, Any] = {"root": root, "t": snap.get("t"), "head": None, "branch": None,
+    doc: dict[str, Any] = {"root": root, "session": snap.get("session"), "t": snap.get("t"),
+                           "head": None, "branch": None,
                            "tree": snap.get("tree"), "dirty": None, "paths": None,
                            "refs": snap.get("refs"),
                            "pids": sorted(int(p) for p in (snap.get("pids") or {}))}
@@ -606,6 +664,13 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
     path = tool_input.get("file_path")
     if not isinstance(path, str) or not path:
         return False
+    # A Read that RETURNED NOTHING observed nothing: a host error (file too large, EACCES)
+    # arrives as a response carrying `error` or an error string (EFF-06).
+    response = event.get("tool_response")
+    if isinstance(response, dict) and "error" in response:
+        return False
+    if isinstance(response, str) and (response.startswith("Error") or "exceeds maximum" in response):
+        return False
     target = state / name
     try:
         if pathlib.Path(path).resolve() != target.resolve() or not target.is_file():
@@ -613,15 +678,30 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
         doc = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
+    if not isinstance(doc, dict):
+        return False
+    # THE DATUM MUST BE THIS SESSION'S AND THIS WORKTREE'S. One file serves every session in a
+    # state directory, so a second window's SessionStart rewrote it for another repository and
+    # the first window's Read paid its guards with a measurement of the wrong tree (DL-11).
+    # Stated limit: two concurrent sessions in one state directory contend for the file and
+    # the loser is refused until its next act rewrites it -- fail closed, never a pass.
+    cwd = event.get("cwd")
+    root = _repo_root(cwd) if isinstance(cwd, str) and os.path.isdir(cwd) else None
+    if root and doc.get("root") and doc["root"] != root:
+        return False
     if name == REMOTE:
         return isinstance(doc.get("tips"), dict)
-    return isinstance(doc, dict) and "head" in doc
+    sid = event.get("session_id")
+    if isinstance(sid, str) and sid and doc.get("session") not in (None, sid):
+        return False
+    return "head" in doc
 
 
 def read_delta(state: pathlib.Path, event: dict[str, Any]) -> dict[str, Any]:
     """The record for a host Read: it did nothing to the world, and it may have observed Keel's own datum."""
     out: dict[str, Any] = {name: False for name in EFFECTS}
-    for name in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned"):
+    for name in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned",
+                 "named_paths", "named_pids"):
         out[name] = []
     out["observed_read"] = _artifact_read(state, event, OBSERVED)
     out["remote_read"] = _artifact_read(state, event, REMOTE)
@@ -635,19 +715,23 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
     response = event.get("tool_response") if isinstance(event.get("tool_response"), dict) else {}
     out.update(report_effects(response.get("stdout"), tool_input.get("command")))
+    act = event.get("tool_use_id")
+    pre = _before_path(slot, act if isinstance(act, str) else None)
+    if not pre.exists():
+        pre = slot / "before.json"
     try:
-        before = json.loads((slot / "before.json").read_text(encoding="utf-8"))
+        before = json.loads(pre.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         out["not_evaluable"] = "no pre-act snapshot"
         return out
     try:
-        (slot / "before.json").unlink()
+        pre.unlink()
     except OSError:
         pass
     memory = _memory(slot)
     root = before.get("root")
     if root:
-        after_tree = worktree_tree(root, slot / "index.after")
+        after_tree = worktree_tree(root, slot / "index")
         changed, removed = _tree_delta(root, before.get("tree"), after_tree)
         out["pre_image"] = before.get("tree")
         after_refs = refs(root)
@@ -658,6 +742,8 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
             out["remote_ref_moved"] = sorted(
                 name for name in set(before_refs) | set(after_refs)
                 if name.startswith("refs/remotes/") and before_refs.get(name) != after_refs.get(name))
+            if out["remote_ref_moved"]:
+                memory["remote_moved"] = True  # the ending asks the remote whatever the counter said
             out["head_reset"] = False
             out["commit_signed"] = False
             out["head_switched"] = False
@@ -665,39 +751,56 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
                 ancestor = _git(root, "merge-base", "--is-ancestor", new_head, old_head)
                 out["head_reset"] = ancestor is not None and bool(changed or removed)
                 body = _git(root, "cat-file", "commit", new_head) or ""
-                # A commit that existed before the act -- a ref pointed at it, or it was made
-                # before the snapshot -- is being SWITCHED to. One that did not was CREATED.
-                made = _git(root, "log", "-1", "--format=%ct", new_head)
-                existed = (new_head in before_refs.values()
-                           or (made is not None and made.strip().isdigit()
-                               and int(made.strip()) < int(before.get("t", 0))))
+                # A commit reachable from a ref that existed before the act is being SWITCHED
+                # to; one that is not was CREATED. Reachability is read from the pre-act refs,
+                # never from the commit's own timestamp: a committer date is whatever the act
+                # says it is (`GIT_COMMITTER_DATE`), so a backdated commit read as a switch and
+                # its signature was never examined (K11). Stated limit: a checkout of a commit
+                # no pre-act ref reached (a dangling or reflog-only commit) reads as created.
+                existed = any(_git(root, "merge-base", "--is-ancestor", new_head, tip) is not None
+                              for tip in set(before_refs.values()) if tip)
                 out["head_switched"] = existed
                 out["commit_signed"] = (not existed) and "\ngpgsig " in body
+            # WHAT HAPPENED IN BETWEEN. A commit-then-reset, or a checkout out and back, leaves
+            # HEAD where it started and the before/after comparison sees nothing (EFF-09). The
+            # reflog records every move HEAD made during the act; the new entries are read.
+            then_n, now_n = before.get("reflog"), _reflog_count(root)
+            if isinstance(then_n, int) and isinstance(now_n, int) and now_n > then_n:
+                moves = (_git(root, "reflog", "show", "--format=%gs", "HEAD") or "").splitlines()[:now_n - then_n]
+                if any(m.startswith("reset:") for m in moves):
+                    out["head_reset"] = True
+                if any(m.startswith("checkout:") for m in moves) and not out["head_moved"]:
+                    out["head_switched"] = True
+        if removed is not None and before.get("ignored") is not None:
+            now_ignored = _ignored(root)
+            if now_ignored is not None:
+                gone = [p for p in before["ignored"] if p not in set(now_ignored)]
+                removed = sorted(set(removed) | set(gone))
     else:
         changed, removed = _walk_delta(before.get("walk"), walk_tree(before["cwd"])
                                        if os.path.isdir(before.get("cwd", "")) else None)
     out["files_changed"], out["files_removed"] = changed, removed
-    everyone = pids()
+    table = proc_table()
     then = before.get("pids")
-    if everyone is not None and then is not None:
+    if table is not None and then is not None:
         own = _own_chain()
-        in_tree = pids(before.get("session_root")) or {}
+        in_tree = under(before.get("session_root") or 0, table)
         out["pids_gone"] = sorted(int(p) for p, s in then.items()
-                                  if everyone.get(int(p)) != s)
+                                  if int(p) not in table or table[int(p)][0] != s)
         # New on the HOST (not merely absent from the tree's snapshot), alive, and assigned.
-        alive_then = set(before.get("alive") or [])
+        alive_then, sids_then = set(before.get("alive") or []), set(before.get("sids") or [])
         spawned = sorted(
-            p for p, s in everyone.items()
+            p for p, (start, _, sid) in table.items()
             if p not in own
-            and (p not in alive_then or (str(p) in then and then[str(p)] != s))
-            and assigned_process(p, before, in_tree))
+            and (p not in alive_then or (str(p) in then and then[str(p)] != start))
+            and assigned_process(p, sid, in_tree, sids_then))
         out["pids_spawned"] = spawned
         out["pids_spawned_again"] = bool(spawned) and memory.get("spawns", 0) > 0
         if spawned:
             memory["spawns"] = memory.get("spawns", 0) + 1
             remembered = dict(memory.get("spawned") or {})
             for p in spawned:
-                remembered[str(p)] = everyone[p]
+                remembered[str(p)] = table[p][0]
             memory["spawned"] = remembered
     net_now = net_active_opens()
     out["net_out"] = assigned_counter(before, net_now)
@@ -721,7 +824,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     # loud on 3 of 15 CI jobs, while the spawn itself fires U01 on its own effect.
     still = changed == [] and removed == [] and not out.get("head_moved")
     out.update(trace_effects(response.get("stdout") if isinstance(response.get("stdout"), str) else "",
-                             dict(before, command=tool_input.get("command")), root, still))
+                             before, root, still, out["report_self"]))
     out["net_read"] = (None if out["net_out"] is None else
                        bool(out["net_out"]) and still and not out["report_fail"])
     out["report_after_change"] = bool(out["report_pass"]) and bool(memory.get("changed_since_spawn"))
@@ -747,8 +850,10 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     slot = _slot(state, session, agent)
     memory = _memory(slot)
     out: dict[str, Any] = {"remote_ref_moved": None, "remote_landed": None}
-    if memory.get("net_out") is False:
-        # Measured: no act of this session transmitted, so no remote ref can have moved.
+    if memory.get("net_out") is False and not memory.get("remote_moved"):
+        # Measured: no act of this session transmitted over the host's counter and no
+        # remote-tracking ref moved, so no remote ref can have moved. A push over a local path
+        # moves the tracking ref without a TCP open (EFF-11), so the ref is the second witness.
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
     # Transmitted, or could not tell: ask the remote rather than assume.
@@ -761,19 +866,25 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
     local = refs(root)
-    listing = _git(root, "ls-remote", "--heads", "origin")
-    if local is None or listing is None:
+    if local is None:
         out["not_evaluable"] = "the remote could not be listed"
         return out
     local_shas = set(local.values())
     moved, unlanded = [], []
-    for line in listing.splitlines():
-        sha, _, name = line.partition("\t")
-        tracking = local.get("refs/remotes/origin/" + name.removeprefix("refs/heads/"))
-        if tracking is not None and tracking != sha:
-            moved.append(name)
-            if sha not in local_shas:
-                unlanded.append(name)
+    # EVERY remote, not only origin: a push to `upstream` moves that tracking ref and origin
+    # says nothing about it.
+    for remote in (remotes or "").split():
+        listing = _git(root, "ls-remote", "--heads", remote)
+        if listing is None:
+            out["not_evaluable"] = f"the remote {remote} could not be listed"
+            return out
+        for line in listing.splitlines():
+            sha, _, name = line.partition("\t")
+            tracking = local.get(f"refs/remotes/{remote}/" + name.removeprefix("refs/heads/"))
+            if tracking is not None and tracking != sha:
+                moved.append(f"{remote}:{name}" if remote != "origin" else name)
+                if sha not in local_shas:
+                    unlanded.append(name)
     out["remote_ref_moved"] = moved
     out["remote_landed"] = not unlanded
     return out

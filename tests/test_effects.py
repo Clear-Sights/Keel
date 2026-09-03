@@ -28,13 +28,12 @@ import pathlib
 import re
 import socket
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
 import unittest.mock
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN, hook_decision, smoke_replace
 from keel import clauses as C
 from keel import effects
 from keel.ledger import Ledger
@@ -147,7 +146,7 @@ class TheObserverSeesTheWorld(Repo):
     def test_the_same_act_under_another_name_is_the_same_effect(self) -> None:
         """Theorem 8 on the ground: the observation does not depend on what removed the file."""
         for command in ("rm a.txt", "python3 -c \"import os; os.remove('a.txt')\"",
-                        "find . -name a.txt -delete"):
+                        "find . -name a.txt -delete", ": > a.txt", "truncate -s 0 a.txt"):
             git(self.repo, "checkout", "-q", "--", "a.txt")
             with self.subTest(command=command):
                 self.assertEqual(["a.txt"], self.observe(command)["files_removed"])
@@ -165,10 +164,30 @@ class TheObserverSeesTheWorld(Repo):
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-qm", "on other")
         git(self.repo, "checkout", "-q", "main")
-        time.sleep(1.1)  # the commit predates the snapshot by a whole second
         d = self.observe("git checkout -q other")
         self.assertTrue(d["head_moved"])
         self.assertTrue(d["head_switched"])
+
+    def test_a_backdated_commit_is_still_a_creation(self) -> None:
+        """K11: the switch/create split read the committer date, which the act itself sets."""
+        d = self.observe("printf two > a.txt && git add -A && "
+                         "GIT_COMMITTER_DATE='2000-01-01T00:00:00' git commit -qm backdated")
+        self.assertTrue(d["head_moved"])
+        self.assertFalse(d["head_switched"], "a commit the act made read as a switch to an old one")
+        self.assertFalse(d["commit_signed"])
+
+    def test_a_checkout_of_an_unreachable_commit_reads_as_created(self) -> None:
+        """The stated limit of reachability: a commit no pre-act ref reaches is not a switch."""
+        git(self.repo, "checkout", "-q", "-b", "gone")
+        pathlib.Path(self.repo, "c.txt").write_text("c\n", encoding="utf-8")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-qm", "dangling")
+        sha = git(self.repo, "rev-parse", "HEAD").strip()
+        git(self.repo, "checkout", "-q", "main")
+        git(self.repo, "branch", "-D", "gone")
+        d = self.observe(f"git checkout -q {sha}")
+        self.assertTrue(d["head_moved"])
+        self.assertFalse(d["head_switched"])
 
     def test_a_hard_reset_to_an_ancestor_is_a_reset(self) -> None:
         pathlib.Path(self.repo, "a.txt").write_text("two\n", encoding="utf-8")
@@ -258,7 +277,7 @@ class TheObserverSeesTheWorld(Repo):
         effects.snapshot(self.state, "s", "", self.repo)
         time.sleep(0.6)  # the act; the foreign session starts its worker meanwhile
         d = effects.delta(self.state, "s", "", {})
-        born = [p for p in effects.pids() or {} if effects.process_session(p) == foreign]
+        born = [p for p, (_, _, sid) in (effects.proc_table() or {}).items() if sid == foreign]
         self.assertTrue(born, "the foreign session left nothing alive to judge")
         self.assertFalse(set(born) & set(d["pids_spawned"]), f"assigned a foreign lineage: {born}")
 
@@ -363,10 +382,7 @@ class TheDispatcherEnforcesAnEffect(Repo):
     def _hook(self, **payload) -> dict:
         payload.setdefault("session_id", "fx")
         payload.setdefault("cwd", self.repo)
-        env = dict(os.environ, KEEL_STATE_DIR=str(self.state), CLAUDE_PLUGIN_ROOT=str(PLUGIN))
-        done = subprocess.run(["bash", str(SHIM)], input=json.dumps(payload), capture_output=True,
-                              text=True, env=env, timeout=60)
-        return json.loads(done.stdout.strip() or "{}")
+        return hook_decision(payload, self.state)
 
     def _act(self, command: str, run: bool = True) -> tuple[dict, dict]:
         """A Bash call through the hook, the world observed live around it, its output real."""

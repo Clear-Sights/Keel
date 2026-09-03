@@ -1,8 +1,8 @@
 """One entrypoint, every event. A capability is a row, never a module.
 
-Adding an event is adding a row to HANDLERS, never another branch in main(). The lookup's default
-is the wildcard: an event with no specialist row is still held to the clause table, so newly wired
-events cannot silently bypass evaluation.
+Adding an event is adding a row to HANDLERS, never another branch in main(). An event with no row
+is answered NOT-EVALUABLE, loudly, and can neither raise nor discharge a demand: the old wildcard
+default let an unknown event pay a guard for free.
 
 WIRE FORMAT is identical on Claude Code and codex, verified against both specs:
   PreToolUse deny  -> {"hookSpecificOutput": {..., "permissionDecision": "deny", ...}}
@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import re
 import sys
+import time
 from pathlib import Path
 
 from . import clauses as C
@@ -78,15 +80,26 @@ ALLOW_LEGACY = re.compile(r"^#\s*gyroscope-allow:\s*(\S.*)$")
 GUARD = re.compile(r"^#\s*keel-guard:\s*([A-Za-z0-9_,\s-]+)$")
 
 
-def _guard_marker(command: str) -> set[str]:
-    """The clause ids a Bash call commits to pay, from its leading comment header."""
+def _header(command):
+    """The leading comment lines of a command, where a marker may appear -- spelled once for
+    both markers. The scan stops dead at the first line that is not blank and not a comment;
+    a missing command is an empty header, said here rather than at each call site."""
+    if not isinstance(command, str):
+        return
     for line in command.split("\n"):
         stripped = line.strip()
         if not stripped:
             continue
         if not stripped.startswith("#"):
-            return set()
-        found = GUARD.match(stripped)
+            # Command text. Everything from here on is payload, not preamble.
+            return
+        yield stripped
+
+
+def _guard_marker(command) -> set[str]:
+    """The clause ids a Bash call commits to pay, from its leading comment header."""
+    for line in _header(command):
+        found = GUARD.match(line)
         if found:
             return {p for p in re.split(r"[,\s]+", found.group(1)) if p}
     return set()
@@ -99,17 +112,11 @@ def _allow_marker(command: str):
     an exemption, and both patterns refuse a marker with nothing after it. The spelling travels
     with it so the caller can say something about the old one.
     """
-    for line in command.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if not stripped.startswith("#"):
-            # Command text. Everything from here on is payload, not preamble.
-            return None
-        found = ALLOW.match(stripped)
+    for line in _header(command):
+        found = ALLOW.match(line)
         if found:
             return "keel", found.group(1)
-        found = ALLOW_LEGACY.match(stripped)
+        found = ALLOW_LEGACY.match(line)
         if found:
             return "gyroscope", found.group(1)
     return None
@@ -130,7 +137,69 @@ def _ids(event: dict) -> tuple[str, str]:
     return str(event.get("session_id") or ""), str(event.get("agent_id") or "")
 
 
-_MISSING_FIELD = None
+# A DEMAND KEYED ON WHAT THE ACT DID. An effect clause's subject may be the datum its effect
+# produced -- `{"effect": "files_changed"}` -- so a rewrite of two files raises two demands,
+# each keyed on its path, and a guard pays exactly the one it names: a Read of `config.txt`,
+# a `git diff` whose output names `config.txt`, a Grep aimed at it. Before this the subject
+# was the session, so any look at any path paid every rewrite (AG-10: a constant payload paid
+# a trace-checked guard, 29 of 30 targets). `observed.json` is Keel's own measurement of the
+# dirty paths and pids, so a Read of it names them all -- that is what the artifact is for.
+_NAMED_BY = {"files_changed": "named_paths", "files_removed": "named_paths", "pids_gone": "named_pids"}
+
+
+def _effect_keyed(clause) -> str | None:
+    spec = clause.subject
+    return spec.get("effect") if isinstance(spec, dict) and "effect" in spec else None
+
+
+def _subjects(clause, event: dict) -> list[str]:
+    """Every key this event raises for the clause: one per datum for an effect subject."""
+    effect = _effect_keyed(clause)
+    if effect is None:
+        return [_subject(clause, event)]
+    record = event.get("keel_effect") if isinstance(event.get("keel_effect"), dict) else {}
+    data = record.get(effect)
+    return [str(d)[:200] for d in data] if isinstance(data, list) else []
+
+
+def _names(clause, event: dict, subject: str) -> bool:
+    """Does this guard event name the datum a demand is keyed on?"""
+    effect = _effect_keyed(clause)
+    record = event.get("keel_effect") if isinstance(event.get("keel_effect"), dict) else {}
+    if record.get("observed_read") is True:
+        return True
+    named = record.get(_NAMED_BY.get(effect, ""))
+    if isinstance(named, list) and subject in {str(n) for n in named}:
+        return True
+    for field in ("tool_input.file_path", "tool_input.path", "tool_input.notebook_path"):
+        value = _get(event, field)
+        if isinstance(value, str) and value and (value == subject or value.endswith("/" + subject)
+                                                 or subject.endswith("/" + value.rsplit("/", 1)[-1])
+                                                 and value.rsplit("/", 1)[-1] == subject.rsplit("/", 1)[-1]):
+            return True
+    return False
+
+
+def _pay(clause, ledger: Ledger, event: dict, session: str, agent: str, *, only_open: bool,
+         how: str, within: set | None = None) -> bool:
+    """Discharge what this guard event pays for the clause; True if it paid anything.
+
+    A session-keyed or extractor-keyed clause pays the one demand its subject derives; an
+    effect-keyed clause pays every open demand of its own whose datum this event names.
+    `within` bounds what may be paid to the demands open BEFORE this act: an act cannot be
+    its own guard, or a quiet connection pays the canary its own connection owed (EFF-12)."""
+    if _effect_keyed(clause) is not None:
+        rows = [row for row in ledger.open_demands(session, agent)
+                if row.get("clause_id") == clause.id and _names(clause, event, row.get("subject") or "")
+                and (within is None or row["id"] in within)]
+        for row in rows:
+            ledger.discharge(session, agent, row["id"], how)
+        return bool(rows)
+    did = derive_id(session, agent, clause.id, _subject(clause, event))
+    if only_open and did not in (ledger.open_ids(session, agent) if within is None else within):
+        return False
+    ledger.discharge(session, agent, did, how)
+    return True
 
 
 def _subject(clause, event: dict) -> str:
@@ -153,21 +222,18 @@ def _subject(clause, event: dict) -> str:
         # With a single field the guard yields no key at all, so it can never discharge the
         # demand it plainly satisfies -- the guard would be composed over two surfaces while the
         # SUBJECT stayed nominal, and the composition would silently do nothing.
-        fields = C.subject_fields(spec)
-        raw = _MISSING_FIELD
-        for field in fields:
+        raw = ""
+        for field in C.subject_fields(spec):
             candidate = _get(event, field)
             if isinstance(candidate, str) and candidate:
                 raw = candidate
                 break
-        if not isinstance(raw, str):
-            return ""
-        m = re.search(spec.get("pattern") or "", raw)
+        m = re.search(spec.get("pattern") or "", raw) if raw else None
         if not m:
             return ""
         try:
             return str(m.group(spec.get("group", 1)) or "")[:200]
-        except (IndexError, re.error):
+        except IndexError:
             return ""
     return str(_get(event, spec) or "")[:200]
 
@@ -206,6 +272,10 @@ def _deny(reason: str) -> dict:
 # the raw subject produced -- is worse than silence, because it points the session at its own id.
 def _keyed_reason(clause, subject: str) -> str:
     base = f"[{clause.id}] {clause.deny_reason}"
+    if _effect_keyed(clause) is not None:
+        return (f"{base} -- keyed on `{subject}`, so the guard must name `{subject}`: Read it, "
+                f"Grep it, or print it from the worktree; a look at another target does not "
+                f"discharge this." + _construction(clause))
     if isinstance(clause.subject, dict):
         if not subject:
             return base + _construction(clause)
@@ -227,7 +297,7 @@ def _keyed_reason(clause, subject: str) -> str:
 # here, the worst a bad anchor can do is omit one sentence from one deny message. The deny itself
 # -- the load-bearing half -- is never withheld because its footnote is malformed.
 def _construction(clause) -> str:
-    anchor = getattr(clause, "construction", "") or ""
+    anchor = clause.construction or ""
     if not C.CONSTRUCTION_ANCHOR.fullmatch(anchor):
         return ""
     return f" Construction: {anchor}."
@@ -237,7 +307,7 @@ def _block(reason: str) -> dict:
     return {"decision": "block", "reason": f"{_PREFIX}: {reason}"}
 
 
-def _context(text: str, event_name: str = "SessionStart") -> dict:
+def _context(text: str, event_name: str) -> dict:
     return {"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": text}}
 
 
@@ -297,7 +367,9 @@ def _effect_record(ledger: Ledger, event: dict, moment: str) -> None:
         tool = event.get("tool_name")
         if moment == "before":
             if tool not in HOST_READS:
-                effects.snapshot(ledger.root, session, agent, cwd)
+                act = event.get("tool_use_id")
+                effects.snapshot(ledger.root, session, agent, cwd,
+                                 act=act if isinstance(act, str) else None)
         elif moment == "after":
             if tool not in HOST_READS:
                 event["keel_effect"] = effects.delta(ledger.root, session, agent, event)
@@ -325,8 +397,7 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
         return None, False
     by_id = {cl.id: cl for cl in table}
     owed, progress = [], False
-    command = _get(event, "tool_input.command")
-    committed = _guard_marker(command) if isinstance(command, str) else set()
+    committed = _guard_marker(_get(event, "tool_input.command"))
     for row in open_rows:
         cl = by_id.get(row.get("clause_id"))
         # A terminal clause's debt is settled at the ending, by `reconcile`; it does not
@@ -339,7 +410,9 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
             continue
         # The guard must name what the demand is keyed on: a Read of `other.json` does not pay
         # for the traversal of `payload.json`. Session-wide subjects agree trivially.
-        if C.discharges(cl, event) and derive_id(session, agent, cl.id, _subject(cl, event)) == row["id"]:
+        if C.discharges(cl, event) and (
+                _names(cl, event, row.get("subject") or "") if _effect_keyed(cl) is not None
+                else derive_id(session, agent, cl.id, _subject(cl, event)) == row["id"]):
             ledger.discharge(session, agent, row["id"], "guard call observed")
             progress = True
             continue
@@ -353,25 +426,27 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
     # A HOST READ IS NEVER THE ACT. An open demand refuses the next act; a Read, Grep or Glob
     # cannot change the world, and a Read is how the observation-shaped guards are paid --
     # its effect record exists only after it ran. Refusing the read would refuse the guard.
-    if event.get("tool_name") in HOST_READS:
+    if event.get("tool_name") in HOST_READS or event.get("tool_name") in NON_ACTS:
         return None, progress
     return _deny("; ".join(owed) + COMMIT_HINT), progress
 
 
 # The host tools that read and cannot act. Closed by the host, listed here once.
 HOST_READS = frozenset({"Read", "Grep", "Glob"})
+# Host tools that neither read nor act on the world: a question to the operator and the plan
+# door. An open demand refuses the next ACT; refusing these left a refused push blocking the
+# very question that would resolve it (DL-14, P-23). `Task` stays an act: it spawns a worker.
+NON_ACTS = frozenset({"AskUserQuestion", "ExitPlanMode"})
 COMMIT_HINT = (" -- a guard that is itself a Bash act passes on a leading `# keel-guard: <clause id>` "
                "line and is checked by its effect after it runs")
 
 
-def _applicable(table, event: dict):
-    name, tool = event.get("hook_event_name"), event.get("tool_name")
-    for cl in table:
-        if cl.event != name:
-            continue
-        if cl.tools and cl.tools != ["*"] and tool not in cl.tools:
-            continue
-        yield cl
+def _applies(cl, event: dict) -> bool:
+    """Does this clause declare this event and this tool? Asked of one clause where the answer
+    is used, not pre-walked into a set of `id()`s: the caller already loops the table."""
+    if cl.event != event.get("hook_event_name"):
+        return False
+    return not cl.tools or cl.tools == ["*"] or event.get("tool_name") in cl.tools
 
 
 def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
@@ -398,7 +473,6 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
         return held
     _effect_record(ledger, event, "before")
     denials = []
-    applicable = {id(cl) for cl in _applicable(table, event)}
     for cl in table:
         try:
             # A GUARD IS READ ON EVERY EVENT, whatever event the clause fires on: a Glob licenses
@@ -406,25 +480,21 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
             # after a rewrite although U12 fires at PostToolUse. Terminal clauses are watched
             # by `_watch_standing`, under their own subject.
             if cl.event not in ("Stop", "SubagentStop") and C.discharges(cl, event):
-                subject = _subject(cl, event)
-                did = derive_id(session, agent, cl.id, subject)
                 # An effect clause is discharged only against a demand its effect raised (the
                 # rule `post_tool_use` states); a pre-act clause is licensed in advance.
-                if (C.classify_side(cl.fingerprint) != "effect"
-                        or did in ledger.open_ids(session, agent)):
-                    ledger.discharge(session, agent, did, "guard call observed")
+                if _pay(cl, ledger, event, session, agent, how="guard call observed",
+                        only_open=C.classify_side(cl.fingerprint) == "effect"):
                     progress = True
                 continue
-            if id(cl) not in applicable:
+            if not _applies(cl, event):
                 continue
             if C.match(cl, event):
                 subject = _subject(cl, event)
-                if isinstance(cl.subject, dict) and not subject:
-                    # The extractor found no operand, so this event cannot be keyed. Denying
-                    # under the empty key would merge every demand for this clause into one
-                    # bucket; passing would be absence-counts-as-pass. It is NOT-EVALUABLE, so
-                    # the clause abstains on this event and says nothing about it.
-                    continue
+                # THE EXTRACTOR FINDING NO OPERAND IS NOT A PASS. This used to abstain, which
+                # made the subject regex a covering: an act spelled outside the extractor's
+                # vocabulary proceeded unguarded (L2). The demand is raised under the empty
+                # key instead -- session-wide, coarse, honest -- and any guard for the clause
+                # that names no operand pays it.
                 did = derive_id(session, agent, cl.id, subject)
                 # The licence must be an OBSERVED discharge, never merely an absent demand.
                 if ledger.is_licensed(session, agent, did):
@@ -450,8 +520,7 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     if not denials:
         return {}
     for cl, subject, did in denials:
-        ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
-                             subject=subject, reason=cl.deny_reason))
+        ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
     return _deny("; ".join(_keyed_reason(cl, subject) for cl, subject, _ in denials))
 
 
@@ -459,7 +528,8 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
     session, agent = _ids(event)
     _effect_record(ledger, event, "after")
     _watch_standing(table, ledger, event, session, agent)
-    applicable = {id(cl) for cl in _applicable(table, event)}
+    # What was owed BEFORE this act is all this act may pay: its own demands are raised below.
+    open_before = ledger.open_ids(session, agent)
     for cl in table:
         try:
             after_the_act = C.classify_side(cl.fingerprint) == "effect"
@@ -468,32 +538,33 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
             # only here. So A01's guard (a Read of the worktree measurement) pays A01's
             # PreToolUse demand from this event, and T01's standing guard the same.
             if cl.event not in ("Stop", "SubagentStop") and C.discharges(cl, event):
-                did = derive_id(session, agent, cl.id, _subject(cl, event))
                 # AN EFFECT'S GUARD IS "LOOK AT WHAT YOU JUST DID", and that cannot be done
                 # in advance. A pre-act clause is licensed by a guard seen before the act; an
                 # effect clause is discharged only against a demand its effect has raised.
                 # Otherwise the suite run every session opens with would license the deletion
                 # that comes an hour later -- measured: U20 never fired once a `pytest` had
                 # run earlier in the session.
-                if not after_the_act or did in ledger.open_ids(session, agent):
-                    ledger.discharge(session, agent, did, "guard call completed")
-                continue
-            if id(cl) not in applicable:
+                _pay(cl, ledger, event, session, agent, how="guard call completed",
+                     only_open=after_the_act, within=open_before if after_the_act else None)
+                if not after_the_act:
+                    continue
+                # An effect clause whose guard this act also satisfies still has its OCCASION
+                # read: `continue` here let a quiet connection be its own canary, so U06 never
+                # fired on the exfiltration shape (EFF-12). Stated limit: any LATER quiet
+                # connection pays it -- the canary is a report shape (owner row 3).
+            if not _applies(cl, event):
                 continue
             # AN EFFECT IS THE OCCASION, OBSERVED AFTER THE ACT. The demand is raised here and
             # the next call pays it (`_open_effect_denial`); this event itself cannot be
             # refused, the act is done. `match` fails closed on an unmeasured effect.
             if after_the_act and C.match(cl, event):
-                subject = _subject(cl, event)
-                did = derive_id(session, agent, cl.id, subject)
-                if not ledger.is_licensed(session, agent, did):
-                    ledger.demand(Demand(id=did, session=session, agent=agent,
-                                         clause_id=cl.id, subject=subject,
-                                         reason=cl.deny_reason))
+                for subject in _subjects(cl, event):
+                    did = derive_id(session, agent, cl.id, subject)
+                    if not ledger.is_licensed(session, agent, did):
+                        ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
         except Exception:
             continue
-    command = _get(event, "tool_input.command")
-    committed = _guard_marker(command) if isinstance(command, str) else set()
+    committed = _guard_marker(_get(event, "tool_input.command"))
     if committed:
         still = {row["clause_id"] for row in ledger.open_demands(session, agent)}
         broken = sorted(committed & still)
@@ -529,8 +600,7 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                         continue
                     subject = f"standing:{key}"
                     did = derive_id(session, agent, cl.id, subject)
-                    ledger.demand(Demand(id=did, session=session, agent=agent, clause_id=cl.id,
-                                         subject=subject, reason=cl.deny_reason))
+                    ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
                     # NO `continue` HERE, and the reason is the whole shape of a keyed standing
                     # clause: ONE ACT CAN BE BOTH THE OCCASION AND THE GUARD. C08 is the case --
                     # running a checker's own can-fail plant both produces a PASS that could be
@@ -553,10 +623,11 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
                     # discharge under the subject "activated" -- rows that net to zero and mean
                     # nothing, in the journal whose whole job is saying what was owed. Benign to
                     # the verdict, junk to a reader, and two shapes wearing one code path.
-                    aid = derive_id(session, agent, cl.id, "activated")
-                    ledger.demand(Demand(id=aid, session=session, agent=agent, clause_id=cl.id,
-                                         subject="activated", reason="occasion observed"))
-                    ledger.discharge(session, agent, aid, "occasion observed")
+                    # ONE row: a demand written and discharged on the next line netted to zero
+                    # in the journal whose whole job is saying what was owed; `reconcile` asks
+                    # `is_licensed`, so only the discharge was ever read.
+                    ledger.discharge(session, agent, derive_id(session, agent, cl.id, "activated"),
+                                     "occasion observed")
             if C.discharges(cl, event):
                 key = C.event_key(cl.discharged_by, event)
                 if cl.discharged_by.get("key_from") is not None and not key:
@@ -568,16 +639,78 @@ def _watch_standing(table, ledger: Ledger, event: dict, session: str, agent: str
             continue
 
 
+# Refusals of one ending before it is allowed LOUDLY (DL-04). Three: one refusal states the
+# debt, a second proves it was read and ignored, a third is the last before the host's own
+# stop-hook loop cap would fail open in silence; exhausted, the ending passes with a fault row
+# and a systemMessage, and the rows stay open for the next ending.
+STOP_ROUNDS = 3
+
+
+def _pending_dir(root: pathlib.Path) -> pathlib.Path:
+    return pathlib.Path(root) / "pending"
+
+
+def _pending_mark(root: pathlib.Path, event: dict) -> pathlib.Path | None:
+    """Leave a marker for the duration of an observed event; `main` removes it on answer."""
+    if event.get("hook_event_name") not in ("PreToolUse", "PostToolUse"):
+        return None
+    session, _ = _ids(event)
+    try:
+        d = _pending_dir(root)
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"{session}-{os.getpid()}.json"
+        cmd = _get(event, "tool_input.command") or _get(event, "tool_input.file_path") or ""
+        path.write_text(json.dumps({"event": event.get("hook_event_name"), "tool": event.get("tool_name"),
+                                    "act": str(cmd)[:200], "t": time.time()}), encoding="utf-8")
+        return path
+    except OSError:
+        return None
+
+
+def _pending_lost(root: pathlib.Path, session: str) -> list[str]:
+    """Markers of this session whose hook process is gone: evaluations that never answered."""
+    lost = []
+    try:
+        for path in sorted(_pending_dir(root).glob(f"{session}-*.json")):
+            pid = path.stem.rsplit("-", 1)[-1]
+            try:
+                os.kill(int(pid), 0)
+                continue  # still running: a concurrent hook, not a dead one
+            except (ValueError, ProcessLookupError, PermissionError):
+                pass
+            try:
+                row = json.loads(path.read_text(encoding="utf-8"))
+                lost.append(f"{row.get('event')} {row.get('tool')} {row.get('act')!r}")
+            except (OSError, ValueError):
+                lost.append(path.name)
+            path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return lost
+
+
 def reconcile(table, ledger: Ledger, event: dict) -> dict:
     """Terminal reconciliation. Fails CLOSED: a gate that cannot decide has not decided, and
     reporting success by default is the one failure this whole loop exists to refuse."""
-    # Claude Code marks the Stop/SubagentStop caused by our own preceding block. Re-blocking that
-    # event cannot discharge an obligation: it only spends another forced continuation until the
-    # host's block cap fails open. Quarantine this repeated decision (not the clauses or ledger
-    # rows); the named successor is the next non-active terminal event, which evaluates them again.
-    if event.get("stop_hook_active") is True:
-        return {}
     session, agent = _ids(event)
+    # THE ENDING IS REFUSED UNTIL IT IS RECONCILED, and the host's `stop_hook_active` flag does
+    # not end that. It used to: the Stop after our own block returned {} unconditionally, so
+    # every refusal was a one-round obstacle -- continue once, do nothing, stop, and the
+    # session ended with the destruction unreconciled (DL-04). The rows are evaluated again on
+    # every ending; what is bounded is the number of refusals, STOP_ROUNDS, after which the
+    # ending is ALLOWED LOUDLY (a fault row and a systemMessage) rather than spent silently
+    # against the host's own loop cap. Stated limit: a session that ignores three refusals ends.
+    slot = effects._slot(ledger.root, session, agent)
+    memory = effects._memory(slot)
+    rounds = int(memory.get("stop_rounds") or 0) if event.get("stop_hook_active") is True else 0
+    if rounds >= STOP_ROUNDS:
+        journal.note_fault(event, "stop_rounds", f"{rounds} refused endings, obligations still open",
+                           failed_closed=False, root=ledger.root)
+        memory["stop_rounds"] = 0
+        effects._remember(slot, memory)
+        return {"systemMessage": f"keel: this ending was refused {rounds} times and its obligations "
+                                 "are STILL OPEN; it is now allowed without reconciliation so the "
+                                 "host's loop cap is not spent in silence. The rows stay in the ledger."}
     _effect_record(ledger, event, "stop")
     _watch_standing(table, ledger, event, session, agent)
     try:
@@ -616,7 +749,20 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
         if not ledger.is_licensed(session, agent, did):
             undischarged.append({"clause_id": cl.id, "reason": cl.deny_reason})
 
+    # A HOOK THE HOST KILLED EVALUATED NOTHING. Every PreToolUse/PostToolUse leaves a marker
+    # while it runs and removes it when it answers; a marker whose process is gone is an act
+    # that was allowed unchecked with no trace (DL-09: the shim dies with its child, so its
+    # fail-open message never prints). Named here, once, then cleared: the ending is refused
+    # for it one time and the fault row is permanent.
+    lost = _pending_lost(ledger.root, session)
+    if lost:
+        journal.note_fault(event, "hook_killed", "; ".join(lost)[:400], failed_closed=True,
+                           root=ledger.root)
+        undischarged.append({"clause_id": "keel", "reason": f"{len(lost)} hook evaluation(s) never "
+                             f"completed, so the act(s) were allowed unchecked: {'; '.join(lost)}"})
     open_rows = list(open_rows) + undischarged
+    memory["stop_rounds"] = 0 if not open_rows else rounds + 1
+    effects._remember(slot, memory)
     if not open_rows:
         return {}
     # Every open row is named: the count says N and the text used to show five of them, so a
@@ -639,6 +785,10 @@ def session_start(table, ledger: Ledger, event: dict) -> dict:
         session, agent = _ids(event)
         try:
             effects.observe(ledger.root, session, agent, str(event.get("cwd") or os.getcwd()))
+        except Exception:
+            pass
+        try:
+            ledger.compact(session)
         except Exception:
             pass
         rows = " | ".join(f"{c.id}: {c.guard}" for c in table)
@@ -735,12 +885,8 @@ def _record(event: dict, out: dict) -> None:
         wire_out = out.get("hookSpecificOutput") if isinstance(out, dict) else None
         if isinstance(wire_out, dict) and wire_out.get("permissionDecision") == "deny":
             reason = str(wire_out.get("permissionDecisionReason") or "")
-            clause_id = ""
-            start = reason.find("[")
-            end = reason.find("]", start)
-            if start != -1 and end != -1:
-                clause_id = reason[start + 1:end]
-            journal.note_deny(event, clause_id, _subject_of(reason), reason)
+            named = _bracketed_ids(reason)  # one parser for the ids a message names
+            journal.note_deny(event, named[0] if named else "", _subject_of(reason), reason)
         elif isinstance(out, dict) and out.get("decision") == "block":
             reason = str(out.get("reason") or "")
             journal.note_block(event, _stated_count(reason), _bracketed_ids(reason))
@@ -824,10 +970,13 @@ def _bracketed_ids(text: str) -> list:
 
 
 def main() -> int:
-    repaired = escaped = 0
     try:
         raw, repaired = wire.read_stdin()
-        event = json.loads(raw or "{}")
+        if not raw.strip():
+            # A closed or broken stdin. This used to parse as {} and answer {} with no row and
+            # no message: the one unreadable envelope that was SILENT (DL-08).
+            raise ValueError("empty envelope")
+        event = json.loads(raw)
         if not isinstance(event, dict):
             raise ValueError("event is not an object")
         # The other surrogate door: valid UTF-8 bytes whose JSON text carried an unpaired \uD8xx
@@ -874,7 +1023,24 @@ def main() -> int:
                     "keel loaded 0 clauses -- NOT-EVALUABLE, not a pass. Nothing was checked "
                     "this session, so this is not a clean run.")))
                 return 0
-        out = HANDLERS.get(event.get("hook_event_name"), pre_tool_use)(table, Ledger(), event)
+        handler = HANDLERS.get(event.get("hook_event_name"))
+        if handler is None:
+            # AN EVENT KEEL HAS NEVER HEARD OF EVALUATES NOTHING AND PAYS NOTHING. The wildcard
+            # default used to route it through pre_tool_use, where it could not raise a demand
+            # (no clause declares it) but could discharge one: a free guard (DL-13).
+            journal.note_fault(event, "unknown_event", str(event.get("hook_event_name"))[:80],
+                               failed_closed=False)
+            print(json.dumps(_open_not_evaluable(
+                f"unknown event {event.get('hook_event_name')!r}; nothing was evaluated and "
+                "nothing was discharged")))
+            return 0
+        ledger = Ledger()
+        marker = _pending_mark(ledger.root, event)
+        try:
+            out = handler(table, ledger, event)
+        finally:
+            if marker is not None:
+                marker.unlink(missing_ok=True)
     except Exception as exc:
         out = _closed_not_evaluable(event, type(exc).__name__)
         print(f"keel: {type(exc).__name__} -- NOT-EVALUABLE, failing "

@@ -110,6 +110,68 @@ def recover_stale_plants(state: Path | None = None) -> list[str]:
 recover_stale_plants()
 
 
+def record(**eff) -> dict:
+    """A full observation record for an act that changed nothing in the world, plus `eff`.
+
+    DERIVED, not restated. Seven test modules carried their own copy of one dict comprehension
+    that re-listed which effect names are list-valued -- a rule with seven homes, each of which
+    goes quiet the day `EFFECTS` gains a list. `read_delta` is the observer's OWN answer for an
+    act that touched nothing (the host Read path), so the shape here is the shape the dispatcher
+    receives in production. Its `state` and `event` are never read for an event naming no file.
+
+    `remote_landed` is NOT-EVALUABLE: nothing was pushed, so nothing landed, and False would
+    claim a measurement that was not made.
+    """
+    from keel import effects
+    rec = effects.read_delta(PLUGIN, {})
+    rec["remote_landed"] = None
+    rec.update(eff)
+    return rec
+
+
+def hook_decision(payload: dict, state, *, timeout=60) -> dict:
+    """One event through the SHIPPED shim, as the single decision object it printed.
+
+    `hooks/dispatch.sh` is the carriage the host actually invokes, so driving it rather than
+    `keel.dispatch` is what makes a cell cover the wiring as well as the rule. Two modules wrote
+    this call out identically; `{}` IS the allow envelope, and reading an empty-looking body as
+    "still denied" is a misreading this suite has made before.
+    """
+    done = subprocess.run(["bash", str(PLUGIN / "hooks" / "dispatch.sh")],
+                          input=json.dumps(payload), capture_output=True, text=True,
+                          timeout=timeout,
+                          env={**os.environ, "KEEL_STATE_DIR": str(state),
+                               "CLAUDE_PLUGIN_ROOT": str(PLUGIN)})
+    return json.loads(done.stdout.strip() or "{}")
+
+
+def run_dispatcher(payload, state, *, cwd=None, timeout=None) -> subprocess.CompletedProcess:
+    """The SHIPPED dispatcher as a child process, in the environment it needs -- one spelling.
+
+    Six call sites across four modules each wrote this `subprocess.run` out in full, so the two
+    variables that decide whether `keel` resolves at all had six writers. Returned raw, because
+    the surface tests read the exit code and stderr as well as the body.
+    """
+    return subprocess.run(
+        [sys.executable, "-m", "keel.dispatch"], input=payload,
+        text=not isinstance(payload, bytes), capture_output=True, timeout=timeout,
+        cwd=None if cwd is None else str(cwd),
+        env={**os.environ, "KEEL_STATE_DIR": str(state),
+             "CLAUDE_PLUGIN_ROOT": str(PLUGIN), "PYTHONPATH": str(PLUGIN)})
+
+
+def dispatch_event(event, state, **kwargs) -> dict:
+    """One event through `run_dispatcher`, as the single decision object it printed.
+
+    `{}` IS the allow envelope. Reading an empty-looking body as "still denied" is a misreading
+    this suite has made before; callers assert on the parsed object, never on emptiness.
+    """
+    payload = event if isinstance(event, (str, bytes)) else json.dumps(event)
+    done = run_dispatcher(payload, state, **kwargs)
+    out = done.stdout if isinstance(done.stdout, str) else done.stdout.decode()
+    return json.loads(out or "{}")
+
+
 def _drop_bytecode(path: Path) -> None:
     """Delete any cached bytecode for `path`, so the next import reads the bytes on disk.
 
@@ -137,6 +199,15 @@ def _drop_bytecode(path: Path) -> None:
             pass
 
 
+# Targets already observed green on the UNMUTATED tree in this process. Being green without the
+# fault is a property of the TARGET, and every plant restores (and asserts the restore) before it
+# returns, so the tree those runs measure is one tree: two plants naming one target need one run
+# of it, not two. MEASURED: `test_measured` plants twice on
+# `test_every_row_recomputes_to_the_value_it_claims`, whose sweep re-runs the 26-session corpus
+# replay -- 17 s of a 238 s suite spent proving the same target green a second time.
+_GREEN_ALREADY: set[str] = set()
+
+
 def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
                   target: str, expected: str) -> str:
     """Mutate one seam, prove the NAMED test goes red because of it, restore, return the output.
@@ -149,7 +220,8 @@ def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
 
     The child's combined output is RETURNED so a caller can assert a property of its OWN on it.
 
-    THE TARGET IS RUN TWICE, and the first run is the point. A plant that only shows the target
+    THE TARGET IS RUN GREEN FIRST, and that run is the point (once per target -- see
+    `_GREEN_ALREADY`). A plant that only shows the target
     RED with the fault is satisfied by a target that is red ALWAYS -- one already broken, or one
     whose `expected` string went stale when the code moved underneath it. That is not
     hypothetical: a plant in this family kept asserting a count that had changed, and stayed
@@ -187,10 +259,12 @@ def smoke_replace(case: unittest.TestCase, path: Path, old: bytes, new: bytes,
                               env={**os.environ, "PYTHONPATH": str(PLUGIN),
                                    PLANT_ACTIVE_ENV: marker.name})
 
-    before = run()
-    case.assertEqual(0, before.returncode,
-                     f"{target} is not green BEFORE the seam is mutated, so the red run below "
-                     f"would prove nothing:\n{before.stdout}{before.stderr}")
+    if target not in _GREEN_ALREADY:
+        before = run()
+        case.assertEqual(0, before.returncode,
+                         f"{target} is not green BEFORE the seam is mutated, so the red run below "
+                         f"would prove nothing:\n{before.stdout}{before.stderr}")
+        _GREEN_ALREADY.add(target)
     PLANT_STATE.mkdir(parents=True, exist_ok=True)
     marker.write_text(json.dumps({"path": str(path), "backup": str(backup_path), "pid": os.getpid(),
                                   "original": _sha(original), "mutated": _sha(mutated)}),

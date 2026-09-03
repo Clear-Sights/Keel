@@ -35,35 +35,24 @@ Measured by this sequence, which is exactly what the cells below assert:
 
 from __future__ import annotations
 
-import json
-import os
 import pathlib
-import subprocess
 import tempfile
 import unittest
 
-from tests.plant_support import PLUGIN, smoke_replace
+from tests.plant_support import PLUGIN, hook_decision, record, smoke_replace
 
-SHIM = PLUGIN / "hooks" / "dispatch.sh"
 SESSION = "chaintest"
 
 
 class TheChainComposesThroughTheRealHook(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.mkdtemp(prefix="keel-chain-")
-        self.env = dict(os.environ)
-        self.env["KEEL_STATE_DIR"] = str(pathlib.Path(self.tmp) / "state")
-        self.env["CLAUDE_PLUGIN_ROOT"] = str(PLUGIN)
+        self.state = pathlib.Path(self.tmp) / "state"
 
     def _hook(self, **payload) -> dict:
         payload.setdefault("session_id", SESSION)
         payload.setdefault("cwd", self.tmp)
-        proc = subprocess.run(["bash", str(SHIM)], input=json.dumps(payload),
-                              capture_output=True, text=True, env=self.env, timeout=60)
-        out = proc.stdout.strip()
-        # `{}` IS the allow envelope. Reading an empty-looking body as "still denied" is a
-        # misreading this suite has made before; assert on the parsed object, never on emptiness.
-        return json.loads(out) if out else {}
+        return hook_decision(payload, self.state)
 
     def _bash(self, event: str, command: str) -> dict:
         payload = dict(hook_event_name=event, tool_name="Bash", tool_input={"command": command})
@@ -71,12 +60,7 @@ class TheChainComposesThroughTheRealHook(unittest.TestCase):
             # The recorded observation, explicit and empty: this test is about the ledger's two
             # directions, not about what the host around it happens to be doing to the process
             # table or the network while it runs.
-            from keel import effects
-            record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
-                                     "pids_gone", "pids_spawned") else False
-                      for n in effects.EFFECTS}
-            record["remote_landed"] = None
-            payload["keel_effect"] = record
+            payload["keel_effect"] = record()
         return self._hook(**payload)
 
     def _read(self, name: str, **eff) -> dict:
@@ -84,13 +68,8 @@ class TheChainComposesThroughTheRealHook(unittest.TestCase):
         path = f"/home/operator/.claude/keel_state/{name}"
         out = self._hook(hook_event_name="PreToolUse", tool_name="Read",
                          tool_input={"file_path": path})
-        from keel import effects
-        record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
-                                 "pids_gone", "pids_spawned") else False for n in effects.EFFECTS}
-        record["remote_landed"] = None
-        record.update(eff)
         self._hook(hook_event_name="PostToolUse", tool_name="Read",
-                   tool_input={"file_path": path}, keel_effect=record)
+                   tool_input={"file_path": path}, keel_effect=record(**eff))
         return out
 
     def test_the_whole_chain_end_to_end(self) -> None:

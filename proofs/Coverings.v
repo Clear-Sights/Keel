@@ -166,6 +166,10 @@ Section Coverings.
 
   Theorem effect_is_name_agnostic :
     forall (Delta : Type) (E : Delta -> Prop) (d : Delta), name_agnostic (effect E d).
+  (* Unfolds to `iff_refl`: name-agnosticism holds BY CONSTRUCTION of `effect`, which reads
+     no segment. The content is therefore RELATIVE to the datum `d` being world-derived; an
+     observer that computes `d` from the command text (Keel's `report_self`) is outside this
+     theorem, and says so at its definition rather than borrowing the certificate. MATH-07 *)
   Proof. intros Delta E d r segs. unfold effect. apply iff_refl. Qed.
 
   Theorem effect_separates_same_segments :
@@ -180,13 +184,12 @@ Section Coverings.
       -- there is always another runner. So the interesting question is not "is the list right"
       but WHICH WAY a missing entry fails. *)
 
-  Definition nominal (V : Program -> Prop) : Covering := structural V.
-
-  (** THEOREM 5 (monotone in the vocabulary). Widening the list can only ever ADD fires.
-      A missing name is therefore always a MISS, never a false fire. *)
+  (** THEOREM 5 (monotone in the vocabulary). A NOMINAL covering is `structural` over a
+      vocabulary of program names -- the same object, not a second one. Widening the list can
+      only ever ADD fires. A missing name is therefore always a MISS, never a false fire. *)
   Theorem nominal_monotone :
     forall (V W : Program -> Prop),
-      (forall p, V p -> W p) -> forall c, nominal V c -> nominal W c.
+      (forall p, V p -> W p) -> forall c, structural V c -> structural W c.
   Proof.
     intros V W Hsub c [s [p [rest [Hin [Hargv HV]]]]].
     exists s, p, rest. repeat split; [exact Hin | exact Hargv | exact (Hsub p HV)].
@@ -276,40 +279,43 @@ Section Coverings.
   Variable Event : Type.
   Variable isX isL : Event -> Prop.
 
-  (* `L occurred with no preceding X` -- the thing the order forbids, stated over a trace. *)
+  (* A trace is CHRONOLOGICAL, head first. `L occurred with no preceding X` -- the thing the
+     order forbids, stated over a trace: the L is reached with only non-X events before it.
+     (An earlier form required that no X exist ANYWHERE, and `backward` asked only that an X be
+     somewhere in the trace, so the out-of-order trace [L; X] was neither a violation nor
+     rejected -- the ordering the section exists to enforce was not in it. MATH-06.) *)
   Inductive violates : list Event -> Prop :=
-  | violates_here  : forall e rest, isL e -> (forall p, ~ (isX p)) -> violates (e :: rest)
+  | violates_here  : forall e rest, isL e -> violates (e :: rest)
   | violates_later : forall e rest, ~ isX e -> violates rest -> violates (e :: rest).
 
-  (* Backward enforcement: at every L, demand that an X already happened. *)
+  (* Backward enforcement: at every L, demand that an X already happened BEFORE it. *)
   Definition backward (t : list Event) : Prop :=
-    forall e, In e t -> isL e -> exists p, In p t /\ isX p.
+    forall pre e post, t = pre ++ e :: post -> isL e -> exists p, In p pre /\ isX p.
 
   (** THEOREM 8a. The inductive `violates` is what backward enforcement rejects, at any trace
       length: the violating L is somewhere in the trace, every event before it is not an X, and
-      backward demands an X somewhere -- which is the contradiction, by induction on the trace. *)
+      backward demands an X somewhere -- which is the contradiction, by induction on the trace.
+
+      This is already "backward catches what forward cannot", at every length rather than one:
+      `violates_here e nil` IS the trace where L happened and X never did, so backward rejects
+      the very trace the forward rule can never reach -- the forward rule is only entered by
+      doing X. A rule enforced only at X has an escape BY CONSTRUCTION: enter the chain at L. *)
   Theorem violation_is_never_backward :
     forall t, violates t -> ~ backward t.
   Proof.
-    intros t Hv. induction Hv as [e rest HL Hno | e rest HnotX Hv IH]; intros Hb.
-    - destruct (Hb e (or_introl eq_refl) HL) as [p [_ HX]]. exact (Hno p HX).
-    - apply IH. intros l Hin HLl.
-      destruct (Hb l (or_intror Hin) HLl) as [p [[Hpe | Hp] HX]].
+    intros t Hv. induction Hv as [e rest HL | e rest HnotX Hv IH]; intros Hb.
+    - destruct (Hb nil e rest eq_refl HL) as [p [Hin _]]. exact Hin.
+    - apply IH. intros pre l post Heq HLl.
+      destruct (Hb (e :: pre) l post (f_equal (cons e) Heq) HLl) as [p [[Hpe | Hp] HX]].
       + subst p. exact (False_ind _ (HnotX HX)).
       + exists p. exact (conj Hp HX).
   Qed.
 
-  (** THEOREM 8. Backward enforcement rejects the violation even when the forward rule never
-      ran -- because the forward rule is only reached by doing X, and the whole point of this
-      violation is that X never happened. A rule enforced only at X has an escape BY
-      CONSTRUCTION: enter the chain at L. *)
-  Theorem backward_catches_what_forward_cannot :
-    forall e, isL e -> (forall p, ~ isX p) -> ~ backward (e :: nil).
-  Proof.
-    intros e HL Hno Hback.
-    destruct (Hback e (or_introl eq_refl) HL) as [p [_ HX]].
-    exact (Hno p HX).
-  Qed.
+  (** The out-of-order trace itself, as a check that can fail: [L; X] is a violation, and
+      backward rejects it. Under the earlier definitions this trace was accepted. *)
+  Corollary out_of_order_is_rejected :
+    forall l x, isL l -> isX x -> ~ backward (l :: x :: nil).
+  Proof. intros l x HL _. exact (violation_is_never_backward _ (violates_here l _ HL)). Qed.
 
   (** COROLLARY (the escape is real, not hypothetical). Forward-only enforcement ACCEPTS that
       same trace: it quantifies over the X events, and there are none, so it holds vacuously.
@@ -347,12 +353,6 @@ Section Coverings.
       + exact (IH i H0 (link j Hdone)).
   Qed.
 
-  (** COROLLARY. A step is reachable only after the entire prefix -- stated as the property an
-      enforcement point can actually check, one link at a time. *)
-  Corollary no_step_without_its_prefix :
-    forall j, done j -> forall i, i <= j -> done i.
-  Proof. intros j Hd i Hle. exact (chain_composes j i Hle Hd). Qed.
-
 End Coverings.
 
 (* The honesty check the repository requires of any proof it publishes. *)
@@ -367,10 +367,9 @@ Print Assumptions nominal_monotone.
 Print Assumptions false_claim_always_rejected.
 Print Assumptions no_claim_is_not_a_pass.
 Print Assumptions violation_is_never_backward.
-Print Assumptions backward_catches_what_forward_cannot.
+Print Assumptions out_of_order_is_rejected.
 Print Assumptions forward_only_admits_the_violation.
 Print Assumptions chain_composes.
-Print Assumptions no_step_without_its_prefix.
 (* Theorem 6 was DECLARED and never graded here. Nothing said so: the grading was a hand-kept
    list, so a result could be added without joining it -- the same hardcoded-list defect the
    Small-Tools review found. tools/check_coq.py now DERIVES the set from the file and refuses

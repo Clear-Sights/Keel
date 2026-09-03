@@ -41,7 +41,15 @@ PROOFS = REPO / "proofs"
 THEORY = PROOFS / "Coverings.v"
 INSTANCE = PROOFS / "Clauses.v"
 TABLE = REPO / "plugin" / "keel" / "clauses.json"
-IDENTITY = re.compile(r"Proof\.\s*(?:intros?[^.]*\.\s*)?split;\s*intro\s+\w+;\s*exact\s+\w+\.\s*Qed\.")
+# NAMED SHAPES, not the class: "this result states nothing" is undecidable in general, so the
+# grader refuses the spellings that have been seen -- split-then-exact, `iff_refl`, an identity
+# lambda, and a bare `conj` of two hypotheses (MATH-04) -- and says so here rather than claim more.
+IDENTITY = re.compile(r"Proof\.\s*(?:intros?[^.]*\.\s*)?(?:"
+                      r"split;\s*intro\s+\w+;\s*exact\s+\w+"
+                      r"|(?:apply|exact)\s+iff_refl"
+                      r"|split;\s*\[\s*exact\s*\(fun\s+\w+\s*=>\s*\w+\)\s*\|\s*exact\s*\(fun\s+\w+\s*=>\s*\w+\)\s*\]"
+                      r"|exact\s*\(conj\s+\w+\s+\w+\)"
+                      r")\.\s*Qed\.")
 EMPTY_BY_DESIGN = {"always", "tool-enum"}
 
 
@@ -71,15 +79,16 @@ def compile_and_index(path: pathlib.Path) -> tuple[str | None, dict[str, list[st
         parts = line.split()
         if len(parts) == 4 and not parts[0].startswith("R"):
             index.setdefault(parts[0], []).append(parts[3])
+        elif len(parts) == 5 and parts[0].startswith("R") and parts[1] == path.stem:
+            index.setdefault("ref", []).append(parts[3])  # what the file's own results USE
     return proc.stdout, index
 
 
-def grade(path: pathlib.Path) -> tuple[int, str]:
+def grade(path: pathlib.Path, stdout: str | None, index: dict[str, list[str]]) -> tuple[int, str]:
     text = path.read_text(encoding="utf-8")
     body = strip_comments(text)
     if IDENTITY.search(body):
         return 1, f"{path.name}: a result is proved by the identity, so it states nothing"
-    stdout, index = compile_and_index(path)
     if stdout is None:
         return 1, f"{path.name}: does not compile\n{index['error'][0]}"
     results = index.get("prf", [])
@@ -109,7 +118,7 @@ def grade(path: pathlib.Path) -> tuple[int, str]:
     return 0, f"{path.name}: results={len(results)} axioms=0 parameters={len(params)}"
 
 
-def instance_covers_table() -> tuple[int, str]:
+def instance_covers_table(index: dict[str, list[str]]) -> tuple[int, str]:
     rows = json.loads(TABLE.read_text(encoding="utf-8"))
     expected = {f"{c['id']}_{side}" for c in rows
                 for side in ("fingerprint", "activated_by", "discharged_by")
@@ -123,11 +132,13 @@ def instance_covers_table() -> tuple[int, str]:
         return 1, f"Clauses.v has no block for {len(missing)} table side(s): {missing}"
     if extra:
         return 1, f"Clauses.v instantiates sides the table lacks: {extra}"
-    _, index = compile_and_index(INSTANCE)
-    results = set(index.get("prf", []))
+    orphan = sorted(set(index.get("ind", [])) - set(index.get("ref", [])))
+    if orphan:
+        return 1, f"Clauses.v enumerates sides in {orphan} and no result quantifies over it"
+    named = set(index.get("constr", []))  # a side is covered when it is a CONSTRUCTOR of an enumeration a result ranges over
     empty: dict[str, int] = {}
     for side, block in present.items():
-        if any(r.startswith(side.replace("-", "_")) for r in results):  # Coq names carry no hyphen
+        if any(n.startswith(side.replace("-", "_")) for n in named):  # Coq names carry no hyphen
             continue
         cls = re.search(r"class=(\S+)", block)
         cls = cls.group(1) if cls else "?"
@@ -148,14 +159,15 @@ def main() -> int:
     if shutil.which("coqc") is None:
         print("COQ=NOT-EVALUABLE coqc absent -- absence is never a pass", file=sys.stderr)
         return 2
-    lines = []
+    lines, index = [], {}
     for path in (THEORY, INSTANCE):
-        status, note = grade(path)
+        stdout, index = compile_and_index(path)  # one coqc per file; INSTANCE is last, so the
+        status, note = grade(path, stdout, index)  # index it leaves is the one censused below
         if status:
             print(f"COQ=FAIL {note}", file=sys.stderr)
             return 1
         lines.append(note)
-    status, note = instance_covers_table()
+    status, note = instance_covers_table(index)
     if status:
         print(f"COQ=FAIL {note}", file=sys.stderr)
         return 1

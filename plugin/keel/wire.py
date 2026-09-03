@@ -96,15 +96,13 @@ def read_stdin():
     handler the ambient locale installed and puts it under this module's own control, where every
     surrogate it produces is scrubbed before the value is returned.
     """
-    buffer = getattr(sys.stdin, "buffer", None)
-    if buffer is not None:
-        try:
-            data = buffer.read()
-        except (AttributeError, ValueError, OSError):
-            data = None
-        if data is not None:
-            return _decode_counting(data)
-    return scrub_text(sys.stdin.read() or "")
+    try:
+        # `or b""`: a stream that answers a read with None is the same empty envelope the text
+        # fallback would produce, so it needs no branch of its own.
+        data = sys.stdin.buffer.read() or b""
+    except (AttributeError, ValueError, OSError):
+        return scrub_text(sys.stdin.read() or "")
+    return _decode_counting(data)
 
 
 def _decode_counting(data: bytes):

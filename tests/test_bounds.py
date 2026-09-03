@@ -198,7 +198,7 @@ class TheseBoundsCanFail(unittest.TestCase):
     def test_the_probe_ceiling_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
         """Shorten the hook, and the ceiling that was fine must stop being fine."""
         smoke_replace(
-            self, PLUGIN / "hooks" / "hooks.json", b'"timeout": 20', b'"timeout": 3',
+            self, PLUGIN / "hooks" / "hooks.json", b'"timeout": 60', b'"timeout": 3',
             "tests.test_bounds.TimingBoundsAreJoinedToTheHookTimeout."
             "test_a_probe_cannot_be_allowed_to_outlive_its_hook",
             "fails OPEN through the hang",
@@ -208,7 +208,7 @@ class TheseBoundsCanFail(unittest.TestCase):
         """Drop the window under the hook bound, and live claims become stealable."""
         smoke_replace(
             self, PLUGIN / "keel" / "journal.py",
-            b"_STALE_CLAIM_SECONDS = 60", b"_STALE_CLAIM_SECONDS = 10",
+            b"_STALE_CLAIM_SECONDS = 120", b"_STALE_CLAIM_SECONDS = 10",
             "tests.test_bounds.TimingBoundsAreJoinedToTheHookTimeout."
             "test_a_claim_younger_than_a_live_hook_is_never_stolen",
             "the liveness row this journal guarantees is lost",

@@ -74,12 +74,13 @@ class EveryTestModuleLoadsAlone(unittest.TestCase):
         """Remove one module's stated dependency and this sweep must name that module."""
         smoke_replace(
             self, REPO / "tests" / "test_c08_activation.py",
-            # The seam follows the module: `test_c08_activation` now imports `smoke_replace`
-            # alongside `PLUGIN`, because its own plant became a real fault injection rather than
-            # a string edit. The dependency being removed is the same one -- the import that puts
-            # `keel` on `sys.path` -- so the property under test is unchanged.
-            b"from tests.plant_support import PLUGIN, smoke_replace",
-            b"# dependency removed by the plant",
+            # The seam is the DEPENDENCY, not the names imported through it: quoting the whole
+            # import line pinned this plant to one module's import list, and it went stale the
+            # first time that list changed. Commenting the statement out leaves the names behind
+            # as prose, which removes exactly the thing under test -- the import that puts `keel`
+            # on `sys.path` -- and stays true however that list is spelled next.
+            b"from tests.plant_support import ",
+            b"# dependency removed by the plant: ",
             "tests.test_suite_imports_standalone.EveryTestModuleLoadsAlone."
             "test_the_suite_declares_its_own_imports",
             "test_c08_activation")

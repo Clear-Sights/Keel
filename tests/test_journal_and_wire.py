@@ -20,24 +20,16 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
-from tests.plant_support import PLUGIN, smoke_replace
-
-PLUGIN_ROOT = PLUGIN
+from tests.plant_support import PLUGIN, dispatch_event, record, smoke_replace
 
 
 def run(raw: bytes, state_dir: Path) -> dict:
-    env = os.environ.copy()
-    env["KEEL_STATE_DIR"] = str(state_dir)
-    proc = subprocess.run([sys.executable, "-m", "keel.dispatch"], input=raw,
-                          capture_output=True, env=env, cwd=str(PLUGIN_ROOT))
-    return json.loads(proc.stdout.decode() or "{}")
+    return dispatch_event(raw, state_dir, cwd=PLUGIN)
 
 
 def rows(state_dir: Path) -> list:
@@ -56,10 +48,7 @@ DESTRUCTIVE = (b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id"
 KEYED_EFFECT = json.dumps({
     "hook_event_name": "PostToolUse", "tool_name": "Bash", "session_id": "g-keyed",
     "tool_input": {"command": "jq .name payload.json"},
-    "keel_effect": {**{n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
-                                      "pids_gone", "pids_spawned") else False
-                       for n in __import__("keel.effects", fromlist=["EFFECTS"]).EFFECTS},
-                    "remote_landed": None, "report_null": True}}).encode()
+    "keel_effect": record(report_null=True)}).encode()
 NEXT_CALL = (b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"g-keyed",'
              b'"tool_input":{"command":"echo next"}}')
 DESTRUCTIVE_BAD_BYTE = (b'{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"g-bad",'
@@ -133,15 +122,10 @@ class TestTheRecord(StateCase):
         and it is exactly what distinguishes 'nothing owed' from 'never got there'."""
         # The one observation a session owes before ending: a Read of Keel's own worktree
         # measurement, recorded complete so no effect is NOT-EVALUABLE.
-        from keel import effects
-        record = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
-                                 "pids_gone", "pids_spawned") else False for n in effects.EFFECTS}
-        record["remote_landed"] = None
-        record["observed_read"] = True
         run(json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Read",
                         "session_id": "g-clean",
                         "tool_input": {"file_path": "/home/operator/.claude/keel_state/observed.json"},
-                        "keel_effect": record}).encode(), self.state)
+                        "keel_effect": record(observed_read=True)}).encode(), self.state)
         run(b'{"hook_event_name":"Stop","session_id":"g-clean"}', self.state)
         blocks = [r for r in rows(self.state) if r["kind"] == "block"]
         self.assertTrue(blocks)
@@ -350,7 +334,6 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
     and the row recorded a shorter, different one."""
 
     def _round_trip(self, subject):
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import dispatch
 
         class Clause:
@@ -376,7 +359,6 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
     def test_a_session_wide_deny_still_reads_as_session_wide(self):
         """The empty answer must stay reachable: a session-scoped clause names no subject, and
         reading one out of its message would point the session at its own id."""
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import dispatch
 
         class SessionClause:
@@ -395,7 +377,6 @@ class TestTheSubjectSurvivesTheRoundTrip(unittest.TestCase):
         the agent was never shown -- the exact disagreement this class exists to rule out, reached
         from the one direction the backtick cases could not see.
         """
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import dispatch
 
         class TalkativeClause:
@@ -448,13 +429,11 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
     stated none. Those are the two outcomes this log exists to tell apart, wearing one row."""
 
     def test_a_message_stating_no_count_reads_as_unknown_not_zero(self):
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import dispatch
         self.assertIsNone(
             dispatch._stated_count("keel: RuntimeError -- NOT-EVALUABLE, failing closed"))
 
     def test_a_message_stating_a_count_still_reads_it(self):
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import dispatch
         self.assertEqual(dispatch._stated_count("3 obligations still open [A02] [C08]"), 3)
 
@@ -467,7 +446,6 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
         apart from a faulted one. Reading as "no count stated" is the honest answer: there is no
         count here that this parser can read.
         """
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import dispatch
         self.assertIsNone(dispatch._stated_count("\u00b2 obligations open"))
         # And a real count later in the same message is still found, so the fix is a narrower
@@ -477,7 +455,6 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
     def test_the_clean_terminal_records_a_real_zero(self):
         """The clean terminal passes its 0 from its own call site, so it stays distinguishable
         from the unknown above."""
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import journal
         journal.note_block({"session_id": "g-clean"}, 0, [], root=self.state_dir)
         journal.note_block({"session_id": "g-clean"}, None, [], root=self.state_dir)
@@ -503,7 +480,6 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
     """Three defects in one function, each costing the liveness row the journal exists for."""
 
     def test_ids_differing_only_in_punctuation_are_not_one_session(self):
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import journal
         journal.note_session({"session_id": "a/b"}, 21, root=self.state)
         journal.note_session({"session_id": "a?b"}, 21, root=self.state)
@@ -511,7 +487,6 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
         self.assertEqual(got, ["a/b", "a?b"])
 
     def test_a_failed_append_does_not_suppress_the_row_forever(self):
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import journal
         original = journal._append
         journal._append = lambda *a, **k: (_ for _ in ()).throw(OSError("disk full"))
@@ -529,7 +504,6 @@ class TestTheSessionRowIsExactlyOnce(StateCase):
         Blocking on one read and closing the write end hands the wakeup to the kernel. Rounds are
         independent trials, so a miss needs every round to miss.
         """
-        sys.path.insert(0, str(PLUGIN_ROOT))
         from keel import journal
         for round_no in range(6):
             session = f"race-{round_no}"

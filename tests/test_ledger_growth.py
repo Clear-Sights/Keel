@@ -66,7 +66,7 @@ class RepeatedGuardsDoNotGrowTheLedger(unittest.TestCase):
     def test_TEETH_a_repeat_discharge_is_a_no_op(self) -> None:
         ledger = Ledger()
         demand_id = derive_id("s", "a", "T01", "x")
-        ledger.demand(Demand(demand_id, "s", "a", "T01", "x", "guard first"))
+        ledger.demand(Demand("s", "a", "T01", "x", "guard first"))
         ledger.discharge("s", "a", demand_id, "observed")
         first = rows_written(self.state)
         for _ in range(20):
@@ -119,9 +119,8 @@ class TheChainDetectsWhatItClaims(unittest.TestCase):
         self.addCleanup(self._temp.cleanup)
         self.ledger = Ledger(root=pathlib.Path(self._temp.name))
         for n in range(3):
-            self.ledger.demand(Demand(id=f"d{n}", session="s", agent="",
-                                      clause_id="A01", subject="s", reason="r"))
-        self.ledger.discharge("s", "", "d1", "guard observed")
+            self.ledger.demand(Demand("s", "", "A01", f"s{n}", "r"))
+        self.ledger.discharge("s", "", derive_id("s", "", "A01", "s1"), "guard observed")
 
     def test_a_sound_chain_reads_clean(self) -> None:
         self.assertIsNone(self.ledger.verify_chain())
