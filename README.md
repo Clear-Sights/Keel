@@ -146,6 +146,16 @@ command supplies for itself. A marker in a heredoc body, inside a quoted string,
 segment, or on a trailing comment is payload, and payload does not exempt anything. `//` and `--`
 are not comment introducers here; the field is a shell command.
 
+One other spelling exempts a call, and it is documented here because an exemption the pages do
+not name is an exemption nobody can audit: `# gyroscope-allow:` is the **pre-rename** form of the
+same marker, still honoured because this plugin shipped publicly under the old name (`v1.0.0`,
+`v1.1.0`) and a marker that silently stops parsing is a denial with no stated reason. It exempts
+exactly as `# keel-allow:` does, and says so — a call using it gets a message naming the rename.
+It is the only other spelling; there is no third. **It is removed at `3.0.0`**, and that end is
+checked, not merely intended: `tests/test_bypass.py` fails once the shipped version reaches a
+major of 3 while the legacy pattern is still present, so the deprecation cannot outlive its own
+deadline by being forgotten.
+
 The same header carries a **commitment**, which is not a bypass: `# keel-guard: U20` names an
 open demand the call will pay. The call passes, and after it ran its effect record is what pays
 — a committed call that paid nothing is recorded as a broken commitment and the demand stays

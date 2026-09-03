@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -264,3 +265,42 @@ class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
                       "tests.test_bypass.TheCutGetsItsPreserveListWithoutBeingAsked."
                       "test_TEETH_a_bare_compact_receives_the_preserve_list",
                       "the cut got no preserve list")
+
+
+class LegacyMarkerHasACheckableEnd(unittest.TestCase):
+    """`# gyroscope-allow:` disarms all 24 clauses exactly as `# keel-allow:` does. An exemption
+    with no stated end is a waiver that never expires, so this is its end, expressed as a check
+    that fails rather than as an intention: at major version 3 the legacy pattern must be gone.
+    Without this, the deprecation outlives its deadline by simply never being remembered."""
+
+    REMOVED_AT_MAJOR = 3
+
+    def _shipped_version(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        manifest = json.loads((root / "plugin" / ".claude-plugin" / "plugin.json").read_text())
+        return tuple(int(p) for p in manifest["version"].split(".")[:2])
+
+    def test_legacy_spelling_is_removed_at_its_declared_major(self):
+        major, _ = self._shipped_version()
+        legacy_present = dispatch.ALLOW_LEGACY is not None
+        if major >= self.REMOVED_AT_MAJOR:
+            self.assertFalse(
+                legacy_present,
+                "README declares `# gyroscope-allow:` removed at 3.0.0 and the shipped version "
+                f"is now {major}.x, but ALLOW_LEGACY is still live. Delete the pattern, its "
+                "branch in `_allow_marker`, the `gyroscope` arm in `pre_tool_use`, and the "
+                "README paragraph -- then delete this test.")
+        else:
+            self.assertTrue(
+                legacy_present,
+                "ALLOW_LEGACY was removed before its declared 3.0.0 deadline. This plugin shipped "
+                "publicly as gyroscope (v1.0.0, v1.1.0), so removing it early silently strands "
+                "exemptions already written in users' scripts -- the exact failure the marker "
+                "exists to prevent. Restore it, or move the declared end in the README first.")
+
+    def test_the_two_spellings_are_the_whole_exemption_surface(self):
+        """The census that makes the README's "there is no third" a measured claim rather than a
+        sentence: every module-level compiled pattern that exempts is one of these two."""
+        exempting = {name for name, val in vars(dispatch).items()
+                     if isinstance(val, re.Pattern) and "allow" in name.lower()}
+        self.assertEqual(exempting, {"ALLOW", "ALLOW_LEGACY"}, exempting)
