@@ -7,3 +7,6 @@ proofs/*.vos
 proofs/*.vok
 proofs/*.glob
 proofs/.*.aux
+# Agent worktrees: `git worktree` checkouts the harness creates inside the repo.
+# Scratch, like the coqc output above -- never project content.
+.claude/worktrees/
