@@ -466,6 +466,16 @@ class TestABlockRowSaysWhichBlockItWas(unittest.TestCase):
         self.state_dir = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
 
+    def test_a_block_owing_more_than_ten_names_every_clause(self):
+        """C-CAR-078: `clause_ids` used to be sliced to 10 while `open_count` was written
+        untruncated, so a Stop owing 14 clauses wrote `open_count: 14` beside 10 ids -- the row
+        disagreeing with itself about the one thing it exists to say."""
+        from keel import journal
+        ids = [f"A{n:02d}" for n in range(14)]
+        journal.note_block({"session_id": "g-many"}, 14, ids, root=self.state_dir)
+        block = [r for r in rows(self.state_dir) if r["kind"] == "block"][0]
+        self.assertEqual(block["clause_ids"], ids)
+
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
         """Restore the 0 default and the fault block becomes indistinguishable from a clean one."""
         smoke_replace(
@@ -571,6 +581,36 @@ class TestRepairCountsMeanWhatTheyAreNamed(StateCase):
             "tests.test_journal_and_wire.TestRepairCountsMeanWhatTheyAreNamed"
             ".test_an_escape_only_envelope_reports_zero_bytes_repaired",
             "1 != 0 : no byte on that wire was undecodable")
+
+
+class TestChainVerifiedAtSessionStart(StateCase):
+    """C-CAR-046/048: `verify_chain` (ledger.py) is the only candidate for the README's chain
+    "detects" claim, and no shipped path calls it -- `compact` runs at SessionStart and never
+    checks what it is about to rewrite. This drives a real SessionStart, through `dispatch.main`,
+    over a ledger with one row whose hash was altered without being recomputed -- the accidental
+    corruption `verify_chain` is built to catch -- and requires a `fault` row naming
+    `chain_divergent` with `failed_closed` False (carriage stays open; the session continues)."""
+
+    def test_a_corrupted_row_writes_a_chain_divergent_fault(self):
+        from keel.ledger import Demand, Ledger, derive_id
+        ledger = Ledger(root=self.state)
+        ledger.demand(Demand("g-chain", "", "A01", "s1", "r"))
+        ledger.discharge("g-chain", "", derive_id("g-chain", "", "A01", "s1"), "guard observed")
+        lines = ledger.path.read_text(encoding="utf-8").splitlines()
+        mutated = lines[0].replace('"clause_id":"A01"', '"clause_id":"A99"')
+        self.assertNotEqual(mutated, lines[0], "the plant never reached the row")
+        lines[0] = mutated
+        ledger.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        body = run(b'{"hook_event_name":"SessionStart","session_id":"g-chain"}', self.state)
+
+        faults = [r for r in rows(self.state) if r["kind"] == "fault"]
+        self.assertTrue(faults, "a corrupted chain at SessionStart wrote no fault row")
+        divergent = [r for r in faults if r["stage"] == "chain_divergent"]
+        self.assertTrue(divergent, f"no chain_divergent fault among {faults}")
+        self.assertFalse(divergent[0]["failed_closed"],
+                          "a chain divergence is carriage, not a decision -- it must fail open")
+        self.assertNotEqual(body, None, "SessionStart must still answer -- the session continues")
 
 
 if __name__ == "__main__":

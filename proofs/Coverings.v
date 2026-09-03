@@ -15,7 +15,7 @@
     tools/check_coq.py requires to equal the `var` entries of coqc's own index (a hypothesis
     added inside the Section is not an axiom to `Print Assumptions`, so it is declared here or
     the gate is red).
-    PARAMETERS: Text Program scan mention infix mention_preserves quoting_program scan_mention_single Datum claimed observed Event isX isL done link *)
+    PARAMETERS: Text Program scan mention infix mention_preserves quoting_program scan_mention_single Datum claimed observed Event isX isL done link tool_name mention_tool_name *)
 (** The adequacy of that scanner against a real shell is empirical and
     is NOT claimed here. But it is now ONE obligation about ONE object, instead of one
     unbounded obligation per covering. That reduction is the result. *)
@@ -43,6 +43,13 @@ Section Coverings.
   Variable quoting_program : Program.
   Hypothesis scan_mention_single :
     forall c, scan (mention c) = [ {| seg_argv := [quoting_program] |} ].
+
+  (* (3) The host's own tool_name field is a datum about which TOOL delivered the call, read
+         without going through `scan` at all. A mention is itself delivered as a Bash call
+         quoting the command, so the host reports the same tool for every mention -- the
+         quoting program's own name in this field, never the wrapped text's. *)
+  Variable tool_name : Text -> Program.
+  Hypothesis mention_tool_name : forall c, tool_name (mention c) = quoting_program.
 
   Definition Covering := Text -> Prop.
 
@@ -202,8 +209,11 @@ Section Coverings.
       - on the GUARD side, a miss fails to discharge, so the clause denies an act that was in
         fact guarded. Cheap: it interrupts, and the interruption is visible and self-correcting.
 
-      An occasion must therefore be nominal (Theorem 3: before the act, the name is the only
-      thing that distinguishes it) and its vocabulary is load-bearing. A GUARD need not be:
+      An occasion that must SEPARATE two acts before the act would therefore have to be nominal
+      (Theorem 3: before the act, the name is the only thing that distinguishes them) -- so Keel
+      does not separate before the act. Its pre-act occasions are `always` and fire on every Bash
+      call, at the cost of firing always; every separating occasion is post-act, an effect, and
+      its vocabulary is load-bearing there instead. A GUARD need not be nominal at all:
       "the suite ran and passed" is a fact about the TRACE, readable as a status and a count,
       with no vocabulary at all. That is where the obligation can be discharged rather than
       merely managed -- and Theorem 4 already says such a covering is name-agnostic. *)
@@ -353,6 +363,99 @@ Section Coverings.
       + exact (IH i H0 (link j Hdone)).
   Qed.
 
+  (** ** Composition, the host-enum class, always, closure, and liveness under non-measurement.
+
+      Added for what `keel/clauses.py` already assumes and this file did not yet state: AGNOSTIC
+      -classes includes `composed` (clauses.py:432 -- five shipped guard sides are `any_of` /
+      `all_of` disjunctions or conjunctions of name-agnostic sides) and `tool-enum`
+      (clauses.py:415-419 -- occasions of D01/P01/P02 and guards of C03/D01/P01/P02, licensed by
+      reading the host's closed `tool_name` field, never `scan`); the loader's fail-closed guard
+      default treats an unmeasured guard as unpaid while its fail-open occasion default treats an
+      unmeasured occasion as fired (clauses.py:316-331, 335-341). *)
+
+  (* (a) COMPOSITION: any_of / all_of over a list of segment-coverings, each keyed by membership
+         rather than by the list's shape, so the proof does not depend on list length. *)
+  Definition any_of (Ps : list (list Segment -> Prop)) : list Segment -> Prop :=
+    fun segs => exists P, In P Ps /\ P segs.
+
+  Definition all_of (Ps : list (list Segment -> Prop)) : list Segment -> Prop :=
+    fun segs => forall P, In P Ps -> P segs.
+
+  Theorem any_of_name_agnostic :
+    forall Ps, (forall P, In P Ps -> name_agnostic P) -> name_agnostic (any_of Ps).
+  Proof.
+    intros Ps Hall r segs. unfold any_of. split.
+    - intros [P [HinP HP]]. exists P. split; [exact HinP | apply (proj1 (Hall P HinP r segs)); exact HP].
+    - intros [P [HinP HP]]. exists P. split; [exact HinP | apply (proj2 (Hall P HinP r segs)); exact HP].
+  Qed.
+
+  Theorem all_of_name_agnostic :
+    forall Ps, (forall P, In P Ps -> name_agnostic P) -> name_agnostic (all_of Ps).
+  Proof.
+    intros Ps Hall r segs. unfold all_of. split.
+    - intros H P HinP. apply (proj1 (Hall P HinP r segs)). exact (H P HinP).
+    - intros H P HinP. apply (proj2 (Hall P HinP r segs)). exact (H P HinP).
+  Qed.
+
+  (* (b) HOST-ENUM: a covering that reads `tool_name` alone, never `scan`. Mention-immune by the
+         same shape as Theorem 2, but through a different field than every structural covering
+         reads -- the boundary Coverings.v had no element for. *)
+  Definition host_enum (allowed : Program -> Prop) : Covering :=
+    fun c => allowed (tool_name c).
+
+  Theorem host_enum_immune :
+    forall allowed, ~ allowed quoting_program -> mention_immune (host_enum allowed).
+  Proof.
+    intros allowed Hnot c Hc. unfold host_enum in Hc.
+    rewrite mention_tool_name in Hc. exact (Hnot Hc).
+  Qed.
+
+  (* (c) ALWAYS: the covering that reads no segment at all -- it ignores `segs` outright, so
+         renaming changes nothing it could possibly see. *)
+  Definition always_segs : list Segment -> Prop := fun _ => True.
+
+  Theorem always_is_name_agnostic : name_agnostic always_segs.
+  Proof. intros r segs. unfold always_segs. tauto. Qed.
+
+  (* (d) A composed covering with a non-vacuous TEXTUAL disjunct is not mention-immune: the
+         disjunct alone is already defeated (Theorem 1), and the disjunction fires whenever a
+         disjunct does, so a mention that defeats the disjunct defeats the whole covering. *)
+  Definition disj (P Q : Covering) : Covering := fun c => P c \/ Q c.
+
+  Theorem disj_with_textual_not_mention_immune :
+    forall P Q, textual P -> non_vacuous P -> ~ mention_immune (disj P Q).
+  Proof.
+    intros P Q Htext Hnv Himmune.
+    apply (textual_never_immune P Htext Hnv).
+    intros c Hc. apply (Himmune c). unfold disj. left. exact Hc.
+  Qed.
+
+  (* (e) CLOSURE: which object a side reads, factored into one type -- host/world/datum, never a
+         theorem, only a Definition, because nothing in this file separates the three by proof;
+         `classify_side` (clauses.py) is the code that assigns a side to one of them. *)
+  Inductive ReadsFrom := ReadsHostEnum | ReadsWorld | ReadsDatum.
+
+  (* (g) NOT-EVALUABLE IS LIVE: an unmeasured occasion is treated as fired, an unmeasured guard as
+         not paid. `option bool` models a measurement that can come back absent (`None`); the
+         loader's two fail directions are the two branches below, and only the guard direction is
+         a theorem, because "fired" is a definition, not a claim to prove. *)
+  Definition occasion_fires (m : option bool) : bool :=
+    match m with None => true | Some b => b end.
+
+  Theorem unmeasured_occasion_fires : occasion_fires None = true.
+  Proof. reflexivity. Qed.
+
+  Definition guard_paid (g : option bool) : Prop := g = Some true.
+
+  Definition licensed (occ : option bool) (g : option bool) : Prop :=
+    occasion_fires occ = true /\ guard_paid g.
+
+  Theorem unmeasured_guard_never_licenses :
+    forall occ, ~ licensed occ None.
+  Proof.
+    intros occ [_ Hpaid]. unfold guard_paid in Hpaid. discriminate.
+  Qed.
+
 End Coverings.
 
 (* The honesty check the repository requires of any proof it publishes. *)
@@ -377,3 +480,10 @@ Print Assumptions chain_composes.
    the claim that a positive obligation needs no vocabulary is what the whole positive form
    rests on, and an axiom hiding under it would be invisible in exactly the place it counts. *)
 Print Assumptions positive_needs_no_vocabulary.
+Print Assumptions any_of_name_agnostic.
+Print Assumptions all_of_name_agnostic.
+Print Assumptions host_enum_immune.
+Print Assumptions always_is_name_agnostic.
+Print Assumptions disj_with_textual_not_mention_immune.
+Print Assumptions unmeasured_occasion_fires.
+Print Assumptions unmeasured_guard_never_licenses.

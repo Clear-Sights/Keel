@@ -154,7 +154,46 @@ class FailOpensAreVisible(unittest.TestCase):
             f"a bare empty object on stdout is a fail-open that explains nothing; emit "
             f"`_open_not_evaluable(...)` instead. Found: {offenders}")
 
+    def test_TEETH_an_unmeasurable_occasion_is_live_and_says_so_on_the_wire_it_has(self) -> None:
+        """What an operator is actually told when an occasion could not be measured.
+
+        The README promised that on a host opening connections by itself, `U06`/`U24` "are raised
+        once as NOT-EVALUABLE" -- which reads as a distinct outcome the reader will see. It is
+        not one. `clauses.match` treats an unmeasurable probe as LIVE (correct: fail closed) and
+        announces NOT-EVALUABLE on STDERR, which this very file opens by documenting goes to the
+        debug log and nowhere a person or a model reads. The demand that lands in the ledger and
+        the deny the operator reads carry the clause's ORDINARY reason.
+
+        Both halves are pinned, because the page has been narrowed to state exactly this: the
+        occasion is live, and the NOT-EVALUABLE reading exists only on stderr.
+        """
+        from keel import clauses as C
+        table = C.load_default()
+        clause = next(c for c in table if c.id == "U06")
+        unmeasured = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                      "tool_input": {"command": "true"}, "keel_effect": {"net_out": None}}
+        self.assertIsNone(C._predicate(clause.fingerprint, unmeasured),
+                          "this fixture is supposed to be UNMEASURABLE; it measured something")
+        noise = io.StringIO()
+        with contextlib.redirect_stderr(noise):
+            live = C.match(clause, unmeasured)
+        self.assertTrue(live, "an unmeasurable occasion was read as not firing, which is a pass")
+        self.assertIn("NOT-EVALUABLE", noise.getvalue(),
+                      "the only place NOT-EVALUABLE is said at all has stopped saying it")
+        self.assertNotIn(
+            "NOT-EVALUABLE", clause.deny_reason,
+            "the reason the operator reads now claims NOT-EVALUABLE. If the dispatcher has "
+            "learned to distinguish an unmeasured occasion on the wire, say so in README's "
+            "network-effect limit, which currently states that it does not.")
+
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red
+        smoke_replace(
+            self, PLUGIN / "keel" / "clauses.py",
+            b'    result = _predicate(clause.fingerprint, event)\n    if result is None:\n',
+            b'    result = _predicate(clause.fingerprint, event)\n    if result is None and False:\n',
+            "tests.test_fail_open_is_visible.FailOpensAreVisible."
+            "test_TEETH_an_unmeasurable_occasion_is_live_and_says_so_on_the_wire_it_has",
+            "an unmeasurable occasion was read as not firing")
         smoke_replace(
             self, DISPATCH,
             b'''        print(json.dumps(_open_not_evaluable(f"the event could not be read "\n'''

@@ -37,38 +37,38 @@ from typing import Any
 # name -> one sentence saying what the observation is. Closed. Read by the loader, the proof
 # renderer and the README; a clause naming anything else is refused at load.
 EFFECTS: dict[str, str] = {
-    "files_changed": "a file has different content after the act, or exists after it and did not before. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed",
-    "files_removed": "a file that had content before the act has none after it, or does not exist; a top-level gitignored entry that vanished is named too, by path only",
+    "files_changed": "a file has different content after the act, or exists after it and did not before. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed. Outside a repository, content is proxied by (size, mtime_ns) rather than read, so a same-signature rewrite goes unobserved and a bare touch reads as changed; that walk excludes .git, node_modules and __pycache__ and honours no .gitignore (there is none to honour), and is itself NOT-EVALUABLE above WALK_CAP=20000 entries",
+    "files_removed": "a file that had content before the act has none after it, or does not exist; a top-level gitignored entry that vanished is named too, by path only. Outside a repository, \"has none\" is read from size==0 in the (size, mtime_ns) proxy alone",
     "head_moved": "HEAD names a different commit after the act",
     "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit; or the act recorded a checkout in HEAD's reflog and HEAD ended where it began",
     "head_reset": "HEAD moved to an ancestor of where it was, and the worktree changed with it; or the act recorded a reset in HEAD's reflog, whatever it moved back to afterwards",
     "commit_signed": "the act created the commit HEAD now names, and that commit carries a signature",
-    "remote_ref_moved": "a remote-tracking ref names a different commit after the act",
+    "remote_ref_moved": "a remote-tracking ref names a different commit after the act. At Stop, a second definition applies: the remote's head disagrees with the local tracking ref, listed at the remote directly -- asked whenever this session may have transmitted (net_out ever True, or unmeasurable) or a tracking ref moved locally without a counted connection (a push over a local path), never assumed",
     "remote_landed": "every remote head this session moved is equal to a local ref (measured at the remote)",
     "pids_gone": "a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it",
-    "pids_spawned": "a process that did not exist before the act is still running after it (stated limit: a worker that exited before the act returned was never a process that outlived it, and is not observed), assigned to this session by lineage: in its tree, or in one of its process sessions",
+    "pids_spawned": "a process of this session other than the hook's own chain -- alive at snapshot and gone at delta by construction, so never the act's doing -- that did not exist before the act is still running after it (stated limit: a worker that exited before the act returned was never a process that outlived it, and is not observed), assigned to this session by lineage: in its tree, or in one of its process sessions",
     "pids_spawned_again": "pids_spawned, and this session had already spawned one before",
-    "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act",
-    "report_null": "the act printed a null datum, or nothing, while reading a structured file",
+    "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act. Remembered across the session as a sticky three-valued mark: once True it stays True; once it has gone NOT-EVALUABLE (some act could not be measured) it never reads back as False -- a session with an unmeasurable act cannot end as \"nothing transmitted\"",
+    "report_null": "the act printed a bare `null`, on any act; or nothing, while reading a structured file. Stated limit: a bare `null` fires whether or not the command read a structured file at all -- firing wide is the cheap direction for a guard, so the ungated arm stands",
     "report_pass": "the act printed a test-report datum with no failures",
     "report_clean": "the act printed a scanner-report datum with no findings",
     "report_fail": "the act printed a report datum with failures or findings",
     # The guard side. A guard is discharged by what the guard act DID -- a datum the trace can
     # check, or a report shape where no trace exists -- never by what it was called.
-    "report_ref": "an act that changed no file, ref or process printed a ref name or commit id the ref snapshot holds",
-    "report_paths": "an act that changed no file, ref or process printed a path the worktree snapshot holds",
+    "report_ref": "an act that changed no file or ref printed a ref name, or a hex prefix of at least 7 characters of a commit the ref snapshot holds. `still` (the quiet gate) tests files and refs only, deliberately: a process ending or spawning during an otherwise-quiet act does not withdraw the guard",
+    "report_paths": "an act that changed no file or ref printed a path the worktree snapshot holds",
     "named_paths": "the worktree paths that report named, in full: what a demand keyed on a changed path is paid by",
     "named_pids": "the live pids that report named: what a demand keyed on a gone pid is paid by",
     "report_pids": "the act printed at least two pids that were alive at the snapshot",
-    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself. The one effect whose datum is read from the command text, not the world: Theorem 8 covers a world-derived datum, so this side is stated, not proven, name-agnostic",
+    "report_self": "the act's output contains a whole segment of its own command: a listing that listed itself. Stated limits: a segment under 3 characters never counts, and the comparison is literal text, so a shell-expanded segment (`grep -v $$` printing `grep -v 4242`) is missed. The one effect whose datum is read from the command text, not the world: Theorem 8 covers a world-derived datum, so this side is stated, not proven, name-agnostic",
     "report_structured": "the act printed a JSON datum that is not null",
     "report_signature": "the act printed a signature block or a verified-signature datum",
     "report_nowarn": "report_pass, and the report carries no warning line",
-    "net_read": "net_out, and the act changed no file, moved no ref, left no process, and reported no failure: a read of the network. Stated limit (K13): the host counter cannot say what was reached, so a quiet connect to a closed port is a read; the trace refuses a mention, not a wasted call",
+    "net_read": "net_out, and the act changed no file, moved no ref, and reported no failure (files and refs only, deliberately -- a process ending or spawning meanwhile does not withdraw this): a read of the network. Stated limit (K13): the host counter cannot say what was reached, so a quiet connect to a closed port is a read; the trace refuses a mention, not a wasted call",
     "report_after_change": "report_pass on an act that ran after a file changed since the last spawn",
     "report_listing": "report_pids, and the output holds no segment of the act's own command: a listing that excluded the observer",
-    "observed_read": "the host Read tool returned Keel's own worktree measurement (observed.json), as written",
-    "remote_read": "the host Read tool returned Keel's own remote measurement (remote.json), with tips present",
+    "observed_read": "the host Read tool returned Keel's own worktree measurement (observed.json), as written -- validated by path identity (resolved, not string-equal), by JSON shape (a `head` key present), and by scope: this session's and this worktree's, keyed on (session_id, repository root)",
+    "remote_read": "the host Read tool returned Keel's own remote measurement (remote.json), with tips present -- validated the same way: path identity, JSON shape (a `tips` dict), and worktree-root scope",
 }
 
 # Guard-side report shapes: a signature datum, and the line a warning leaves in a report.
@@ -117,9 +117,6 @@ _STARTTIME_AFTER_COMM = 19
 # line: state, ppid, pgrp, session). It is what a daemonized worker keeps after it is reparented
 # out of this session's tree, so it is the lineage that assigns such a worker to the session.
 _SID_AFTER_COMM = 3
-# Ancestors walked before giving up on a pid: a process tree deeper than this is a cycle in a
-# stale /proc read, not a real ancestry, so the walk stops rather than spinning.
-_ANCESTRY_CAP = 64
 
 
 def _git(cwd: str, *args: str, env: dict | None = None) -> str | None:
@@ -232,15 +229,22 @@ def proc_table() -> dict[int, tuple[str, int, int]] | None:
 
 
 def under(root: int, table: dict[int, tuple[str, int, int]]) -> dict[int, str]:
-    """pid -> start time for the processes of `table` whose ancestry reaches `root`."""
+    """pid -> start time for the processes of `table` whose ancestry reaches `root`.
+
+    Walked with a visited set, not a hop cap: a legitimately deep descendant (a long build
+    pipeline, an interpreter chain) is real ancestry no matter how many generations deep, so
+    the walk stops only on pid<=1 or on revisiting a pid already seen this walk -- a cycle in
+    a stale /proc read, the only case that is not a real ancestry.
+    """
     kin: dict[int, str] = {}
     for pid, (start, _, _) in table.items():
-        cursor, hops = pid, 0
-        while cursor > 1 and hops < _ANCESTRY_CAP:
+        cursor, seen = pid, set()
+        while cursor > 1 and cursor not in seen:
             if cursor == root:
                 kin[pid] = start
                 break
-            cursor, hops = (table[cursor][1] if cursor in table else 1), hops + 1
+            seen.add(cursor)
+            cursor = table[cursor][1] if cursor in table else 1
     return kin
 
 
@@ -320,6 +324,11 @@ def assigned_process(pid: int, sid: int, in_tree: dict[int, str], sids_then: set
         return True
     if not sid:  # kernel threads carry session 0: no lineage, never this session's
         return False
+    if sid in in_tree:
+        # The session leader is itself a pid of the tree (born during the act, or already
+        # there): a member later reparented away by a double-fork daemonize keeps the session
+        # it was born into, even after its own ppid chain no longer reaches the tree.
+        return True
     return sid in sids_then
 
 
@@ -576,26 +585,18 @@ def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bo
     elif before.get("walk") is not None:
         paths = list(before["walk"])
     if paths is not None:
-        held = set()
-        for path in paths:
-            if not path:
-                continue
-            held.add(path)
-            held.add(path.rsplit("/", 1)[-1])
-            parts = path.split("/")
-            for i in range(1, len(parts)):
-                held.add("/".join(parts[:i]))
-        # The named paths are kept in FULL, resolved from a basename or a prefix the report
+        # The named paths are kept in FULL, resolved from a basename or a suffix the report
         # printed, so a demand keyed on `src/main.py` is paid by `git diff` printing
         # `a/src/main.py` and by `ls src` printing `main.py`, and by nothing that printed
-        # neither (AG-10: a constant payload must not pay a keyed demand).
+        # neither (AG-10: a constant payload must not pay a keyed demand). A bare directory
+        # name (`src`) does not pay a demand keyed on a path under it: that arm let `ls src`
+        # pay a demand on `src/main.py` without the report ever printing the file.
         named = set()
         for t in tokens:
             t = t.removeprefix("./").rstrip("/")
             base = t.rsplit("/", 1)[-1]
             for path in paths:
-                if path and (path == t or path.endswith("/" + t) or path.rsplit("/", 1)[-1] == base
-                             or (t and path.startswith(t + "/"))):
+                if path and (path == t or path.endswith("/" + t) or path.rsplit("/", 1)[-1] == base):
                     named.add(path)
         out["named_paths"] = sorted(named) if quiet else []
         out["report_paths"] = quiet and bool(named)
@@ -744,12 +745,16 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
                 if name.startswith("refs/remotes/") and before_refs.get(name) != after_refs.get(name))
             if out["remote_ref_moved"]:
                 memory["remote_moved"] = True  # the ending asks the remote whatever the counter said
-            out["head_reset"] = False
+            # head_reset states that the worktree changed WITH the move: unmeasurable when the
+            # tree comparison itself is (changed is None), never collapsed to False -- a real
+            # reset whose worktree side could not be read is NOT-EVALUABLE, not "no reset".
+            out["head_reset"] = None if changed is None else False
             out["commit_signed"] = False
             out["head_switched"] = False
             if out["head_moved"] and old_head and new_head:
                 ancestor = _git(root, "merge-base", "--is-ancestor", new_head, old_head)
-                out["head_reset"] = ancestor is not None and bool(changed or removed)
+                if changed is not None:
+                    out["head_reset"] = ancestor is not None and bool(changed or removed)
                 body = _git(root, "cat-file", "commit", new_head) or ""
                 # A commit reachable from a ref that existed before the act is being SWITCHED
                 # to; one that is not was CREATED. Reachability is read from the pre-act refs,
@@ -767,7 +772,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
             then_n, now_n = before.get("reflog"), _reflog_count(root)
             if isinstance(then_n, int) and isinstance(now_n, int) and now_n > then_n:
                 moves = (_git(root, "reflog", "show", "--format=%gs", "HEAD") or "").splitlines()[:now_n - then_n]
-                if any(m.startswith("reset:") for m in moves):
+                if any(m.startswith("reset:") for m in moves) and changed is not None:
                     out["head_reset"] = True
                 if any(m.startswith("checkout:") for m in moves) and not out["head_moved"]:
                     out["head_switched"] = True

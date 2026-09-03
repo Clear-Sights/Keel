@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -114,13 +115,15 @@ class TheAllowMarkerIsAHeaderNotAPayload(unittest.TestCase):
 class TheRenameOwesTheOldNameASentence(unittest.TestCase):
     """A hard rename may strand a user; it may not strand them quietly.
 
-    Renaming to `keel` broke two things that were already on people's machines, and broke both
-    without a word. `GYROSCOPE_STATE_DIR` stopped being read, so a session that still set it began
-    from an empty ledger and looked clean. `gyroscope-allow:` stopped parsing, so every exemption
-    already written became an ordinary command and got denied with no hint that a rename was the
-    cause. Both are asserted here in both directions -- the notice must appear when there is
-    something to say, and must NOT appear when there is not, because a warning that is always on
-    is a warning nobody reads.
+    Renaming to `keel` stopped `GYROSCOPE_STATE_DIR` being read, so a session that still set it
+    began from an empty ledger and looked clean. That is a NOTICE, and it stays: saying so costs
+    one sentence and is never a way past a clause. Asserted in both directions -- the notice must
+    appear when there is something to say, and must NOT appear when there is not, because a
+    warning that is always on is a warning nobody reads.
+
+    The rename's other casualty, the `gyroscope-allow:` exemption marker, is NOT handled by a
+    notice: an exemption is a way past all 24 clauses, so it is retired outright rather than
+    honoured with an apology. See `ThereIsExactlyOneExemptionSpelling`.
     """
 
     def setUp(self) -> None:
@@ -168,14 +171,6 @@ class TheRenameOwesTheOldNameASentence(unittest.TestCase):
         (self.root / "keel_state" / ledger_module.LEDGER_FILE).write_text("{}\n")
         self.assertNotIn("systemMessage", self._start())
 
-    def test_TEETH_the_pre_rename_marker_still_exempts_and_says_so(self) -> None:
-        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "r",
-                 "agent_id": "", "tool_input": {"command": "# gyroscope-allow: approved\nrm -rf b/"}}
-        out = dispatch.pre_tool_use(C.load_default(), Ledger(), event)
-        self.assertNotIn("hookSpecificOutput", out, f"the old spelling was denied: {out}")
-        self.assertIn("pre-rename", out.get("systemMessage", ""),
-                      f"the old spelling worked but said nothing: {out}")
-
     def test_the_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
         smoke_replace(self, PLUGIN / "keel" / "ledger.py",
                       b'    env = os.environ.get(LEGACY_STATE_ENV)\n    if env:\n'
@@ -212,7 +207,17 @@ class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
         out = self._submit("/compact")
         context = out.get("hookSpecificOutput", {}).get("additionalContext", "")
         self.assertIn("Preserve verbatim", context, f"the cut got no preserve list: {out}")
-        self.assertEqual(dispatch._preserve_list(), context,
+        # THE VENDORED BYTES, READ HERE, not `dispatch._preserve_list()` -- which is the function
+        # that produced `context` in the first place. That comparison was the function against
+        # itself: MEASURED, with `return doc["preserve"]` changed to `return doc["preserve"][:40]`
+        # the hook delivered 40 of the list's 475 bytes and the whole suite returned OK, because
+        # both sides of the assertion had been truncated together. `_provenance.sha256` did not
+        # catch it either: it pins compaction.json's `preserve` field against a digest of itself,
+        # which is the file's internal consistency and says nothing about what is delivered.
+        # Nothing in the repository pinned the compaction feature's actual output. This does.
+        vendored = json.loads(
+            (PLUGIN / "keel" / "compaction.json").read_text(encoding="utf-8"))["preserve"]
+        self.assertEqual(vendored, context,
                          "the injected text is not the vendored list, byte for byte")
 
     def test_TEETH_an_authored_preserve_list_is_never_overridden(self) -> None:
@@ -264,3 +269,47 @@ class TheCutGetsItsPreserveListWithoutBeingAsked(unittest.TestCase):
                       "tests.test_bypass.TheCutGetsItsPreserveListWithoutBeingAsked."
                       "test_TEETH_a_bare_compact_receives_the_preserve_list",
                       "the cut got no preserve list")
+
+    def test_the_delivered_bytes_check_can_fail(self) -> None:  # makoto-allow: teeth are in smoke_replace, which runs the target green, plants the fault, then requires red; a checker that cannot follow an imported helper reads this body as empty
+        """Truncate the list AT DELIVERY, and the byte-for-byte assertion must go red.
+
+        This is the plant the old assertion could not carry: it compared the hook's output to
+        `dispatch._preserve_list()`, so this exact mutation moved both sides together and the
+        suite stayed green with 40 of 475 bytes reaching the model.
+        """
+        smoke_replace(self, PLUGIN / "keel" / "dispatch.py",
+                      b'    return doc["preserve"]',
+                      b'    return doc["preserve"][:40]',
+                      "tests.test_bypass.TheCutGetsItsPreserveListWithoutBeingAsked."
+                      "test_TEETH_a_bare_compact_receives_the_preserve_list",
+                      "the injected text is not the vendored list, byte for byte")
+
+
+class ThereIsExactlyOneExemptionSpelling(unittest.TestCase):
+    """`# gyroscope-allow:` was a second, undocumented spelling that exempted a Bash call from all
+    24 clauses exactly as `# keel-allow:` does, while the README named only one. An exemption the
+    pages do not name is one nobody can audit: a reader counting the ways a call can skip the table
+    would have counted one and been wrong.
+
+    It was kept on the argument that the plugin had shipped under the old name and removing it
+    would strand exemptions already written in users' scripts. The owner settled the fact: the
+    public repository is Keel, several tags carry that name, and there is no installed base to
+    strand. So the argument was empty and the pattern is gone.
+
+    This is the census that keeps it gone. A third spelling added later fails here rather than
+    passing unnoticed."""
+
+    def test_the_allow_pattern_is_the_whole_exemption_surface(self):
+        exempting = {name for name, val in vars(dispatch).items()
+                     if isinstance(val, re.Pattern) and "allow" in name.lower()}
+        self.assertEqual(
+            exempting, {"ALLOW"},
+            f"a second exemption spelling exists: {sorted(exempting)}. Every way past the 24 "
+            "clauses must be named in README.md's Manual bypass section, or it cannot be audited.")
+
+    def test_the_retired_spelling_no_longer_exempts(self):
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "r",
+                 "agent_id": "", "tool_input": {"command": "# gyroscope-allow: approved\nrm -rf b/"}}
+        out = dispatch.pre_tool_use(C.load_default(), Ledger(), event)
+        self.assertIn("hookSpecificOutput", out,
+                      f"the retired spelling still exempted the call: {out}")

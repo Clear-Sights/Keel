@@ -34,7 +34,7 @@ def base(clause_id: str, **overrides) -> dict:
     row = dict(
         id=clause_id, event="PreToolUse", tools=["Bash"],
         occasion="x", costly="x", guard="x", subject="session_id",
-        fingerprint={"kind": "tool", "on": "tool_name", "equals": "Bash"},
+        fingerprint={"kind": "regex", "on": "tool_name", "pattern": "^Bash$"},
         window="session", deny_reason="x",
         fixtures_pos=["Bash"], fixtures_neg=["Read"],
         construction="POINTS.md#a01",
@@ -55,29 +55,41 @@ PLANTS: dict[str, dict] = {
         fixtures_discharge=["x"], fixtures_no_discharge=["y"]),
     "CLAUSE-SIDE-UNCLASSIFIED": base("Z-UNCLASS", fingerprint={"kind": "bogus"}),
     "CLAUSE-GUARD-ALWAYS": base("Z-GUARD-ALWAYS", discharged_by={"kind": "always"}),
-    "CLAUSE-NONZERO-NOT-RESPONSE": base(
-        "Z-NONZERO", fingerprint={"kind": "nonzero", "on": "tool_input.command"},
+    # SUPERSEDES the CLAUSE-NONZERO-NOT-RESPONSE plant (removed 2026-09-03). That plant asserted
+    # a WEAKER rule than the one now shipped: it refused `kind: nonzero` only when the surface it
+    # read was not `tool_response.*`, which means a `nonzero` on `tool_response.exit_code` still
+    # LOADED. `nonzero` had zero shipped uses and was not the Definition `positive` it stood in
+    # for, so the kind was removed outright and every `nonzero`, on any surface, is now refused by
+    # CLAUSE-KIND-RETIRED below. The two plants below replace that one: they are what the removals
+    # of `kind: tool`, `kind: nonzero` and `unless` are witnessed by, and a regrown evaluator with
+    # no entry in `_RETIRED_KINDS` fails `test_the_census_is_complete` by name.
+    "CLAUSE-KIND-RETIRED": base(
+        "Z-KIND-RETIRED", fingerprint={"kind": "nonzero", "on": "tool_response.exit_code"},
         fixtures_pos=["1"], fixtures_neg=["0"]),
+    "CLAUSE-UNLESS-RETIRED": base(
+        "Z-UNLESS-RETIRED",
+        fingerprint={"kind": "regex", "on": "tool_name", "pattern": "^Bash$",
+                     "unless": ["^Read$"]}),
     "CLAUSE-NO-ACTIVATION-FIXTURES": base(
-        "Z-NO-ACT-FIX", activated_by={"kind": "tool", "on": "tool_name", "equals": "Bash"}),
+        "Z-NO-ACT-FIX", activated_by={"kind": "regex", "on": "tool_name", "pattern": "^Bash$"}),
     "CLAUSE-ACTIVATION-FIXTURE-MISS": base(
-        "Z-ACT-MISS", activated_by={"kind": "tool", "on": "tool_name", "equals": "Bash"},
+        "Z-ACT-MISS", activated_by={"kind": "regex", "on": "tool_name", "pattern": "^Bash$"},
         fixtures_activate=["Read"]),
     "CLAUSE-EVENT-UNKNOWN": base("Z-EVENT", event="BogusEvent"),
     "CLAUSE-NO-FIXTURES": base("Z-NO-FIX", fixtures_pos=[]),
     "CLAUSE-KEY-FROM-INVALID": base(
         "Z-KEY-FROM",
-        fingerprint={"kind": "tool", "on": "tool_name", "equals": "Bash", "key_from": {}}),
+        fingerprint={"kind": "regex", "on": "tool_name", "pattern": "^Bash$", "key_from": {}}),
     "CLAUSE-REGEX-INVALID": base(
         "Z-REGEX", fingerprint={"kind": "regex", "on": "tool_name", "pattern": "("}),
     "CLAUSE-PROBE-INVALID": base(
         "Z-PROBE-INVALID",
-        fingerprint={"kind": "tool", "on": "tool_name", "equals": "Bash",
+        fingerprint={"kind": "regex", "on": "tool_name", "pattern": "^Bash$",
                      "probe": {"cmd": ["git", "status", "--porcelain"],
                                "timeout_ms": 99999, "expect": "empty"}}),
     "CLAUSE-PROBE-MUTATING": base(
         "Z-PROBE-MUT",
-        fingerprint={"kind": "tool", "on": "tool_name", "equals": "Bash",
+        fingerprint={"kind": "regex", "on": "tool_name", "pattern": "^Bash$",
                      "probe": {"cmd": ["rm", "-rf", "/"], "timeout_ms": 1000, "expect": "empty"}}),
     "CLAUSE-EFFECT-UNKNOWN": base(
         "Z-EFFECT-UNK", fingerprint={"kind": "effect", "effect": "nonexistent_effect"}),
@@ -91,12 +103,12 @@ PLANTS: dict[str, dict] = {
         subject={"on": "tool_input.command", "pattern": "(--force)", "group": 1}),
     "CLAUSE-FIXTURE-NEG-HIT": base("Z-NEG-HIT", fixtures_neg=["Bash"]),
     "CLAUSE-NO-GUARD-FIXTURES": base(
-        "Z-NO-GUARD-FIX", discharged_by={"kind": "tool", "on": "tool_name", "equals": "Read"}),
+        "Z-NO-GUARD-FIX", discharged_by={"kind": "regex", "on": "tool_name", "pattern": "^Read$"}),
     "CLAUSE-GUARD-FIXTURE-MISS": base(
-        "Z-GUARD-MISS", discharged_by={"kind": "tool", "on": "tool_name", "equals": "Read"},
+        "Z-GUARD-MISS", discharged_by={"kind": "regex", "on": "tool_name", "pattern": "^Read$"},
         fixtures_discharge=["Bash"], fixtures_no_discharge=["Bash"]),
     "CLAUSE-GUARD-FIXTURE-HIT": base(
-        "Z-GUARD-HIT", discharged_by={"kind": "tool", "on": "tool_name", "equals": "Read"},
+        "Z-GUARD-HIT", discharged_by={"kind": "regex", "on": "tool_name", "pattern": "^Read$"},
         fixtures_discharge=["Read"], fixtures_no_discharge=["Read"]),
     "CLAUSE-CARRIES-AN-EXCUSE": {**base("Z-EXCUSE"), "waiver": "nope"},
 }
@@ -130,6 +142,72 @@ class LoaderRefusesEveryCode(unittest.TestCase):
         with self.assertRaises(C.ClauseError) as ctx:
             C.load_bundle(path)
         self.assertEqual("CLAUSE-ID-DUPLICATE", ctx.exception.code)
+
+    def test_TEETH_every_retired_spelling_is_refused_on_every_side(self) -> None:
+        """The three removals of 2026-09-03, each refused by name, on each of the three sides.
+
+        SUPERSEDES nothing; it is new coverage for machinery that is now gone. `kind: tool` and
+        `kind: nonzero` were predicate kinds with ZERO shipped uses, and `unless` was a regex
+        exclusion list with zero shipped uses. Removing an evaluator without refusing its
+        spelling is the SOFT direction: `kind: tool` would fall out as an unclassified side
+        (true, but silent about the spelling the table does carry) and an `unless` list would be
+        read by nothing at all, silently WIDENING the match its author wrote to "matches
+        pattern", with no diagnostic. Every case below asserts the code, not merely that
+        something was raised, so neutering one branch of `_refuse_retired_spellings` cannot be
+        absorbed by another.
+
+        The `_admit` ordering is part of the claim: these must beat CLAUSE-SIDE-UNCLASSIFIED and
+        CLAUSE-OCCASION-NOMINAL to the raise, or the author reads a symptom instead of a cause.
+        """
+        cases = [
+            ("CLAUSE-KIND-RETIRED", {"kind": "tool", "on": "tool_name", "equals": "Bash"}),
+            ("CLAUSE-KIND-RETIRED", {"kind": "nonzero", "on": "tool_response.exit_code"}),
+            ("CLAUSE-KIND-RETIRED", {"kind": "nonzero", "on": "tool_input.command"}),
+            ("CLAUSE-UNLESS-RETIRED",
+             {"kind": "regex", "on": "tool_name", "pattern": "^Bash$", "unless": ["^R"]}),
+            # Nested, and under a composition node that carries no `kind` of its own -- the shape
+            # `_leaves` walks past, which is why the walker does not use it.
+            ("CLAUSE-KIND-RETIRED",
+             {"any_of": [{"kind": "effect", "effect": "files_changed"},
+                         {"kind": "tool", "on": "tool_name", "equals": "Bash"}]}),
+            ("CLAUSE-UNLESS-RETIRED",
+             {"any_of": [{"kind": "effect", "effect": "files_changed"}], "unless": ["^R"]}),
+        ]
+        for side in ("fingerprint", "activated_by", "discharged_by"):
+            for code, predicate in cases:
+                with self.subTest(side=side, code=code, predicate=predicate):
+                    row = base(f"Z-RETIRED-{side}", **{side: predicate})
+                    with self.assertRaises(C.ClauseError) as ctx:
+                        C._load_object(row)
+                    self.assertEqual(code, ctx.exception.code)
+
+    def test_TEETH_a_composed_occasion_is_refused_though_a_composed_guard_is_not(self) -> None:
+        """AGNOSTIC_OCCASIONS is narrower than AGNOSTIC_CLASSES, and this is the difference.
+
+        It was `= AGNOSTIC_CLASSES`, an alias read by nothing, which claimed the occasion side
+        accepted `composed` while README's occasion law says every occasion is `always`, a host
+        tool enum, or an effect -- exactly three. No shipped row exercises the gap, so nothing in
+        the suite could tell the two sets apart and the alias could be widened back with the
+        whole suite green. This is the row that tells them apart: the SAME composed predicate,
+        admitted as a guard and refused as an occasion.
+        """
+        composed = {"any_of": [{"kind": "effect", "effect": "files_changed"},
+                               {"kind": "regex", "on": "tool_name", "pattern": "^Read$"}]}
+        self.assertEqual("composed", C.classify_side(composed))
+        for side in ("fingerprint", "activated_by"):
+            with self.subTest(side=side):
+                with self.assertRaises(C.ClauseError) as ctx:
+                    C._load_object(base(f"Z-COMPOSED-{side}", **{side: composed}))
+                self.assertEqual("CLAUSE-OCCASION-NOMINAL", ctx.exception.code)
+        # The same predicate on the guard side loads: `composed` is a guard-side class.
+        C._load_object(base("Z-COMPOSED-GUARD", discharged_by=composed,
+                            event="PostToolUse",
+                            fixtures_discharge=[{"hook_event_name": "PostToolUse",
+                                                 "tool_name": "Read",
+                                                 "tool_input": {"command": "x"}}],
+                            fixtures_no_discharge=[{"hook_event_name": "PostToolUse",
+                                                    "tool_name": "Bash",
+                                                    "tool_input": {"command": "x"}}]))
 
     def test_the_census_is_complete(self) -> None:
         """Every code the source can raise has a plant above -- a new one is caught by name."""
