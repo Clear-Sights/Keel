@@ -10,3 +10,8 @@ proofs/.*.aux
 # Agent worktrees: `git worktree` checkouts the harness creates inside the repo.
 # Scratch, like the coqc output above -- never project content.
 .claude/worktrees/
+
+# Never public: transient suite output, and the review ledger (audit trail).
+suite_run.log
+*.suite.log
+docs/ledger/
