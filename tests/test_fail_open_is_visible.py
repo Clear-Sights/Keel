@@ -1,6 +1,6 @@
 """A fail-open must reach a seat that can act on it -- at EVERY boundary, not just the shim.
 
-`docs/FAIL-DIRECTION.md` §3 states the rule and, unusually, states that it was not true:
+Courthouse `docs/FAIL-DIRECTION.md` §3 -- not in this tree; see README "Prior art" -- states the rule and, unusually, states that it was not true:
 
     Hook stderr on exit 0 goes to the debug log only. Not the transcript, not the user, not the
     model. So "loud-allow + stderr" was loud to nobody: a skipped check was indistinguishable,

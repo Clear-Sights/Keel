@@ -824,7 +824,12 @@ class SpelledCountsMatchWhatTheyCount(unittest.TestCase):
         clauses = _clause_rows()
         return {
             "acts": len(_headings(_load(ACTS_MD))),
-            "points": len(clauses),
+            # A point is not a row: `P01` and `P02` are two enforcement rows over one
+            # plan point, so they share a construction anchor. Counting rows here made
+            # "the twenty-four points" agree with itself by construction, which is the
+            # one thing this class exists to stop. Anchors are read from the table, not
+            # from POINTS.md, so the page still cannot settle its own count.
+            "points": len({c["construction"] for c in clauses}),
             "moments": len(clauses),
             "clauses": len(clauses),
             # One clause, one demand: the Stop summary reads every row, and `render_views` refuses

@@ -1,4 +1,4 @@
-# The twenty-four points
+# The twenty-three points
 
 The exact moments this plugin's clauses name. The hooks stop the run and name a guard; the guard
 buys one session. Each entry below names what to build so the guard's outcome arrives on every

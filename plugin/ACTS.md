@@ -1,6 +1,6 @@
 # The ten acts
 
-The twenty-four points in [POINTS.md](POINTS.md) are exact moments named by the plugin's
+The twenty-three points in [POINTS.md](POINTS.md) are exact moments named by the plugin's
 admitted clauses. They do not reach everywhere. These ten acts are the coarser index — the moments where a
 decision sets what the rest of the run inherits, whether or not a point fires.
 
