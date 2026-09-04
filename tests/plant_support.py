@@ -55,7 +55,14 @@ PLANT_ACTIVE_ENV = "KEEL_PLANT_ACTIVE"
 def recover_stale_plants(state: Path | None = None) -> list[str]:
     """Undo any mutation a killed plant left behind, and say where. Returns what it recovered.
 
-    A plant mutates a source file, runs a child against it, and restores. Restore is registered
+    A plant mutates a source file, runs a child against it, and restores.
+
+    TWO THINGS ARE CALLED A PLANT and they mutate different objects. This one -- the harness --
+    mutates a SOURCE FILE of the thing under test. The construction at `plugin/POINTS.md` under
+    C08 mutates a copy of a checker's INPUT and runs the real checker over it. The methods named
+    `test_the_check_can_fail` throughout this suite are named for the second and implemented with
+    the first: the seam replaced is in the checker's own source, which is strictly stronger, since
+    a checker that ignores its input is caught too. Restore is registered
     with `addCleanup` and called again inline -- and a SIGKILL skips both, so an interrupt or a
     timeout while the child runs leaves the working tree carrying the planted fault.
 

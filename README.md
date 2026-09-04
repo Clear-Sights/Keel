@@ -100,6 +100,10 @@ The ledger's properties, each stated in the code it constrains:
   Every shipped row declares `session`, except `C08`, whose `session, per normalized checker key`
   narrows the scope further so proving one checker can fail does not discharge the demand for a
   different one. Neither spelling introduces an expiry.
+  Three further uses of the word are neither: the marker AGE WINDOW in `keel/journal.py`, a real
+  duration that decides whether a concurrent sibling is still working; the model's CONTEXT
+  WINDOW, which is what fills before an automatic cut; and a host UI window, where a second
+  editor window running its own SessionStart is the defect `effects.py` records.
 - **Absence is not a pass.** An empty ledger at Stop means nothing was recorded, which is not the
   same as nothing being owed — it is NOT-EVALUABLE. A shipped verifier once scored an *absent*
   check better than an empty one, and that inversion is the defect the ledger refuses to repeat:
@@ -133,7 +137,11 @@ The ledger's properties, each stated in the code it constrains:
   how `pids_spawned` and `pids_gone` are attributed to an act at all (`keel/effects.py`,
   `session_root`). The two need not coincide: the nested run above shares the parent's
   `session_id` and has its own subtree. Where a sentence below says "the session's processes", it
-  means the subtree.
+  means the subtree. A third sense appears in the assignment rule further down and is the
+  operating system's, not this plugin's: a POSIX **process session** is the session id every
+  process carries in `/proc/<pid>/stat`, which a worker keeps after `setsid` reparents it out of
+  the subtree — that is why lineage tests it separately. And the Evidence section counts
+  "sessions" of a fourth kind: one recorded corpus file, replayed rather than lived.
 
 `plugin/` is the whole package — exactly what the marketplace installs:
 

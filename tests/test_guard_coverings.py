@@ -6,7 +6,7 @@ WHY THIS LAW EXISTS -- the gap it was written against, measured on this table be
 
 Every clause shipped `fixtures_pos`/`fixtures_neg`, and the loader validated them. But those
 discriminate the OCCASION. Nothing declared what DISCHARGES a clause, so the guard half of all
-24 points was un-witnessed BY CONSTRUCTION: there was no population to check, and a guard that a
+every point was un-witnessed BY CONSTRUCTION: there was no population to check, and a guard that a
 document could spend loaded perfectly clean.
 
 That is the asymmetric direction. A false discharge REMOVES the guard while the costly act goes
