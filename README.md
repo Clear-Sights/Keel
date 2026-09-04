@@ -94,7 +94,12 @@ happened, so its demand refuses the *next* act rather than this one:
 The ledger's properties, each stated in the code it constrains:
 
 - **Obligations are un-windowed within a session.** A promise does not expire because an hour
-  passed; events may be windowed for cost, demands never are.
+  passed; events may be windowed for cost, demands never are. Two senses of the word meet here
+  and only one is a time window: every clause row also carries a `window` field, and that one is
+  a *scope*, not a duration — it names the span an obligation and its discharge must share.
+  Every shipped row declares `session`, except `C08`, whose `session, per normalized checker key`
+  narrows the scope further so proving one checker can fail does not discharge the demand for a
+  different one. Neither spelling introduces an expiry.
 - **Absence is not a pass.** An empty ledger at Stop means nothing was recorded, which is not the
   same as nothing being owed — it is NOT-EVALUABLE. A shipped verifier once scored an *absent*
   check better than an empty one, and that inversion is the defect the ledger refuses to repeat:
@@ -122,7 +127,13 @@ The ledger's properties, each stated in the code it constrains:
   and the parent can be blocked at Stop by a demand the child raised. The keying is correct for
   the ids the host supplies — it cannot separate threads the host does not distinguish. Recorded
   rather than papered over, because a scope that silently pools is worse than one that says it
-  pools.
+  pools. Note that this repository uses *session* for two different things, and this bullet is
+  about only one of them: the ledger's scope is the host-supplied `session_id`, while the effect
+  observer's session is a **process subtree** — the acts descended from the host process, which is
+  how `pids_spawned` and `pids_gone` are attributed to an act at all (`keel/effects.py`,
+  `session_root`). The two need not coincide: the nested run above shares the parent's
+  `session_id` and has its own subtree. Where a sentence below says "the session's processes", it
+  means the subtree.
 
 `plugin/` is the whole package — exactly what the marketplace installs:
 
