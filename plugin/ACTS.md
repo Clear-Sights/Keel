@@ -241,8 +241,8 @@ produces the outcome you wanted, so the rule is not defeated by ordinary forgett
 tested. Collapse them, and there is one implementation to cover instead of two.
 
 **A waiver is default-dead or it is nothing.** In the code you are writing -- Keel's own clause
-table admits no waiver field, and the loader refuses a row carrying one, so this is about your
-subject and never about a clause. It carries the condition that excused it and a date; when it
+table admits no waiver field, and the loader refuses a row carrying one, so this is about the codebase
+you are working on and never about a clause. It carries the condition that excused it and a date; when it
 lapses it goes red rather than quiet; renewal is re-argued. Renewed twice means the baseline was
 wrong, not the waiver.
 

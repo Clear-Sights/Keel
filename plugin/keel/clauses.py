@@ -663,7 +663,7 @@ def _admit(clause: Clause) -> Clause:
         if isinstance(predicate, dict):
             _refuse_retired_spellings(predicate, f"{clause.id}.{name}")
     # THE CLASS OF EVERY SIDE IS CHECKED NEXT: a side the table may not carry is refused by
-    # its shape, before any fixture is graded against it.
+    # its class, before any fixture is graded against it.
     for name in ("fingerprint", "activated_by", "discharged_by"):
         predicate = getattr(clause, name)
         if not isinstance(predicate, dict):

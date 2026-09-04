@@ -129,6 +129,11 @@ this page cannot quietly lag the table it describes.
 A benefit compounds through the same four positions a harm cascades through. They locate; they
 do not define. The one test defines.
 
+This sense of *shape* is the positions named in this table and nothing else. Elsewhere the
+code uses the word in its ordinary sense of structural form (an anchor's spelling, a
+predicate's form); where that form is load-bearing the loader calls it a CLASS, which
+`clauses.classify_side` owns.
+
 | shape | position | a benefit here |
 |---|---|---|
 | **built upon** | before the run | a pinned baseline every later comparison inherits |
