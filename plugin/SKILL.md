@@ -154,8 +154,8 @@ was moved, not removed.
 
 ## Where the detail lives
 
-- **[POINTS.md](POINTS.md)** — the twenty-four moments the clauses name, one authored entry
-  each: what is denied, what the discharge buys, and what to build so the discharge is never
+- **[POINTS.md](POINTS.md)** — the moments the clauses name, one authored entry per point:
+  what is denied, what the discharge buys, and what to build so the discharge is never
   needed again — or, for the points still unsolved, what is known and what is still missing. Open
   this when a deny names it.
 - **[ACTS.md](ACTS.md)** — the ten coarser acts: the decisions that set what the rest of the

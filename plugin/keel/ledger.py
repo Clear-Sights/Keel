@@ -1,13 +1,19 @@
 """The one mechanism: demand -> discharge -> reconciliation.
 
 A PreToolUse deny records a DEMAND. A later call matching the clause's guard records a DISCHARGE.
-At Stop, anything still open is unreconciled and blocks. That is the whole model; the nine things
-that looked like separate Stop checks are one ledger read.
+At Stop, anything still open is unreconciled and blocks. That is the whole model; the things that
+looked like separate Stop checks are one ledger read -- every clause demand in the table, whatever
+the table's size, which `tools/render_views.py` states in README's generated stop-ledger block and
+this docstring deliberately does not restate. It used to say "the nine things", against a table
+that has carried 24 clauses for a long time, and the README cites THIS file as where the count is
+defined.
 
 HONESTY BOUNDARY, stated where the mechanism is introduced rather than in a footnote: the ledger
 is written by the same agent it constrains. The hash chain detects accidental corruption, a
 truncated write, bit-rot. It does NOT detect deliberate forgery -- anyone who can append to
-`closures.jsonl` can append a matching hash. This constrains an honest-but-forgetful agent, not a
+the ledger file (`LEDGER_FILE`, below) can append a matching hash. This named `closures.jsonl`,
+which has never existed in this package; the honesty boundary is real and was stated against a
+filename that was not. This constrains an honest-but-forgetful agent, not a
 forging one, and no mechanism inside this trust boundary can do better. Ventura's manifest records
 the same limit for the same reason.
 

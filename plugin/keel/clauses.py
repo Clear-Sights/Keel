@@ -620,7 +620,8 @@ def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
 
 # THE OCCASION SIDE IS NARROWER THAN THE GUARD SIDE, and this is where that is written down.
 #
-# README:188-197 states the law: every occasion is `always`, a host tool enum, or an effect --
+# README's "Honest limitations" section states the law, under the bullet that begins "No occasion
+# reads a program's name": every occasion is `always`, a host tool enum, or an effect --
 # exactly three. This name used to be `= AGNOSTIC_CLASSES`, an alias, which claimed the occasion
 # side accepted all five guard-side classes, and it was READ BY NOTHING: the check below spelled
 # `AGNOSTIC_CLASSES` directly, so the alias documented a licence the code never granted and the

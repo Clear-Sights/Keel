@@ -130,9 +130,10 @@ The ledger's properties, each stated in the code it constrains:
 
 - **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,
   24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both
-  supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity
-  — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it
-  stays silent rather than blocking the host.
+  supported hosts. Every fingerprint is `always`, a host tool enum, or an observed effect —
+  the loader refuses any other kind, so no clause reads a command string or infers intent
+  from prose. The hook fails open: if the dispatcher cannot run, it stays silent rather than
+  blocking the host.
 
 <!-- END GENERATED: package-clause-count -->
 - **one skill** ([`plugin/SKILL.md`](plugin/SKILL.md), with
@@ -262,8 +263,11 @@ Limits before capability claims — read these before the clause table below.
   away. What it does still refuse is a *mention*: claiming a canary ran pays nothing, because
   either the counter moved during the act or it did not. The limit is recorded beside the effect
   it belongs to in `keel/effects.py` and re-measured by the `net_read_counts_a_closed_port` cell.
-- **It does not judge prose.** Every fingerprint is an exact predicate over command, tool, or
-  path identity; a clause that would need to infer intent from a command string is not admitted.
+- **It does not judge prose.** Every fingerprint is `always`, a host tool enum, or an observed
+  effect — `clauses.AGNOSTIC_OCCASIONS`, enforced at load. This used to say "command, tool, or
+  path identity", which named two kinds the loader refuses outright: a fingerprint reading the
+  command is rejected as `CLAUSE-TEXT-COVERING`, and no shipped fingerprint reads a path. The
+  limitation was stated weaker than what actually ships.
 - **The denial is verified; the behaviour change is not.** "Prevented" here means exactly one
   thing: a matching costly call is denied before it executes, and that firing is deterministic —
   the corpus replay below proves the dispatcher denies at or before the derailment event in every
