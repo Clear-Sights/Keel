@@ -131,8 +131,8 @@ The ledger's properties, each stated in the code it constrains:
   and the parent can be blocked at Stop by a demand the child raised. The keying is correct for
   the ids the host supplies — it cannot separate threads the host does not distinguish. Recorded
   rather than papered over, because a scope that silently pools is worse than one that says it
-  pools. Note that this repository uses *session* for two different things, and this bullet is
-  about only one of them: the ledger's scope is the host-supplied `session_id`, while the effect
+  pools. Note that this repository uses *session* for four different things, listed here, and this
+  bullet is about only the first: the ledger's scope is the host-supplied `session_id`, while the effect
   observer's session is a **process subtree** — the acts descended from the host process, which is
   how `pids_spawned` and `pids_gone` are attributed to an act at all (`keel/effects.py`,
   `session_root`). The two need not coincide: the nested run above shares the parent's

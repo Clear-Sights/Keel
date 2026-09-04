@@ -5,7 +5,7 @@ WHY THIS LAW EXISTS -- the gap it was written against, measured on this table be
     clauses declaring a discharge fixture: 0 of 24
 
 Every clause shipped `fixtures_pos`/`fixtures_neg`, and the loader validated them. But those
-discriminate the OCCASION. Nothing declared what DISCHARGES a clause, so the guard half of all
+discriminate the OCCASION. Nothing declared what DISCHARGES a clause, so the guard half of
 every point was un-witnessed BY CONSTRUCTION: there was no population to check, and a guard that a
 document could spend loaded perfectly clean.
 
