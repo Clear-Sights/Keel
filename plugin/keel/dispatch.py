@@ -304,7 +304,8 @@ def _open_not_evaluable(detail: str) -> dict:
     `systemMessage` is the universal output field the host actually surfaces. Everything else a
     hook can say on exit 0 -- stderr above all -- goes to the debug log, so a fail-open written
     only to stderr is, from every seat, byte-identical to a clean pass. That is not a hypothesis:
-    `docs/FAIL-DIRECTION.md` §3 records 30 such allows in one day going unnoticed, and says of
+    Courthouse `docs/FAIL-DIRECTION.md` §3 (this repo has no `docs/` prose;
+    README links it under "What Keel writes down") records 30 such allows in one day going unnoticed, and says of
     itself that the rule "was written down and still not true in practice."
 
     It was still not true here. The three fail-open exits below printed a bare `{}`, and the

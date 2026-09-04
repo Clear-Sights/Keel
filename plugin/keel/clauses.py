@@ -92,7 +92,7 @@ class Clause:
     # a precondition nothing exercises is a precondition nobody can show works.
     fixtures_activate: list[Any] | None = None
     # The GUARD side's own fixtures. `fixtures_pos`/`fixtures_neg` discriminate the OCCASION and
-    # say nothing about what discharges a clause, which left the guard half of all 24 points
+    # say nothing about what discharges a clause, which left the guard half of every point
     # un-witnessed by construction -- the loader had nothing to validate there, so a guard that
     # could be spent by a document loaded clean. C09 was exactly that, and the first run of these
     # fixtures found it.
@@ -620,7 +620,8 @@ def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
 
 # THE OCCASION SIDE IS NARROWER THAN THE GUARD SIDE, and this is where that is written down.
 #
-# README:188-197 states the law: every occasion is `always`, a host tool enum, or an effect --
+# README's "Honest limitations" section states the law, under the bullet that begins "No occasion
+# reads a program's name": every occasion is `always`, a host tool enum, or an effect --
 # exactly three. This name used to be `= AGNOSTIC_CLASSES`, an alias, which claimed the occasion
 # side accepted all five guard-side classes, and it was READ BY NOTHING: the check below spelled
 # `AGNOSTIC_CLASSES` directly, so the alias documented a licence the code never granted and the
@@ -633,6 +634,12 @@ def _leaves(predicate: dict[str, Any]) -> list[dict[str, Any]]:
 #
 # No shipped row exercises the gap -- all 27 occasion sides are already `always`, tool-enum or
 # effect -- so this narrows a licence nothing used rather than removing a covering anyone had.
+# THE FIELD NAMED `occasion` IS NOT THIS WORD. Each row carries an `occasion` string -- free
+# prose naming the moment in human terms, read by nothing, constructed at `_admit` and never
+# evaluated. The law below is about the row's OCCASION SIDE, its `fingerprint` and
+# `activated_by` predicates, which is what `classify_side` grades and what this frozenset
+# constrains. A row whose prose and whose predicates disagree is not caught here, and nothing
+# else catches it either.
 AGNOSTIC_OCCASIONS = frozenset({"always", "tool-enum", "effect"})
 
 
@@ -662,7 +669,7 @@ def _admit(clause: Clause) -> Clause:
         if isinstance(predicate, dict):
             _refuse_retired_spellings(predicate, f"{clause.id}.{name}")
     # THE CLASS OF EVERY SIDE IS CHECKED NEXT: a side the table may not carry is refused by
-    # its shape, before any fixture is graded against it.
+    # its class, before any fixture is graded against it.
     for name in ("fingerprint", "activated_by", "discharged_by"):
         predicate = getattr(clause, name)
         if not isinstance(predicate, dict):
@@ -803,11 +810,13 @@ def _admit(clause: Clause) -> Clause:
     # Every command-string `fixtures_no_discharge` set carries the ECHO-MENTION of one of its own
     # positives. That single case is what found C09: `echo 'ps aux | grep -v $$'` discharged the
     # guard, so an agent that never listed a process could claim it had.
-    # A clause with NO discharge predicate has no guard side to witness -- `clauses/fixtures/E3`
-    # is guarded by a PROBE on its fingerprint, and demanding discharge fixtures of it would be
-    # demanding evidence about a predicate that does not exist. The exemption is exactly that
-    # narrow: it keys on the predicate's absence, not on any declared opt-out, so a clause cannot
-    # buy its way out of this law by claiming one.
+    # A clause with NO discharge predicate has no guard side to witness, so demanding discharge
+    # fixtures of it would be demanding evidence about a predicate that does not exist. NO SHIPPED
+    # ROW REACHES THIS BRANCH: every one of the 24 carries a `discharged_by`, so the guard below is
+    # defensive, kept for a row a future table might add. An earlier version of this comment cited
+    # `clauses/fixtures/E3` as its instance; no such path and no such clause id has ever existed
+    # here. The exemption is exactly this narrow: it keys on the predicate's absence, not on any
+    # declared opt-out, so a clause cannot buy its way out of this law by claiming one.
     if clause.discharged_by is None:
         return clause
     if not clause.fixtures_discharge or not clause.fixtures_no_discharge:

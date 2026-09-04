@@ -1,6 +1,6 @@
 # The ten acts
 
-The twenty-four points in [POINTS.md](POINTS.md) are exact moments named by the plugin's
+The twenty-three points in [POINTS.md](POINTS.md) are exact moments named by the plugin's
 admitted clauses. They do not reach everywhere. These ten acts are the coarser index — the moments where a
 decision sets what the rest of the run inherits, whether or not a point fires.
 
@@ -240,9 +240,11 @@ produces the outcome you wanted, so the rule is not defeated by ordinary forgett
 **One path.** Two branches that do the same thing are two places to be wrong and one place to be
 tested. Collapse them, and there is one implementation to cover instead of two.
 
-**A waiver is default-dead or it is nothing.** It carries the condition that excused it and a date;
-when it lapses it goes red rather than quiet; renewal is re-argued. Renewed twice means the baseline
-was wrong, not the waiver.
+**A waiver is default-dead or it is nothing.** In the code you are writing -- Keel's own clause
+table admits no waiver field, and the loader refuses a row carrying one, so this is about the codebase
+you are working on and never about a clause. It carries the condition that excused it and a date; when it
+lapses it goes red rather than quiet; renewal is re-argued. Renewed twice means the baseline was
+wrong, not the waiver.
 
 **Absence of a rule is a claim too.** Say where you looked and where the rule could still be, so the
 gap is falsifiable rather than assumed.

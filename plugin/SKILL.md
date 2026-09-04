@@ -129,6 +129,11 @@ this page cannot quietly lag the table it describes.
 A benefit compounds through the same four positions a harm cascades through. They locate; they
 do not define. The one test defines.
 
+This sense of *shape* is the positions named in this table and nothing else. Elsewhere the
+code uses the word in its ordinary sense of structural form (an anchor's spelling, a
+predicate's form); where that form is load-bearing the loader calls it a CLASS, which
+`clauses.classify_side` owns.
+
 | shape | position | a benefit here |
 |---|---|---|
 | **built upon** | before the run | a pinned baseline every later comparison inherits |
@@ -154,8 +159,8 @@ was moved, not removed.
 
 ## Where the detail lives
 
-- **[POINTS.md](POINTS.md)** — the twenty-four moments the clauses name, one authored entry
-  each: what is denied, what the discharge buys, and what to build so the discharge is never
+- **[POINTS.md](POINTS.md)** — the moments the clauses name, one authored entry per point:
+  what is denied, what the discharge buys, and what to build so the discharge is never
   needed again — or, for the points still unsolved, what is known and what is still missing. Open
   this when a deny names it.
 - **[ACTS.md](ACTS.md)** — the ten coarser acts: the decisions that set what the rest of the

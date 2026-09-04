@@ -94,7 +94,16 @@ happened, so its demand refuses the *next* act rather than this one:
 The ledger's properties, each stated in the code it constrains:
 
 - **Obligations are un-windowed within a session.** A promise does not expire because an hour
-  passed; events may be windowed for cost, demands never are.
+  passed; events may be windowed for cost, demands never are. Two senses of the word meet here
+  and only one is a time window: every clause row also carries a `window` field, and that one is
+  a *scope*, not a duration — it names the span an obligation and its discharge must share.
+  Every shipped row declares `session`, except `C08`, whose `session, per normalized checker key`
+  narrows the scope further so proving one checker can fail does not discharge the demand for a
+  different one. Neither spelling introduces an expiry.
+  Three further uses of the word are neither: the marker AGE WINDOW in `keel/journal.py`, a real
+  duration that decides whether a concurrent sibling is still working; the model's CONTEXT
+  WINDOW, which is what fills before an automatic cut; and a host UI window, where a second
+  editor window running its own SessionStart is the defect `effects.py` records.
 - **Absence is not a pass.** An empty ledger at Stop means nothing was recorded, which is not the
   same as nothing being owed — it is NOT-EVALUABLE. A shipped verifier once scored an *absent*
   check better than an empty one, and that inversion is the defect the ledger refuses to repeat:
@@ -122,7 +131,17 @@ The ledger's properties, each stated in the code it constrains:
   and the parent can be blocked at Stop by a demand the child raised. The keying is correct for
   the ids the host supplies — it cannot separate threads the host does not distinguish. Recorded
   rather than papered over, because a scope that silently pools is worse than one that says it
-  pools.
+  pools. Note that this repository uses *session* for four different things, listed here, and this
+  bullet is about only the first: the ledger's scope is the host-supplied `session_id`, while the effect
+  observer's session is a **process subtree** — the acts descended from the host process, which is
+  how `pids_spawned` and `pids_gone` are attributed to an act at all (`keel/effects.py`,
+  `session_root`). The two need not coincide: the nested run above shares the parent's
+  `session_id` and has its own subtree. Where a sentence below says "the session's processes", it
+  means the subtree. A third sense appears in the assignment rule further down and is the
+  operating system's, not this plugin's: a POSIX **process session** is the session id every
+  process carries in `/proc/<pid>/stat`, which a worker keeps after `setsid` reparents it out of
+  the subtree — that is why lineage tests it separately. And the Evidence section counts
+  "sessions" of a fourth kind: one recorded corpus file, replayed rather than lived.
 
 `plugin/` is the whole package — exactly what the marketplace installs:
 
@@ -130,9 +149,10 @@ The ledger's properties, each stated in the code it constrains:
 
 - **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,
   24 admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both
-  supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity
-  — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it
-  stays silent rather than blocking the host.
+  supported hosts. Every fingerprint is `always`, a host tool enum, or an observed effect —
+  the loader refuses any other kind, so no clause reads a command string or infers intent
+  from prose. The hook fails open: if the dispatcher cannot run, it stays silent rather than
+  blocking the host.
 
 <!-- END GENERATED: package-clause-count -->
 - **one skill** ([`plugin/SKILL.md`](plugin/SKILL.md), with
@@ -262,8 +282,11 @@ Limits before capability claims — read these before the clause table below.
   away. What it does still refuse is a *mention*: claiming a canary ran pays nothing, because
   either the counter moved during the act or it did not. The limit is recorded beside the effect
   it belongs to in `keel/effects.py` and re-measured by the `net_read_counts_a_closed_port` cell.
-- **It does not judge prose.** Every fingerprint is an exact predicate over command, tool, or
-  path identity; a clause that would need to infer intent from a command string is not admitted.
+- **It does not judge prose.** Every fingerprint is `always`, a host tool enum, or an observed
+  effect — `clauses.AGNOSTIC_OCCASIONS`, enforced at load. This used to say "command, tool, or
+  path identity", which named two kinds the loader refuses outright: a fingerprint reading the
+  command is rejected as `CLAUSE-TEXT-COVERING`, and no shipped fingerprint reads a path. The
+  limitation was stated weaker than what actually ships.
 - **The denial is verified; the behaviour change is not.** "Prevented" here means exactly one
   thing: a matching costly call is denied before it executes, and that firing is deterministic —
   the corpus replay below proves the dispatcher denies at or before the derailment event in every

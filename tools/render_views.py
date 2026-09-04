@@ -119,9 +119,10 @@ def render_clause_count(rows: list[dict], marker: str) -> list[str]:
             "",
             "- **the dispatcher** (`keel/`) and the shipped clause table (`keel/clauses.json`,",
             f"  {count} admitted clauses), the POSIX shim (`hooks/dispatch.sh`), and hook manifests for both",
-            "  supported hosts. Every fingerprint is an exact predicate over command, tool, or path identity",
-            "  — no clause infers intent from prose. The hook fails open: if the dispatcher cannot run, it",
-            "  stays silent rather than blocking the host.",
+            "  supported hosts. Every fingerprint is `always`, a host tool enum, or an observed effect —",
+            "  the loader refuses any other kind, so no clause reads a command string or infers intent",
+            "  from prose. The hook fails open: if the dispatcher cannot run, it stays silent rather than",
+            "  blocking the host.",
             "",
         ]
     if marker == "shipped-clause-count":
