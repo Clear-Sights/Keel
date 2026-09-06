@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import effects as _effects
 
@@ -215,6 +215,56 @@ def _measure_probe(spec: dict[str, Any]) -> bool | None:
     return re.search(expect["regex"], output) is not None
 
 
+def _eval_effect(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
+    # What the act DID, attached to the event by the dispatcher (or recorded in a fixture).
+    # An unmeasured effect is None: not False, and `_predicate` reports it as NOT-EVALUABLE
+    # rather than letting a composition read "could not see" as "did not happen".
+    value = _resolve(event, "keel_effect." + str(predicate.get("effect", "")))
+    return value is not _MISSING and value is not None and bool(value)
+
+
+def _eval_regex(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
+    value = _resolve(event, predicate.get("on", ""))
+    return isinstance(value, str) and re.search(predicate["pattern"], value) is not None
+
+
+def _class_regex(predicate: dict[str, Any]) -> str:
+    if predicate.get("on") == "tool_name":
+        return "tool-enum"
+    return "textual" if predicate.get("on") == COMMAND_FIELD else "unclassified"
+
+
+def _validate_effect(leaf: dict[str, Any], clause_id: str) -> None:
+    if leaf.get("effect") not in _effects.EFFECTS:
+        raise ClauseError("CLAUSE-EFFECT-UNKNOWN",
+                          f"{clause_id}: {leaf.get('effect')!r} is not an effect the observer measures")
+
+
+def _validate_regex(leaf: dict[str, Any], clause_id: str) -> None:
+    try:
+        re.compile(leaf.get("pattern", ""))
+    except (re.error, TypeError) as exc:
+        raise ClauseError("CLAUSE-REGEX-INVALID", f"{clause_id}: {exc}") from exc
+
+
+class Kind(NamedTuple):
+    """One row per predicate kind: how it is evaluated, classed, and validated. ONE owner:
+    the three switches on `kind` that used to live in `_base_predicate`, `_own_class` and
+    `_compile` are this table's three columns, so a kind cannot be evaluable but unclassed."""
+    evaluate: Any   # (predicate, event) -> bool; None: never fires (retired kinds)
+    classify: Any   # (predicate) -> Coverings.v class
+    validate: Any   # (leaf, clause_id) -> None, raising ClauseError; None: nothing to check
+
+
+KINDS: dict[str, Kind] = {
+    "always":   Kind(lambda p, e: True, lambda p: "always", None),
+    "effect":   Kind(_eval_effect, lambda p: "effect", _validate_effect),
+    "regex":    Kind(_eval_regex, _class_regex, _validate_regex),
+    "program":  Kind(None, lambda p: "nominal", None),
+    "pipeline": Kind(None, lambda p: "nominal", None),
+}
+
+
 def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     # COMPOSITION ACROSS FIELDS, and it has to live here rather than inside one kind. `any_of`
     # already existed, but only INSIDE `kind == "program"`, so it could only ever compose two
@@ -243,23 +293,8 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
             return any(_base_predicate(sub, event) for sub in predicate["any_of"])
         if predicate.get("all_of"):
             return all(_base_predicate(sub, event) for sub in predicate["all_of"])
-    kind = predicate.get("kind")
-    if kind == "always":
-        return True
-    if kind == "effect":
-        # What the act DID, attached to the event by the dispatcher (or recorded in a fixture).
-        # An unmeasured effect is None: not False, and `_predicate` reports it as NOT-EVALUABLE
-        # rather than letting a composition read "could not see" as "did not happen".
-        value = _resolve(event, "keel_effect." + str(predicate.get("effect", "")))
-        return value is not _MISSING and value is not None and bool(value)
-    value = _resolve(event, predicate.get("on", ""))
-    if value is _MISSING:
-        return False
-    if kind == "regex":
-        if not isinstance(value, str):
-            return False
-        return re.search(predicate["pattern"], value) is not None
-    return False
+    row = KINDS.get(predicate.get("kind"))
+    return row.evaluate(predicate, event) if row and row.evaluate else False
 
 
 def _predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool | None:
@@ -390,18 +425,8 @@ def classify_side(predicate: Any) -> str:
 
 def _own_class(predicate: dict[str, Any]) -> str:
     """The class of a predicate's OWN `kind`, ignoring any branches it also carries."""
-    kind = predicate.get("kind")
-    if kind == "always":
-        return "always"
-    if kind == "effect":
-        return "effect"
-    if kind == "regex":
-        if predicate.get("on") == "tool_name":
-            return "tool-enum"
-        return "textual" if predicate.get("on") == COMMAND_FIELD else "unclassified"
-    if kind in ("program", "pipeline"):
-        return "nominal"
-    return "unclassified"
+    row = KINDS.get(predicate.get("kind"))
+    return row.classify(predicate) if row else "unclassified"
 
 
 # The classes a side may have, on EITHER side. Each is name-agnostic or is the Theorem 3
@@ -553,14 +578,9 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
     if predicate is None:
         return
     for leaf in _leaves(predicate):
-        if leaf.get("kind") == "effect" and leaf.get("effect") not in _effects.EFFECTS:
-            raise ClauseError("CLAUSE-EFFECT-UNKNOWN",
-                              f"{clause_id}: {leaf.get('effect')!r} is not an effect the observer measures")
-    if predicate.get("kind") == "regex":
-        try:
-            re.compile(predicate.get("pattern", ""))
-        except (re.error, TypeError) as exc:
-            raise ClauseError("CLAUSE-REGEX-INVALID", f"{clause_id}: {exc}") from exc
+        row = KINDS.get(leaf.get("kind"))
+        if row and row.validate:
+            row.validate(leaf, clause_id)
     key_from = predicate.get("key_from")
     if key_from is not None:
         if isinstance(key_from, str):
