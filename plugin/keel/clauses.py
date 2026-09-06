@@ -215,6 +215,16 @@ def _measure_probe(spec: dict[str, Any]) -> bool | None:
     return re.search(expect["regex"], output) is not None
 
 
+def _on_surface(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
+    """Whether the event is on the surface the predicate declares (`event`, `tools`). ONE owner:
+    both evaluation and the unmeasured-effect check bound themselves by this, so neither can
+    read a branch on an event the predicate never claimed to cover."""
+    if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
+        return False
+    tools = predicate.get("tools")
+    return not (tools and tools != ["*"] and event.get("tool_name") not in tools)
+
+
 def _eval_effect(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     # What the act DID, attached to the event by the dispatcher (or recorded in a fixture).
     # An unmeasured effect is None: not False, and `_predicate` reports it as NOT-EVALUABLE
@@ -283,10 +293,7 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     # SessionStart/Read event is not live, whatever its `any_of` branches say on their own
     # terms. Returning from the composition first let the declared surface be silently
     # dropped -- the branches were evaluated on an event the predicate never claimed to cover.
-    if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
-        return False
-    tools = predicate.get("tools")
-    if tools and tools != ["*"] and event.get("tool_name") not in tools:
+    if not _on_surface(predicate, event):
         return False
     if predicate.get("kind") is None:
         if predicate.get("any_of"):
@@ -323,10 +330,7 @@ def _unmeasured(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     record = event.get("keel_effect")
     if not isinstance(record, dict):
         return False
-    if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
-        return False
-    tools = predicate.get("tools")
-    if tools and tools != ["*"] and event.get("tool_name") not in tools:
+    if not _on_surface(predicate, event):
         return False
     return record.get(str(predicate.get("effect", ""))) is None
 
