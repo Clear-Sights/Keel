@@ -300,8 +300,11 @@ def _base_predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
             return any(_base_predicate(sub, event) for sub in predicate["any_of"])
         if predicate.get("all_of"):
             return all(_base_predicate(sub, event) for sub in predicate["all_of"])
-    row = KINDS.get(predicate.get("kind"))
-    return row.evaluate(predicate, event) if row and row.evaluate else False
+    # Every kind reaching here is one the loader admitted (an unknown kind is refused as
+    # `unclassified`, a retired one as CLAUSE-KIND-RETIRED), so there is no "else" branch: a
+    # case for a kind the loader never admits is a case that cannot occur, and a body built
+    # from what the name admits carries none.
+    return KINDS[predicate["kind"]].evaluate(predicate, event)
 
 
 def _predicate(predicate: dict[str, Any], event: dict[str, Any]) -> bool | None:
