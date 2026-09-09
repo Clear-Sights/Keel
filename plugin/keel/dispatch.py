@@ -63,9 +63,9 @@ ALLOW = re.compile(r"^#\s*keel-allow:\s*(\S.*)$")
 
 
 
-# A COMMITMENT, not an exemption. A guard that is itself a Bash act cannot be recognised before
+# A COMMITMENT, not an exemption. A guard that is itself a shell act cannot be recognised before
 # it runs -- its effect is what discharges, and the effect exists only after. So under an open
-# demand a Bash call passes on a leading `# keel-guard: <clause ids>` line naming what it will
+# demand a shell call passes on a leading `# keel-guard: <clause ids>` line naming what it will
 # pay, and is CHECKED after it ran: a committed call whose effect did not pay is a broken
 # commitment, recorded in the journal, and the demand stays open. The marker names a clause,
 # never a program; what it claims is verified by the observer, so a mention cannot spend it.
@@ -89,11 +89,11 @@ def _header(command):
 
 
 def _guard_marker(command) -> set[str]:
-    """The clause ids a Bash call commits to pay, from its leading comment header."""
+    """The canonical clause ids a shell call commits to pay, from its leading comment header."""
     for line in _header(command):
         found = GUARD.match(line)
         if found:
-            return {p for p in re.split(r"[,\s]+", found.group(1)) if p}
+            return {p.upper() for p in re.split(r"[,\s]+", found.group(1)) if p}
     return set()
 
 
@@ -393,7 +393,7 @@ def _open_effect_denial(table, ledger: Ledger, event: dict, session: str, agent:
         # pays for it.
         if cl is None or cl.event in ("Stop", "SubagentStop"):
             continue
-        if cl.id in committed:
+        if cl.id.upper() in committed:
             progress = True
             continue
         # The guard must name what the demand is keyed on: a Read of `other.json` does not pay
@@ -425,7 +425,12 @@ HOST_READS = frozenset({"Read", "Grep", "Glob"})
 # door. An open demand refuses the next ACT; refusing these left a refused push blocking the
 # very question that would resolve it (DL-14, P-23). `Task` stays an act: it spawns a worker.
 NON_ACTS = frozenset({"AskUserQuestion", "ExitPlanMode"})
-COMMIT_HINT = (" -- a guard that is itself a Bash act passes on a leading `# keel-guard: <clause id>` "
+# Claude Code's shell tool names, including its Windows PowerShell tool:
+# https://code.claude.com/docs/en/hooks#powershell
+# Exactly ["Bash"] in the clause table denotes this shell scope. Mixed and wildcard scopes
+# retain their literal meaning. Keep both hook manifests in sync (covered by regression tests).
+SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
+COMMIT_HINT = (" -- a guard that is itself a shell act passes on a leading `# keel-guard: <clause id>` "
                "line and is checked by its effect after it runs")
 
 
@@ -434,6 +439,8 @@ def _applies(cl, event: dict) -> bool:
     is used, not pre-walked into a set of `id()`s: the caller already loops the table."""
     if cl.event != event.get("hook_event_name"):
         return False
+    if cl.tools == ["Bash"]:
+        return event.get("tool_name") in SHELL_TOOLS
     return not cl.tools or cl.tools == ["*"] or event.get("tool_name") in cl.tools
 
 
@@ -454,6 +461,7 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     if held is not None:
         return held
     _effect_record(ledger, event, "before")
+    committed = _guard_marker(bypass)
     denials = []
     for cl in table:
         try:
@@ -481,6 +489,12 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
                 # The licence must be an OBSERVED discharge, never merely an absent demand.
                 if ledger.is_licensed(session, agent, did):
                     continue
+                if (cl.fingerprint or {}).get("kind") == "always" and cl.id.upper() in committed:
+                    # A first-call promise needs a debt too: PostToolUse checks its actual
+                    # effect against this row, leaving it open if the promise was broken.
+                    ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
+                    progress = True
+                    continue
                 denials.append((cl, subject, did))
         except Exception:
             continue
@@ -495,15 +509,15 @@ def pre_tool_use(table, ledger: Ledger, event: dict) -> dict:
     # this event is progress toward the debt and is not refused by an occasion that fires on
     # everything; it is still refused by an occasion that selects (a host tool enum), because
     # those do not owe the session an opening move.
-    # The demand is recorded only for a refusal that stands: a waived one would leave a row
-    # open at Stop for an act that was allowed.
+    # Uncommitted demands are recorded only for a refusal that stands. A commitment's row
+    # above stays open until the effect pays it, even though the call was allowed.
     if progress:
         denials = [d for d in denials if (d[0].fingerprint or {}).get("kind") != "always"]
     if not denials:
         return {}
     for cl, subject, did in denials:
         ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
-    return _deny("; ".join(_keyed_reason(cl, subject) for cl, subject, _ in denials))
+    return _deny("; ".join(_keyed_reason(cl, subject) for cl, subject, _ in denials) + COMMIT_HINT)
 
 
 def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
@@ -548,7 +562,7 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
             continue
     committed = _guard_marker(_get(event, "tool_input.command"))
     if committed:
-        still = {row["clause_id"] for row in ledger.open_demands(session, agent)}
+        still = {row["clause_id"].upper() for row in ledger.open_demands(session, agent)}
         broken = sorted(committed & still)
         if broken:
             # The call passed on its word and its effect did not pay. Recorded where the

@@ -10,7 +10,7 @@
             "type": "command"
           }
         ],
-        "matcher": "^(Bash|Edit|MultiEdit|NotebookEdit|Read|Write)$"
+        "matcher": "^(Bash|Edit|MultiEdit|NotebookEdit|PowerShell|Read|Write)$"
       }
     ],
     "PreCompact": [
@@ -34,7 +34,7 @@
             "type": "command"
           }
         ],
-        "matcher": "^(Agent|AskUserQuestion|Bash|Edit|ExitPlanMode|Glob|Grep|MultiEdit|NotebookEdit|Read|Task|Write)$"
+        "matcher": "^(Agent|AskUserQuestion|Bash|Edit|ExitPlanMode|Glob|Grep|MultiEdit|NotebookEdit|PowerShell|Read|Task|Write)$"
       }
     ],
     "SessionStart": [

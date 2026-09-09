@@ -415,12 +415,16 @@ def snapshot(state: pathlib.Path, session: str, agent: str, cwd: str,
     slot.mkdir(parents=True, exist_ok=True)
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
     memory = _memory(slot)
-    if root and not memory.get("remote_measured") and (
+    if "remote_root" in memory and memory["remote_root"] != root:
+        memory.pop("remote_measured", None)
+        memory.pop("remote_tried", None)
+    if not memory.get("remote_measured") and (
             time.time() - float(memory.get("remote_tried", 0)) >= REMOTE_RETRY_S):
         # Measured BEFORE this act's counter is read, and the idle-gap mark moved past it, so
         # the hook's own connection is neither the act's nor ambient noise. A remote that
         # could not be listed is tried again later, never more often than REMOTE_RETRY_S.
         memory["remote_measured"] = observe_remote(state, root) is not None
+        memory["remote_root"] = root
         memory["remote_tried"] = time.time()
         memory["net_after"] = net_active_opens()
         _remember(slot, memory)
@@ -644,13 +648,14 @@ def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bo
     return out
 
 
-def observe_remote(state: pathlib.Path, root: str) -> dict[str, Any] | None:
+def observe_remote(state: pathlib.Path, root: str | None) -> dict[str, Any] | None:
     """Measure the remote tips once and write them for the operator to Read (A03's datum).
 
     Returns the tips, or None when the remote could not be listed -- then no artifact is
     written, so a Read of it cannot happen and the demand stays owed: fails closed.
+    Outside a repository, an empty tips datum records the terminal no-repository result.
     """
-    remotes = _git(root, "remote")
+    remotes = _git(root, "remote") if root is not None else ""
     if remotes is None:
         return None
     tips: dict[str, str] = {}
@@ -663,7 +668,8 @@ def observe_remote(state: pathlib.Path, root: str) -> dict[str, Any] | None:
             if sha and name:
                 tips[name] = sha
     try:
-        (state / REMOTE).write_text(json.dumps({"root": root, "t": time.time(), "tips": tips},
+        (state / REMOTE).write_text(json.dumps({"root": root, "t": time.time(), "tips": tips,
+                                                "checked": True},
                                                indent=1), encoding="utf-8")
     except OSError:
         return None
@@ -725,6 +731,12 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
     if root and doc.get("root") and doc["root"] != root:
         return False
     if name == REMOTE:
+        # A no-repository datum must not license a repository, or vice versa. Keep the
+        # same path and tips-shape checks; the sentinel is an observation, not a bypass.
+        if isinstance(cwd, str) and doc.get("root") != root:
+            return False
+        if doc.get("root") is None and ("root" not in doc or doc.get("checked") is not True):
+            return False
         return isinstance(doc.get("tips"), dict)
     sid = event.get("session_id")
     if isinstance(sid, str) and sid and doc.get("session") not in (None, sid):
