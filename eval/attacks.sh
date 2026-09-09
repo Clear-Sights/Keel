@@ -34,15 +34,15 @@ ev = {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"com
 raise SystemExit(0 if clauses._predicate(u20.fingerprint, ev) is None else 1)
 PY
 }
-creation_is_a_change() {  # a created file is files_changed in both observers
+creation_is_not_a_rewrite() {  # creations remain observable without becoming unread rewrites
   cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
 import subprocess, tempfile, pathlib
 from keel import effects
-assert effects._walk_delta({}, {"new.txt": (1, 2)})[0] == ["new.txt"]
+assert effects._walk_delta({}, {"new.txt": (1, 2)}) == ([], [], ["new.txt"])
 d = tempfile.mkdtemp(); g = lambda *a: subprocess.run(["git", "-C", d, *a], capture_output=True, text=True, check=True).stdout.strip()
 g("init", "-q"); pathlib.Path(d, "a").write_text("a"); g("add", "a"); before = g("write-tree")
 pathlib.Path(d, "b").write_text("b"); g("add", "b"); after = g("write-tree")
-raise SystemExit(0 if effects._tree_delta(d, before, after)[0] == ["b"] else 1)
+raise SystemExit(0 if effects._tree_delta(d, before, after) == ([], [], ["b"]) else 1)
 PY
 }
 dead_effect_is_gone() {  # an effect no clause names is not in the vocabulary
@@ -136,8 +136,8 @@ emptied_is_removed() {  # K17: content loss by truncation is files_removed in bo
   cd "$REPO" && PYTHONPATH=plugin python3 - <<'PY'
 from keel import effects
 w_before = {"a.txt": (4, 1), "b.txt": (0, 1)}; w_after = {"a.txt": (0, 2), "b.txt": (0, 1)}
-changed, removed = effects._walk_delta(w_before, w_after)
-ok = changed == [] and removed == ["a.txt"]
+changed, removed, created = effects._walk_delta(w_before, w_after)
+ok = changed == [] and removed == ["a.txt"] and created == []
 import os, pathlib, subprocess, tempfile
 tmp = tempfile.mkdtemp(); repo = os.path.join(tmp, "repo"); state = pathlib.Path(tmp, "state"); os.mkdir(repo)
 git = lambda *a: subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True, text=True)

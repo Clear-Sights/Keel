@@ -31,7 +31,7 @@ CWD = "/work/repo"
 
 
 def full(**eff):
-    base = {n: [] if n in ("files_changed", "files_removed", "remote_ref_moved",
+    base = {n: [] if n in ("files_changed", "files_removed", "files_created", "remote_ref_moved",
                            "pids_gone", "pids_spawned", "named_paths", "named_pids") else False
             for n in effects.EFFECTS}
     base["head_switched"] = False

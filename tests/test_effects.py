@@ -139,6 +139,33 @@ class TheLoaderRefusesANominalOccasion(unittest.TestCase):
 
 
 class TheObserverSeesTheWorld(Repo):
+    def test_creations_are_separate_and_do_not_make_an_act_quiet(self) -> None:
+        for repository in (True, False):
+            with self.subTest(repository=repository):
+                if not repository:
+                    self.repo = os.path.join(self.tmp, "plain")
+                    os.mkdir(self.repo)
+                    pathlib.Path(self.repo, "a.txt").write_text("one\n", encoding="utf-8")
+                d = self.observe("printf new > new.txt; touch empty.txt; echo a.txt")
+                self.assertEqual([], d["files_changed"])
+                self.assertEqual(["empty.txt", "new.txt"], d["files_created"])
+                self.assertEqual([], d["files_removed"])
+                self.assertFalse(d["report_paths"], "creation must not count as a quiet look")
+                self.assertTrue(self.observe("echo '1 passed'")["report_after_change"])
+
+    def test_mixed_creation_rewrite_truncation_and_deletion(self) -> None:
+        for repository in (True, False):
+            with self.subTest(repository=repository):
+                if not repository:
+                    self.repo = os.path.join(self.tmp, "plain")
+                    os.mkdir(self.repo)
+                for name in ("rewrite", "truncate", "delete"):
+                    pathlib.Path(self.repo, name).write_text("old\n", encoding="utf-8")
+                d = self.observe("printf replacement > rewrite; : > truncate; rm delete; printf new > created")
+                self.assertEqual(["rewrite"], d["files_changed"])
+                self.assertEqual(["created"], d["files_created"])
+                self.assertEqual(["delete", "truncate"], d["files_removed"])
+
     def test_a_rewrite_is_seen_and_its_pre_image_is_recoverable(self) -> None:
         d = self.observe("printf two > a.txt")
         self.assertEqual(["a.txt"], d["files_changed"])
@@ -471,6 +498,40 @@ class TheObserverSeesTheWorld(Repo):
 
 
 class TheDispatcherEnforcesAnEffect(Repo):
+    def test_a_many_file_clone_mints_no_unread_rewrite_obligation(self) -> None:
+        source = self.repo
+        for n in range(300):
+            pathlib.Path(source, f"file-{n}.txt").write_text("new\n", encoding="utf-8")
+        git(source, "add", "-A")
+        git(source, "commit", "-qm", "clone source")
+        self._hook(hook_event_name="SessionStart")
+        self._read("observed.json")
+        self._read("remote.json")
+        self.pay()
+        self.repo = os.path.join(self.tmp, "destination")
+        os.mkdir(self.repo)
+        before, _ = self._act(f"git clone -q {source} checkout")
+        self.assertEqual({}, before)
+        self.assertEqual(301, len(git(os.path.join(self.repo, "checkout"), "ls-files").splitlines()))
+        demands = [r for r in Ledger(self.state)._rows()
+                   if r.get("kind") == "demand" and r.get("clause_id") in {"U12", "U13", "U19"}]
+        self.assertEqual([], demands, "a creation is not an unread rewrite")
+
+    def test_a_plain_directory_unread_rewrite_still_mints_obligations(self) -> None:
+        self._hook(hook_event_name="SessionStart")
+        self._read("observed.json")
+        self._read("remote.json")
+        self.pay()
+        self.repo = os.path.join(self.tmp, "plain")
+        os.mkdir(self.repo)
+        pathlib.Path(self.repo, "unread.txt").write_text("old\n", encoding="utf-8")
+        before, _ = self._act("printf replacement > unread.txt; printf new > created.txt")
+        self.assertEqual({}, before)
+        demands = {(r["clause_id"], r["subject"]) for r in Ledger(self.state).open_demands("fx", "")
+                   if r["clause_id"] in {"U12", "U13", "U19"}}
+        self.assertEqual({(c, "unread.txt") for c in ("U12", "U13", "U19")}, demands)
+        self.assertLessEqual({"U12", "U13", "U19"}, self.refusal_matches_the_ledger())
+
     def _hook(self, **payload) -> dict:
         payload.setdefault("session_id", "fx")
         payload.setdefault("cwd", self.repo)
