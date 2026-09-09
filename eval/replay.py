@@ -200,7 +200,8 @@ def _live_ground(work: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     git("init", "-q", "-b", "main")
     git("config", "user.email", "replay@keel.invalid")
     git("config", "user.name", "replay")
-    (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+    # The authored session rewrites calc.py; its live pre-image must contain that file.
+    (repo / "calc.py").write_text("seed\n", encoding="utf-8")
     git("add", "-A")
     git("commit", "-q", "-m", "seed")
     root = subprocess.run(["git", "-C", str(repo), "rev-parse", "--show-toplevel"],

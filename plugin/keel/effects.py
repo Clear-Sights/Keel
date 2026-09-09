@@ -37,7 +37,8 @@ from typing import Any
 # name -> one sentence saying what the observation is. Closed. Read by the loader, the proof
 # renderer and the README; a clause naming anything else is refused at load.
 EFFECTS: dict[str, str] = {
-    "files_changed": "a file has different content after the act, or exists after it and did not before. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed. Outside a repository, content is proxied by (size, mtime_ns) rather than read, so a same-signature rewrite goes unobserved and a bare touch reads as changed; that walk excludes .git, node_modules and __pycache__ and honours no .gitignore (there is none to honour), and is itself NOT-EVALUABLE above WALK_CAP=20000 entries",
+    "files_changed": "a file that existed before the act has different content after it; creations are reported separately. Stated limits: a change another process made while the act ran is charged to the act (files carry no per-act lineage); content under gitignored paths, and any path outside the repository root, is not observed. Outside a repository, content is proxied by (size, mtime_ns) rather than read, so a same-signature rewrite goes unobserved and a bare touch reads as changed; that walk excludes .git, node_modules and __pycache__ and honours no .gitignore (there is none to honour), and is itself NOT-EVALUABLE above WALK_CAP=20000 entries",
+    "files_created": "a path absent before the act exists afterward; measured with the same scope and limits as files_changed",
     "files_removed": "a file that had content before the act has none after it, or does not exist; a top-level gitignored entry that vanished is named too, by path only. Outside a repository, \"has none\" is read from size==0 in the (size, mtime_ns) proxy alone",
     "head_moved": "HEAD names a different commit after the act",
     "head_switched": "HEAD moved to a commit that already existed before the act: a switch or checkout, not a commit; or the act recorded a checkout in HEAD's reflog and HEAD ended where it began",
@@ -161,12 +162,42 @@ def worktree_tree(root: str, index: pathlib.Path) -> str | None:
     return out.strip() if out else None
 
 
+def _ignored_paths(root: str, cache: dict[str, set[str]]) -> set[str]:
+    """Paths git ignores in `root`, relative to it. Directories carry a trailing slash."""
+    if root in cache:
+        return cache[root]
+    out = _git(root, "ls-files", "-o", "-i", "--exclude-standard", "--directory")
+    names = set(out.splitlines()) if out else set()
+    cache[root] = names
+    return names
+
+
 def walk_tree(cwd: str) -> dict[str, tuple[int, int]] | None:
-    """Fallback outside a repository: (size, mtime_ns) per file, capped. No pre-image kept."""
+    """Fallback outside a repository: (size, mtime_ns) per file, capped. No pre-image kept.
+
+    A tree outside a repository can still CONTAIN repositories, and their build output is
+    ignored by their own .gitignore. Honouring nothing there made every regenerated .vo,
+    .glob and .aux a changed path with an obligation keyed on it -- ~123 of them at once,
+    on files no one would ever read. So each directory is classified to its nearest repo
+    and that repo's ignore list prunes it. os.walk is top-down, so a pruned parent is never
+    descended into.
+    """
     seen: dict[str, tuple[int, int]] = {}
+    roots: dict[str, str | None] = {}
+    ignores: dict[str, set[str]] = {}
     try:
         for dirpath, dirnames, filenames in os.walk(cwd):
             dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules", "__pycache__")]
+            if dirpath not in roots:
+                roots[dirpath] = _repo_root(dirpath)
+            root = roots[dirpath]
+            if root:
+                names = _ignored_paths(root, ignores)
+                if names:
+                    base = os.path.relpath(dirpath, root)
+                    base = "" if base == "." else base + "/"
+                    dirnames[:] = [d for d in dirnames if base + d + "/" not in names]
+                    filenames = [f for f in filenames if base + f not in names]
             for name in filenames:
                 path = os.path.join(dirpath, name)
                 try:
@@ -451,15 +482,15 @@ def _remember(slot: pathlib.Path, memory: dict[str, Any]) -> None:
 EMPTY_BLOB = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 
-def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list | None, list | None]:
+def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list | None, list | None, list | None]:
     if not before or not after:
-        return None, None
+        return None, None, None
     if before == after:
-        return [], []
+        return [], [], []
     out = _git(root, "diff-tree", "-r", "--raw", "--no-renames", before, after)
     if out is None:
-        return None, None
-    changed, removed = [], []
+        return None, None, None
+    changed, removed, created = [], [], []
     for line in out.splitlines():
         meta, _, path = line.partition("\t")
         fields = meta.split()  # :mode mode sha_before sha_after status
@@ -470,19 +501,22 @@ def _tree_delta(root: str, before: str | None, after: str | None) -> tuple[list 
         # under a different name, so it is observed as one.
         if status == "D" or (status in ("M", "T") and now == EMPTY_BLOB and was != EMPTY_BLOB):
             removed.append(path)
-        elif status in ("M", "T", "A"):
+        elif status == "A":
+            created.append(path)
+        elif status in ("M", "T"):
             changed.append(path)
-    return changed, removed
+    return changed, removed, created
 
 
-def _walk_delta(before: dict | None, after: dict | None) -> tuple[list | None, list | None]:
+def _walk_delta(before: dict | None, after: dict | None) -> tuple[list | None, list | None, list | None]:
     if before is None or after is None:
-        return None, None
+        return None, None, None
     emptied = {p for p, sig in after.items() if p in before and sig[0] == 0 and before[p][0] != 0}
     changed = sorted(p for p, sig in after.items()
-                     if p not in emptied and (p not in before or tuple(sig) != tuple(before[p])))
+                     if p in before and p not in emptied and tuple(sig) != tuple(before[p]))
+    created = sorted(p for p in after if p not in before)
     removed = sorted(set(p for p in before if p not in after) | emptied)
-    return changed, removed
+    return changed, removed, created
 
 
 def report_effects(stdout: Any, command: Any) -> dict[str, bool]:
@@ -701,7 +735,7 @@ def _artifact_read(state: pathlib.Path, event: dict[str, Any], name: str) -> boo
 def read_delta(state: pathlib.Path, event: dict[str, Any]) -> dict[str, Any]:
     """The record for a host Read: it did nothing to the world, and it may have observed Keel's own datum."""
     out: dict[str, Any] = {name: False for name in EFFECTS}
-    for name in ("files_changed", "files_removed", "remote_ref_moved", "pids_gone", "pids_spawned",
+    for name in ("files_changed", "files_removed", "files_created", "remote_ref_moved", "pids_gone", "pids_spawned",
                  "named_paths", "named_pids"):
         out[name] = []
     out["observed_read"] = _artifact_read(state, event, OBSERVED)
@@ -733,7 +767,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     root = before.get("root")
     if root:
         after_tree = worktree_tree(root, slot / "index")
-        changed, removed = _tree_delta(root, before.get("tree"), after_tree)
+        changed, removed, created = _tree_delta(root, before.get("tree"), after_tree)
         out["pre_image"] = before.get("tree")
         after_refs = refs(root)
         before_refs = before.get("refs")
@@ -754,7 +788,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
             if out["head_moved"] and old_head and new_head:
                 ancestor = _git(root, "merge-base", "--is-ancestor", new_head, old_head)
                 if changed is not None:
-                    out["head_reset"] = ancestor is not None and bool(changed or removed)
+                    out["head_reset"] = ancestor is not None and bool(changed or removed or created)
                 body = _git(root, "cat-file", "commit", new_head) or ""
                 # A commit reachable from a ref that existed before the act is being SWITCHED
                 # to; one that is not was CREATED. Reachability is read from the pre-act refs,
@@ -782,9 +816,9 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
                 gone = [p for p in before["ignored"] if p not in set(now_ignored)]
                 removed = sorted(set(removed) | set(gone))
     else:
-        changed, removed = _walk_delta(before.get("walk"), walk_tree(before["cwd"])
+        changed, removed, created = _walk_delta(before.get("walk"), walk_tree(before["cwd"])
                                        if os.path.isdir(before.get("cwd", "")) else None)
-    out["files_changed"], out["files_removed"] = changed, removed
+    out["files_changed"], out["files_removed"], out["files_created"] = changed, removed, created
     table = proc_table()
     then = before.get("pids")
     if table is not None and then is not None:
@@ -827,13 +861,13 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     # in the session tree during the act is as often a sibling's (a runner worker, a
     # concurrent agent) as the act's own. Measured: `git diff` beside a sibling spawn read as
     # loud on 3 of 15 CI jobs, while the spawn itself fires U01 on its own effect.
-    still = changed == [] and removed == [] and not out.get("head_moved")
+    still = changed == [] and removed == [] and created == [] and not out.get("head_moved")
     out.update(trace_effects(response.get("stdout") if isinstance(response.get("stdout"), str) else "",
                              before, root, still, out["report_self"]))
     out["net_read"] = (None if out["net_out"] is None else
                        bool(out["net_out"]) and still and not out["report_fail"])
     out["report_after_change"] = bool(out["report_pass"]) and bool(memory.get("changed_since_spawn"))
-    if changed:
+    if changed or created:
         memory["changed_since_spawn"] = True
     if spawned:
         memory["changed_since_spawn"] = False

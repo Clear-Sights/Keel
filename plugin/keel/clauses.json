@@ -852,8 +852,7 @@
       ],
       "key_from": {
         "on": "tool_input.command",
-        "pattern": "^(?:[\\s\\S]*[;&|\\n])?\\s*(?:[A-Za-z_]\\w*=\\S*(?:\\s+|$))*(?:(?:sh|bash)\\s+(?:-c|-lc)\\s+['\\\"])?(?:python[0-9.]*\\s+(?:-m\\s+)?)?((?:npm|yarn|pnpm|uv|make|poetry|pipenv|cargo|go|bundle|rake|gem|composer|gradle|mvn)\\s+[^\\s;&|'\\\"]+|[^\\s=;&|]+)(?=[\\s;&|]|$)",
-        "group": 1
+        "extractor": "checker"
       }
     },
     "fixtures_activate": [
@@ -917,8 +916,7 @@
       ],
       "key_from": {
         "on": "tool_input.command",
-        "pattern": "^(?:[\\s\\S]*[;&|\\n])?\\s*(?:[A-Za-z_]\\w*=\\S*(?:\\s+|$))*(?:(?:sh|bash)\\s+(?:-c|-lc)\\s+['\\\"])?(?:python[0-9.]*\\s+(?:-m\\s+)?)?((?:npm|yarn|pnpm|uv|make|poetry|pipenv|cargo|go|bundle|rake|gem|composer|gradle|mvn)\\s+[^\\s;&|'\\\"]+|[^\\s=;&|]+)(?=[\\s;&|]|$)",
-        "group": 1
+        "extractor": "checker"
       }
     },
     "window": "session, per normalized checker key",
@@ -993,7 +991,7 @@
       }
     ],
     "_fixture_note": "The guard is the effect `report_fail` on a PostToolUse Bash record keyed by the checker; a can-fail cell that swallows the failure into its own PASS is not an observation Keel can make, so running the checker under the fault directly is what pays it.",
-    "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is narrowed to explicit pytest/unittest runners and named *check*/verify Python or shell scripts. Each PostToolUse `report_pass` record activates the clause and records the normalized checker command as its own obligation; only a PostToolUse `report_fail` record for the equal key discharges it. 2026-09-03: this sentence said `PreToolUse` activation and a `nonzero` discharge, which the shipped activated_by/discharged_by contradict -- both are `{kind: effect, ...}` on PostToolUse, and the `nonzero` predicate kind no longer exists. Corrected to the shipped guard. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py.",
+    "_note": "Individual admission decision: a checker that accepts missing or invalid input produces the same green result as a sound checker, so doing nothing preserves a false licensing fact and downstream work consumes the opportunity to distinguish them. Recovery requires reversing the accepted PASS, planting or removing input, and replaying the checker decision path (restart path 3). The occasion is a printed PASS; the checker extractor keys both sides on the first plausible invocation, skipping shell control words and output plumbing. If no checker can be identified, no obligation is recorded. Multiple checkers in one command still share the first key; output-line attribution is not available. Each PostToolUse `report_pass` record activates the clause and records the normalized checker command as its own obligation; only a PostToolUse `report_fail` record for the equal key discharges it. 2026-09-03: this sentence said `PreToolUse` activation and a `nonzero` discharge, which the shipped activated_by/discharged_by contradict -- both are `{kind: effect, ...}` on PostToolUse, and the `nonzero` predicate kind no longer exists. Corrected to the shipped guard. Admit only if the frozen corpus reports candidate_fp=0 and TABLE_SUM remains below 20 per 1000. 2026-08-20: the command-word class excludes = and quote characters. It was [^\\s;&|]*, which a shell VARIABLE ASSIGNMENT satisfies -- F=plugin/makoto/checks/writeThrashRevert.py contains 'check' and ends .py, so it both activated the clause and became the key, and nothing can discharge a row that names no runnable checker. Measured in one live session: 114 demand rows, 19 of them keyed on a token containing =, over 18 distinct never-dischargeable subjects. A genuine invocation never carries = inside the program token, and 'export PYTHONPATH=/x; python3 -m pytest tests/' still keys off its second segment. See tests/test_c08_activation.py.",
     "fixtures_discharge": [
       {
         "hook_event_name": "PostToolUse",
