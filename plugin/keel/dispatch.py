@@ -141,6 +141,10 @@ def _effect_keyed(clause) -> str | None:
     return spec.get("effect") if isinstance(spec, dict) and "effect" in spec else None
 
 
+# Existing effect-key storage limit; a subject reaching it may be truncated, so cannot be retired.
+_EFFECT_SUBJECT_LIMIT = 200
+
+
 def _subjects(clause, event: dict) -> list[str]:
     """Every key this event raises for the clause: one per datum for an effect subject."""
     effect = _effect_keyed(clause)
@@ -148,7 +152,7 @@ def _subjects(clause, event: dict) -> list[str]:
         return [_subject(clause, event)]
     record = event.get("keel_effect") if isinstance(event.get("keel_effect"), dict) else {}
     data = record.get(effect)
-    return [str(d)[:200] for d in data] if isinstance(data, list) else []
+    return [str(d)[:_EFFECT_SUBJECT_LIMIT] for d in data] if isinstance(data, list) else []
 
 
 def _names(clause, event: dict, subject: str) -> bool:
@@ -688,10 +692,37 @@ def _pending_lost(root: pathlib.Path, session: str) -> list[str]:
     return lost
 
 
+def _retire_missing(ledger: Ledger, event: dict, open_rows: list[dict]) -> list[dict]:
+    """Only definite absence retires a target from this ending, never licenses its next act.
+
+    Git effect subjects are relative and their original root is not stored in a demand. The
+    current cwd is NOT evidence of that old root. Likewise, a 200-character subject may have
+    been truncated by `_subjects`. Both stay owed; guessing either can retire an existing file.
+    `lstat` retains a dangling symlink (the entry still exists); other stat errors prove nothing.
+    The immutable ledger demand stays untouched: a returning path is owed again, and an older
+    reader conservatively blocks rather than mistaking a retirement for an observed guard.
+    """
+    kept = []
+    for row in open_rows:
+        subject = row.get("subject")
+        if (row.get("clause_id") in {"U12", "U13", "U19"} and isinstance(subject, str)
+                and 0 < len(subject) < _EFFECT_SUBJECT_LIMIT and Path(subject).is_absolute()):
+            try:
+                Path(subject).lstat()
+            except FileNotFoundError:
+                journal.note_retired_missing(event, row, root=ledger.root)
+                continue
+            except (OSError, ValueError):
+                pass
+        kept.append(row)
+    return kept
+
+
 def reconcile(table, ledger: Ledger, event: dict) -> dict:
     """Terminal reconciliation. Fails CLOSED: a gate that cannot decide has not decided, and
     reporting success by default is the one failure this whole loop exists to refuse."""
     session, agent = _ids(event)
+    event.pop("_keel_open_rows", None)  # internal audit data, never inherited from a host envelope
     # THE ENDING IS REFUSED UNTIL IT IS RECONCILED, and the host's `stop_hook_active` flag does
     # not end that. It used to: the Stop after our own block returned {} unconditionally, so
     # every refusal was a one-round obstacle -- continue once, do nothing, stop, and the
@@ -713,7 +744,7 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     _effect_record(ledger, event, "stop")
     _watch_standing(table, ledger, event, session, agent)
     try:
-        open_rows = ledger.open_demands(session, agent)
+        open_rows = _retire_missing(ledger, event, ledger.open_demands(session, agent))
     except Exception as exc:
         return _block(f"keel could not read its ledger: {type(exc).__name__} "
                       "-- NOT-EVALUABLE, not a pass")
@@ -764,10 +795,20 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     effects._remember(slot, memory)
     if not open_rows:
         return {}
-    # Every open row is named: the count says N and the text used to show five of them, so a
-    # replay reading the names could not see the sixth, and neither could the operator.
-    lines = "; ".join(f"[{r['clause_id']}] {r['reason']}" for r in open_rows)
-    return _block(f"{len(open_rows)} unreconciled obligation(s): {lines}")
+    # Keep EVERY row for replay in the journal and ledger, not in the host's bounded deny
+    # text. A clause's reason is repeated once; the full audit is not reconstructed from it.
+    event["_keel_open_rows"] = open_rows
+    groups = {}
+    for row in open_rows:
+        groups.setdefault(row["clause_id"], []).append(row)
+    lines = []
+    for clause_id, rows in groups.items():
+        subjects = [str(r["subject"]) for r in rows if r.get("subject")]
+        paths = ", ".join(subjects[:5])
+        if len(subjects) > 5:
+            paths += f", +{len(subjects) - 5} more"
+        lines.append(f"[{clause_id}] x{len(rows)} {rows[0]['reason']}" + (f": {paths}" if paths else ""))
+    return _block(f"{len(open_rows)} unreconciled obligation(s): {'; '.join(lines)}")
 
 
 def session_start(table, ledger: Ledger, event: dict) -> dict:
@@ -899,7 +940,11 @@ def _record(event: dict, out: dict) -> None:
             journal.note_deny(event, named[0] if named else "", _subject_of(reason), reason)
         elif isinstance(out, dict) and out.get("decision") == "block":
             reason = str(out.get("reason") or "")
-            journal.note_block(event, _stated_count(reason), _bracketed_ids(reason))
+            rows = event.get("_keel_open_rows")
+            if isinstance(rows, list):
+                journal.note_block(event, len(rows), [r["clause_id"] for r in rows], rows=rows)
+            else:
+                journal.note_block(event, _stated_count(reason), _bracketed_ids(reason))
         elif hook in ("Stop", "SubagentStop") and not out:
             # A terminal that reconciled cleanly is a POSITIVE result, not an absence, and it is
             # the one outcome a fires-only log would erase. Recording it is what lets a reader

@@ -229,6 +229,8 @@ class TestTheRecord(StateCase):
             ("note_deny", lambda: journal.note_deny({"session_id": "x"}, "A02", "build/", "r")),
             ("note_session", lambda: journal.note_session({"session_id": "x"}, 24)),
             ("note_block", lambda: journal.note_block({"session_id": "x"}, 1, ["T01"])),
+            ("note_retired_missing", lambda: journal.note_retired_missing({"session_id": "x"},
+                                                                           {"id": "missing"})),
             ("note_fault", lambda: journal.note_fault({"session_id": "x"}, "s", "d",
                                                       failed_closed=True)),
             ("note_repair", lambda: journal.note_repair({"session_id": "x"}, 1)),

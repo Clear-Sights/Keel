@@ -374,6 +374,32 @@ class GeneratedViewsMatch(unittest.TestCase):
             f"generated views drifted from clauses.json:\n{completed.stdout}{completed.stderr}",
         )
 
+    def test_repaired_views_preserve_lf_bytes_on_every_host(self) -> None:
+        import contextlib
+        import importlib.util
+        import io
+        import tempfile
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location("keel_render_views", REPO / "tools/render_views.py")
+        render = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(render)
+        with tempfile.TemporaryDirectory(prefix="keel-views-") as directory:
+            root = Path(directory)
+            originals = {path.relative_to(REPO): path.read_bytes() for path, _ in render.TABLE_VIEWS}
+            for relative, data in originals.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                self.assertIn(b"| `U08` |", data)
+                path.write_bytes(data.replace(b"| `U08` |", b"| `stale-U08` |", 1))
+            views = tuple((root / path.relative_to(REPO), prefix) for path, prefix in render.TABLE_VIEWS)
+            with mock.patch.multiple(render, REPO=root, README=root / "README.md", TABLE_VIEWS=views):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    for _ in range(2):
+                        self.assertEqual(0, render.main(["render_views.py", "--write"]))
+                        for relative, data in originals.items():
+                            self.assertEqual(data, (root / relative).read_bytes(), str(relative))
+
 
 class SharedVocabulary(unittest.TestCase):
     """The definition and the shapes are vendored from the development repository's register.

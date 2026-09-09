@@ -217,7 +217,7 @@ def main(argv: list[str]) -> int:
             continue
         if write:
             lines[start:stop] = fresh
-            path.write_text("\n".join(lines), encoding="utf-8")
+            path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
             print(f"wrote {path.relative_to(REPO)}")
         else:
             drifted.append(str(path.relative_to(REPO)))
