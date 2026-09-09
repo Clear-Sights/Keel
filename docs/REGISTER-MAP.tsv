@@ -1,0 +1,77 @@
+entry	verdict	runner	note
+A1	OUT-OF-SUBJECT	-	a sentinel choice inside code; keel judges the sequence of acts, not the values in them
+A2	OUT-OF-SUBJECT	-	canonicalization inside code keel does not execute
+A3	RUNNER	U10	traversing structured data is the act; the demand is to read the shape rather than assume the positions line up
+A4	OUT-OF-SUBJECT	-	duplicate-key precedence inside code keel does not execute
+A5	OUT-OF-SUBJECT	-	an extracted inner value inside code keel does not execute
+A6	OUT-OF-SUBJECT	-	threshold behaviour of a metric keel does not compute
+A7	OUT-OF-SUBJECT	-	aggregation inside code keel does not execute
+A11	OUT-OF-SUBJECT	-	occurrence counting inside code keel does not execute
+A13	NOT-RAISABLE	-	which layer set a value is not observable from the act about to run
+B1	RUNNER	C08-check-can-fail	a checker PASS is refused until the checker has demonstrated it can reject
+B2	RUNNER	C08-check-can-fail	an assertion over a population never shown rejectable is the same defect
+B4	RUNNER	U25	a scanner standing in for acceptance is named as the proxy it is
+B5	RUNNER	C08-check-can-fail	a verdict that is constant cannot demonstrate rejection
+B6	NOT-RAISABLE	-	the graded denominator is not observable before the act
+B7	RUNNER	tools/register_map.py	every clause binds to a dispatcher path; this file binds the register to keel
+B8	RUNNER	T01	the run is not declared finished on absence; the tree is asked
+B9	NOT-RAISABLE	-	an exemption's discharge is not observable from the act about to run
+B10	RUNNER	C08-check-can-fail	a check that cannot reject is exactly one that never abstains
+B11	RUNNER	D01	fanning out with nothing probed first is the untaken baseline
+B14	NOT-RAISABLE	-	with-and-without measurement spans runs; keel raises within one
+B17	RUNNER	C09-checker-excludes-self	the observer is excluded from the set it counts
+B18	NOT-RAISABLE	-	held-out reporting is a property of a corpus, not of an act
+B20	RUNNER	U24	a passing report is required to carry the warning line that would have failed it
+B21	OUT-OF-SUBJECT	-	isolation of conditions inside a suite keel does not run
+B23	OUT-OF-SUBJECT	-	a numeric bound inside code keel does not execute
+B24	RUNNER	P01	a plan built on nothing read cannot entail the sentence resting on it
+B26	RUNNER	U01	a nested worker's liveness is owed before the launch
+B28	OUT-OF-SUBJECT	-	sequencing of test cases inside a suite keel does not run
+B32	OUT-OF-SUBJECT	-	a proof's structure inside work keel does not check
+B34	RUNNER	tools/register_map.py	keel's own law is run over keel, and names every region it cannot reach
+C1	RUNNER	C03-verify-what-returns	delegated work is inspected on return rather than inherited
+C2	RUNNER	T01	"could not ask the tree" is not a finish; the demand stands unmet
+C3	RUNNER	C03-verify-what-returns	each returned item is inspected, not the batch
+C4	RUNNER	dispatcher fail-closed	a dispatcher error resolves as a denial
+C5	RUNNER	dispatcher fail-closed	an unadmitted clause shape is an error, not a fallthrough
+C6	OUT-OF-SUBJECT	-	sign of a recorded number inside code keel does not execute
+C7	RUNNER	U24	a partial run is not a release; the report must carry its terminator
+C8	RUNNER	T02	a push report is not a landing; the demand is to wait on what the work emits
+C9	RUNNER	journal	every clause decision is written to decisions.jsonl, never held in the window
+C10	RUNNER	U06	a mutating external request names its route; absence on one route is not absence
+D1	RUNNER	T02	the write is graded by reading it back, not by the report of it
+D2	RUNNER	T02	the landing is looked for where a consumer would see it
+D3	RUNNER	U03	a PID is re-resolved rather than trusted; the subject is pinned by identity
+D4	RUNNER	U13	a generated patch is regenerated and compared, not trusted as current
+D8	NOT-RAISABLE	-	magnitude of a system keel does not execute
+D9	RUNNER	C09-checker-excludes-self	the observer excludes itself by identity from its own match set
+D11	RUNNER	U19	an in-place rewrite is bounded rather than performed as a whole-artifact pass
+D12	RUNNER	U09	switching a ref is the boundary; what must survive it is named first
+D13	RUNNER	A02	the set is listed before it is deleted, and the act is exactly that list
+D14	RUNNER	U20	a destructive behavior-changing mutation owes its undo before it runs
+E1	OUT-OF-SUBJECT	-	branch reachability inside code keel does not execute
+E3	RUNNER	U12	a patch applies at an explicitly named target, not wherever it happens to match
+E4	RUNNER	A01	the branch and staged set are read rather than inherited from the platform
+E5	OUT-OF-SUBJECT	-	retry structure inside code keel does not execute
+E7	RUNNER	A01	nothing has observed the worktree, so the worktree is read before the first act
+E8	OUT-OF-SUBJECT	-	setting combinations of a system keel does not configure
+E9	NOT-RAISABLE	-	a fallback's coverage of its own trigger is not observable from the act
+E10	OUT-OF-SUBJECT	-	failure classification inside code keel does not execute
+E11	NOT-RAISABLE	-	nested limits of a host keel does not allocate
+E12	RUNNER	U08	a signed commit's principal is the attribute the gate inspects; rewording cannot grant it
+E13	RUNNER	U02	re-launching a nested-worker target is the channel nobody feeds
+F1	RUNNER	U02	a target relaunched is enumerated with its siblings before the second launch
+F2	RUNNER	clauses.json	one admitted clause table; every dispatcher path reads it
+F3	RUNNER	U09	a ref is re-resolved at use, not trusted from when it was named
+F4	RUNNER	P01	a plan built on nothing read is refused
+F6	OUT-OF-SUBJECT	-	monotonicity of a state space keel does not walk
+F7	RUNNER	A01	the staged set is re-read within the act, not before it
+F8	OUT-OF-SUBJECT	-	alert suppression of a system keel does not emit
+F10	RUNNER	A03	remote history is re-read rather than trusted from a record of it
+F12	NOT-RAISABLE	-	a discriminating observation between mechanisms is not available from the act
+F14	RUNNER	U20	"no behaviour change" is graded on behaviour, not on the description of the mutation
+F16	RUNNER	A01	the worktree's current state is read at the act, not carried forward
+G1	RUNNER	P02	a plan built on a guessed reading of the request is refused before it is adopted
+G2	RUNNER	P02	the same demand: the request is read and derived from before the plan is adopted
+G3	NOT-RAISABLE	-	one party's span against the answer's is not observable from a single act
+G5	NOT-RAISABLE	-	an epistemic "cannot" is a statement, and keel judges acts
