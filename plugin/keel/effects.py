@@ -161,12 +161,42 @@ def worktree_tree(root: str, index: pathlib.Path) -> str | None:
     return out.strip() if out else None
 
 
+def _ignored_paths(root: str, cache: dict[str, set[str]]) -> set[str]:
+    """Paths git ignores in `root`, relative to it. Directories carry a trailing slash."""
+    if root in cache:
+        return cache[root]
+    out = _git(root, "ls-files", "-o", "-i", "--exclude-standard", "--directory")
+    names = set(out.splitlines()) if out else set()
+    cache[root] = names
+    return names
+
+
 def walk_tree(cwd: str) -> dict[str, tuple[int, int]] | None:
-    """Fallback outside a repository: (size, mtime_ns) per file, capped. No pre-image kept."""
+    """Fallback outside a repository: (size, mtime_ns) per file, capped. No pre-image kept.
+
+    A tree outside a repository can still CONTAIN repositories, and their build output is
+    ignored by their own .gitignore. Honouring nothing there made every regenerated .vo,
+    .glob and .aux a changed path with an obligation keyed on it -- ~123 of them at once,
+    on files no one would ever read. So each directory is classified to its nearest repo
+    and that repo's ignore list prunes it. os.walk is top-down, so a pruned parent is never
+    descended into.
+    """
     seen: dict[str, tuple[int, int]] = {}
+    roots: dict[str, str | None] = {}
+    ignores: dict[str, set[str]] = {}
     try:
         for dirpath, dirnames, filenames in os.walk(cwd):
             dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules", "__pycache__")]
+            if dirpath not in roots:
+                roots[dirpath] = _repo_root(dirpath)
+            root = roots[dirpath]
+            if root:
+                names = _ignored_paths(root, ignores)
+                if names:
+                    base = os.path.relpath(dirpath, root)
+                    base = "" if base == "." else base + "/"
+                    dirnames[:] = [d for d in dirnames if base + d + "/" not in names]
+                    filenames = [f for f in filenames if base + f not in names]
             for name in filenames:
                 path = os.path.join(dirpath, name)
                 try:

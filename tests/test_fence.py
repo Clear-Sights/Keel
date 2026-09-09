@@ -63,7 +63,7 @@ COUNTED_PAGES = (*PAGES, README)
 
 
 def _headings(text: str) -> list[str]:
-    """Every `## ` heading in a page, in order.
+    r"""Every `## ` heading in a page, in order.
 
     `(.+)`, never `(\S+)`, and the difference is not cosmetic. Three scanners in this module
     matched word-shaped headings only, so a heading with a space in it was INVISIBLE to them: it
