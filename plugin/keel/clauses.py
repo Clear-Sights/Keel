@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Any, NamedTuple
@@ -131,11 +132,77 @@ def _resolve(event: dict[str, Any], dotted: str) -> Any:
 _MISSING = object()
 
 
+# A PASS belongs to a checker, not to the filter that displayed it. Keep arbitrary checker
+# names (the report is the occasion), but exclude commands whose output cannot identify one.
+_CHECKER_NON_COMMANDS = frozenset("""
+    done fi esac then else do elif if for in while until case select function time coproc
+    tail head cat sort uniq wc tee less more tr cut awk sed grep rg echo printf jq ls true false
+    cd pwd export unset set source eval exec return break continue exit read shift wait git : !
+""".split())
+_CHECKER_RUNNERS = frozenset("""
+    npm yarn pnpm uv make poetry pipenv cargo go bundle rake gem composer gradle mvn
+""".split())
+
+
+def _checker_key(command: str, depth: int = 0) -> str:
+    """First plausible checker in shell order, or no key rather than an unpayable demand.
+
+    This is identity extraction, not a shell interpreter or attribution of individual output
+    lines. Multiple checkers in one call still yield only the first key. Quotes protect mentions
+    from segment splitting; sh/bash -c bodies are commands and are inspected explicitly.
+    Expansions, heredocs, and nested shell grammar are not evaluated. Refuse substitutions and
+    heredocs entirely: their text may name a checker without invoking it. Unknown wrappers and
+    aliases cannot be resolved here; callers should invoke the checker directly for a stable key.
+    """
+    if depth >= 8 or any(syntax in command for syntax in ("$(", "`", "<<")):
+        return ""
+    for segment in _effects._segments(command):
+        try:
+            words = shlex.split(segment, comments=True)
+        except ValueError:
+            return ""
+        # These words introduce a command; loop/case headers do not. Never search arbitrary
+        # arguments for a checker: `echo 'pytest -q'` is a mention, even with a printed PASS.
+        while words and (words[0] in {"do", "then", "else", "elif", "if", "while", "until", "!"}
+                         or re.fullmatch(r"[A-Za-z_]\w*=.*", words[0], re.DOTALL)):
+            words.pop(0)
+        if not words:
+            continue
+        name = words[0].rsplit("/", 1)[-1]
+        if name in {"sh", "bash"}:
+            if len(words) >= 3 and words[1] in {"-c", "-lc"}:
+                key = _checker_key(words[2], depth + 1)
+                if key:
+                    return key
+            continue
+        if re.fullmatch(r"python[0-9.]*", name):
+            words = words[1:]
+            if words and words[0] == "-m":
+                words = words[1:]
+            if not words:
+                continue
+            name = words[0].rsplit("/", 1)[-1]
+        if (name in _CHECKER_NON_COMMANDS or not name or words[0].startswith("-")
+                or any(char in words[0] for char in "=(){}")):
+            continue
+        if name in _CHECKER_RUNNERS:
+            if len(words) >= 2 and not words[1].startswith("-"):
+                return " ".join(words[:2])
+            continue
+        return words[0]
+    return ""
+
+
+# Named extractors keep both sides of a keyed obligation on the same normalization. Unlike a
+# predicate kind, an extractor can decline identity without changing what counts as a PASS.
+KEY_EXTRACTORS = {"checker": _checker_key}
+
+
 def event_key(predicate: dict[str, Any] | None, event: dict[str, Any]) -> str:
     """Extract the cross-event correlation key declared by a predicate.
 
     A bare dotted path preserves the whole field.  The object form can normalize a field by
-    retaining one regex group, which lets a PreToolUse command and its PostToolUse echo resolve
+    retaining one regex group or using a named extractor, which lets a command and its echo resolve
     to the same checker identity without making that identity the clause's ordinary subject.
     """
     if predicate is None:
@@ -151,6 +218,10 @@ def event_key(predicate: dict[str, Any] | None, event: dict[str, Any]) -> str:
     value = _resolve(event, on)
     if value is _MISSING:
         return ""
+    if isinstance(spec, dict) and spec.get("extractor") is not None:
+        if not isinstance(value, str):
+            return ""
+        return KEY_EXTRACTORS[spec["extractor"]](value)[:200]
     if pattern is not None:
         if not isinstance(value, str):
             return ""
@@ -598,6 +669,11 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
                          and bool(key_from.get("on")))
         if not valid_key:
             raise ClauseError("CLAUSE-KEY-FROM-INVALID", clause_id)
+        if isinstance(key_from, dict) and "extractor" in key_from:
+            extractor = key_from["extractor"]
+            if (not isinstance(extractor, str) or extractor not in KEY_EXTRACTORS
+                    or "pattern" in key_from or "group" in key_from):
+                raise ClauseError("CLAUSE-KEY-FROM-INVALID", clause_id)
         if isinstance(key_from, dict) and key_from.get("pattern") is not None:
             try:
                 re.compile(key_from["pattern"])
