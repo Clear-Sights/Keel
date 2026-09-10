@@ -17,7 +17,7 @@ as green", the reason `dispatch.main` refuses a zero-clause load -- turned aroun
 the plugin itself. A gate that will not accept an unexplained silence from the session should not
 be producing one about itself.
 
-ROW KINDS:
+SEVEN ROW KINDS:
 
   * `session` -- ONE row the first time a session is seen, carrying the clause count. The liveness
     proof, and the reason the log answers "did it run" separately from "did it find anything". A
@@ -27,7 +27,7 @@ ROW KINDS:
   * `fault`   -- an event that could not be evaluated, and which way it fell.
   * `repair`  -- an envelope that needed repair before it could be read (see `note_repair`).
   * `reconcile` -- every open row before terminal deny text is grouped for display.
-  * `retired_missing` -- a changed-path demand retired because its target no longer exists.
+  * `retired_missing` -- a vanished content target, with its original demand; NOT a guard pass.
 
 There is deliberately NO row per allowed call: a sibling plugin measured that policy and found the
 log ran 99%+ noise. A log nobody can read is a log nobody reads.
@@ -60,9 +60,10 @@ def _root(root=None) -> pathlib.Path:
 def _append(row: dict, root=None) -> None:
     """Append one compact JSON line to `decisions.jsonl`.
 
-    Reconciliation rows retain the entire open list and can be large. `ensure_ascii=True`
-    deliberately -- unlike the ledger's canonical form, this writer must never be able to
-    become the encoding failure it exists to record.
+    A full reconciliation can be a large row. This ordinary-file append has no cross-process
+    locking guarantee (PIPE_BUF describes pipes, not this file). `ensure_ascii=True` deliberately
+    -- unlike the ledger's canonical form, this writer must never be able to become the encoding
+    failure it exists to record. Journaling remains best-effort observability, not a gate.
     """
     path = _root(root)
     path.mkdir(parents=True, exist_ok=True)
@@ -230,18 +231,28 @@ def note_deny(event: dict, clause_id: str, subject: str, reason: str, root=None)
         pass
 
 
-def note_block(event: dict, open_count, clause_ids, root=None) -> None:
+def note_block(event: dict, open_count, clause_ids, root=None, *, rows=None) -> None:
     """Record a terminal reconciliation block.
 
     `open_count` is `None` when the block message stated no count -- which is what an internal
     fault's block looks like. Recorded as `null` rather than coerced to `0`, because `0` is
     already the clean terminal's own answer and the two outcomes must not share a row shape. See
-    `dispatch._stated_count`.
+    `dispatch._stated_count`. `rows` preserves the full reconciliation behind grouped host text;
+    it is keyword-only so existing positional `root` callers retain their meaning.
     """
     try:
+        extra = {} if rows is None else {"rows": rows}
         _append(_row(event, "block",
                      open_count=None if open_count is None else int(open_count),
-                     clause_ids=[str(c) for c in clause_ids]), root=root)
+                     clause_ids=[str(c) for c in clause_ids], **extra), root=root)
+    except Exception:
+        pass
+
+
+def note_retired_missing(event: dict, demand: dict, root=None) -> None:
+    """Preserve why a no-longer-existing target was retired, without claiming a discharge."""
+    try:
+        _append(_row(event, "retired_missing", demand=demand), root=root)
     except Exception:
         pass
 
@@ -264,14 +275,6 @@ def note_reconcile(event: dict, open_rows, root=None) -> None:
     """Preserve every row for replay, including subjects omitted from grouped deny text."""
     try:
         _append(_row(event, "reconcile", open_rows=list(open_rows)), root=root)
-    except Exception:
-        pass
-
-
-def note_retired_missing(event: dict, demand: dict, path: str, root=None) -> None:
-    """A vanished target makes comparison impossible; this is retirement, not discharge."""
-    try:
-        _append(_row(event, "retired_missing", demand=demand, path=path), root=root)
     except Exception:
         pass
 

@@ -2679,7 +2679,7 @@
     ],
     "occasion": "the act created a signed commit -- through whatever program",
     "costly": "create a signed git commit",
-    "guard": "produce a signature datum: sign something and see the signature block, or verify one",
+    "guard": "observe a PGP or SSH signature block, `Good signature` verification output, or `gpgsig` commit data",
     "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
@@ -2690,7 +2690,7 @@
       "effect": "report_signature"
     },
     "window": "session",
-    "deny_reason": "a signed commit was created and no signature datum is on record; sign something (`printf test | gpg --clearsign`, or any signer) so the signature block is observed, before the next act",
+    "deny_reason": "a signed commit was created and no signature datum is on record; before the next act, observe a PGP or SSH signature block (for example, `printf test | gpg --clearsign`), verification output containing `Good signature`, or commit data containing `gpgsig`",
     "construction": "POINTS.md#u08",
     "fixtures_pos": [
       {

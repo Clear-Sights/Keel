@@ -141,6 +141,10 @@ def _effect_keyed(clause) -> str | None:
     return spec.get("effect") if isinstance(spec, dict) and "effect" in spec else None
 
 
+# Existing effect-key storage limit; a subject reaching it may be truncated, so cannot be retired.
+_EFFECT_SUBJECT_LIMIT = 200
+
+
 def _subjects(clause, event: dict) -> list[str]:
     """Every key this event raises for the clause: one per datum for an effect subject."""
     effect = _effect_keyed(clause)
@@ -148,7 +152,7 @@ def _subjects(clause, event: dict) -> list[str]:
         return [_subject(clause, event)]
     record = event.get("keel_effect") if isinstance(event.get("keel_effect"), dict) else {}
     data = record.get(effect)
-    return [str(d)[:200] for d in data] if isinstance(data, list) else []
+    return [str(d)[:_EFFECT_SUBJECT_LIMIT] for d in data] if isinstance(data, list) else []
 
 
 def _names(clause, event: dict, subject: str) -> bool:
@@ -560,23 +564,6 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
                         ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
         except Exception:
             continue
-    # Retirement belongs to the act that raised the row. A later absence (or a later
-    # deleting act) cannot stand in for that act's observed removal. Bind evidence to
-    # the demand's hash so a reopened demand cannot inherit an earlier retirement.
-    removed = (event.get("keel_effect") or {}).get("files_removed")
-    if isinstance(removed, list) and removed:
-        slot = effects._slot(ledger.root, session, agent)
-        memory = effects._memory(slot)
-        eligible = memory.setdefault("removed_demands", {})
-        cwd = str(event.get("cwd") or os.getcwd())
-        base = Path(effects._repo_root(cwd) or cwd)
-        for row in ledger.open_demands(session, agent):
-            if (row["id"] not in open_before
-                    and row.get("clause_id") in {"U12", "U13", "U19"}
-                    and row.get("subject") in removed):
-                eligible[row["hash"]] = str(base / row["subject"])
-        slot.mkdir(parents=True, exist_ok=True)
-        effects._remember(slot, memory)
     committed = _guard_marker(_get(event, "tool_input.command"))
     if committed:
         still = {row["clause_id"].upper() for row in ledger.open_demands(session, agent)}
@@ -705,10 +692,37 @@ def _pending_lost(root: pathlib.Path, session: str) -> list[str]:
     return lost
 
 
+def _retire_missing(ledger: Ledger, event: dict, open_rows: list[dict]) -> list[dict]:
+    """Only definite absence retires a target from this ending, never licenses its next act.
+
+    Git effect subjects are relative and their original root is not stored in a demand. The
+    current cwd is NOT evidence of that old root. Likewise, a 200-character subject may have
+    been truncated by `_subjects`. Both stay owed; guessing either can retire an existing file.
+    `lstat` retains a dangling symlink (the entry still exists); other stat errors prove nothing.
+    The immutable ledger demand stays untouched: a returning path is owed again, and an older
+    reader conservatively blocks rather than mistaking a retirement for an observed guard.
+    """
+    kept = []
+    for row in open_rows:
+        subject = row.get("subject")
+        if (row.get("clause_id") in {"U12", "U13", "U19"} and isinstance(subject, str)
+                and 0 < len(subject) < _EFFECT_SUBJECT_LIMIT and Path(subject).is_absolute()):
+            try:
+                Path(subject).lstat()
+            except FileNotFoundError:
+                journal.note_retired_missing(event, row, root=ledger.root)
+                continue
+            except (OSError, ValueError):
+                pass
+        kept.append(row)
+    return kept
+
+
 def reconcile(table, ledger: Ledger, event: dict) -> dict:
     """Terminal reconciliation. Fails CLOSED: a gate that cannot decide has not decided, and
     reporting success by default is the one failure this whole loop exists to refuse."""
     session, agent = _ids(event)
+    event.pop("_keel_open_rows", None)  # internal audit data, never inherited from a host envelope
     # THE ENDING IS REFUSED UNTIL IT IS RECONCILED, and the host's `stop_hook_active` flag does
     # not end that. It used to: the Stop after our own block returned {} unconditionally, so
     # every refusal was a one-round obstacle -- continue once, do nothing, stop, and the
@@ -730,26 +744,7 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     _effect_record(ledger, event, "stop")
     _watch_standing(table, ledger, event, session, agent)
     try:
-        open_rows = ledger.open_demands(session, agent)
-        remaining = []
-        for row in open_rows:
-            observed_path = memory.get("removed_demands", {}).get(row.get("hash"))
-            missing = False
-            if observed_path:
-                path = Path(observed_path)
-                try:
-                    path.stat()
-                except (FileNotFoundError, NotADirectoryError):
-                    missing = True
-                except OSError:
-                    # An inaccessible path is not evidence that it has disappeared.
-                    pass
-            if missing:
-                ledger.retire_missing(session, agent, row["id"])
-                journal.note_retired_missing(event, row, str(path), root=ledger.root)
-            else:
-                remaining.append(row)
-        open_rows = remaining
+        open_rows = _retire_missing(ledger, event, ledger.open_demands(session, agent))
     except Exception as exc:
         return _block(f"keel could not read its ledger: {type(exc).__name__} "
                       "-- NOT-EVALUABLE, not a pass")
@@ -803,6 +798,7 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     # Every open row is named in the journal/ledger so a replay can see even the sixth row.
     # Only the host's deny text is collapsed; the full reasons and subjects remain on record.
     journal.note_reconcile(event, open_rows, root=ledger.root)
+    event["_keel_open_rows"] = open_rows
     groups = {}
     for row in open_rows:
         groups.setdefault(row["clause_id"], []).append(row)
@@ -948,7 +944,11 @@ def _record(event: dict, out: dict) -> None:
             journal.note_deny(event, named[0] if named else "", _subject_of(reason), reason)
         elif isinstance(out, dict) and out.get("decision") == "block":
             reason = str(out.get("reason") or "")
-            journal.note_block(event, _stated_count(reason), _bracketed_ids(reason))
+            rows = event.get("_keel_open_rows")
+            if isinstance(rows, list):
+                journal.note_block(event, len(rows), [r["clause_id"] for r in rows], rows=rows)
+            else:
+                journal.note_block(event, _stated_count(reason), _bracketed_ids(reason))
         elif hook in ("Stop", "SubagentStop") and not out:
             # A terminal that reconciled cleanly is a POSITIVE result, not an absence, and it is
             # the one outcome a fires-only log would erase. Recording it is what lets a reader
