@@ -560,6 +560,23 @@ def post_tool_use(table, ledger: Ledger, event: dict) -> dict:
                         ledger.demand(Demand(session, agent, cl.id, subject, cl.deny_reason))
         except Exception:
             continue
+    # Retirement belongs to the act that raised the row. A later absence (or a later
+    # deleting act) cannot stand in for that act's observed removal. Bind evidence to
+    # the demand's hash so a reopened demand cannot inherit an earlier retirement.
+    removed = (event.get("keel_effect") or {}).get("files_removed")
+    if isinstance(removed, list) and removed:
+        slot = effects._slot(ledger.root, session, agent)
+        memory = effects._memory(slot)
+        eligible = memory.setdefault("removed_demands", {})
+        cwd = str(event.get("cwd") or os.getcwd())
+        base = Path(effects._repo_root(cwd) or cwd)
+        for row in ledger.open_demands(session, agent):
+            if (row["id"] not in open_before
+                    and row.get("clause_id") in {"U12", "U13", "U19"}
+                    and row.get("subject") in removed):
+                eligible[row["hash"]] = str(base / row["subject"])
+        slot.mkdir(parents=True, exist_ok=True)
+        effects._remember(slot, memory)
     committed = _guard_marker(_get(event, "tool_input.command"))
     if committed:
         still = {row["clause_id"].upper() for row in ledger.open_demands(session, agent)}
@@ -714,6 +731,25 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     _watch_standing(table, ledger, event, session, agent)
     try:
         open_rows = ledger.open_demands(session, agent)
+        remaining = []
+        for row in open_rows:
+            observed_path = memory.get("removed_demands", {}).get(row.get("hash"))
+            missing = False
+            if observed_path:
+                path = Path(observed_path)
+                try:
+                    path.stat()
+                except (FileNotFoundError, NotADirectoryError):
+                    missing = True
+                except OSError:
+                    # An inaccessible path is not evidence that it has disappeared.
+                    pass
+            if missing:
+                ledger.retire_missing(session, agent, row["id"])
+                journal.note_retired_missing(event, row, str(path), root=ledger.root)
+            else:
+                remaining.append(row)
+        open_rows = remaining
     except Exception as exc:
         return _block(f"keel could not read its ledger: {type(exc).__name__} "
                       "-- NOT-EVALUABLE, not a pass")
@@ -764,9 +800,22 @@ def reconcile(table, ledger: Ledger, event: dict) -> dict:
     effects._remember(slot, memory)
     if not open_rows:
         return {}
-    # Every open row is named: the count says N and the text used to show five of them, so a
-    # replay reading the names could not see the sixth, and neither could the operator.
-    lines = "; ".join(f"[{r['clause_id']}] {r['reason']}" for r in open_rows)
+    # Every open row is named in the journal/ledger so a replay can see even the sixth row.
+    # Only the host's deny text is collapsed; the full reasons and subjects remain on record.
+    journal.note_reconcile(event, open_rows, root=ledger.root)
+    groups = {}
+    for row in open_rows:
+        groups.setdefault(row["clause_id"], []).append(row)
+    lines = []
+    for clause_id, rows in groups.items():
+        paths = [str(row["subject"]) for row in rows if row.get("subject")]
+        line = f"[{clause_id}] x{len(rows)} {rows[0]['reason']}"
+        if paths:
+            line += ": " + ", ".join(paths[:5])
+            if len(paths) > 5:
+                line += f", +{len(paths) - 5} more"
+        lines.append(line)
+    lines = "\n".join(lines)
     return _block(f"{len(open_rows)} unreconciled obligation(s): {lines}")
 
 

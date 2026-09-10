@@ -17,7 +17,7 @@ as green", the reason `dispatch.main` refuses a zero-clause load -- turned aroun
 the plugin itself. A gate that will not accept an unexplained silence from the session should not
 be producing one about itself.
 
-FIVE ROW KINDS:
+ROW KINDS:
 
   * `session` -- ONE row the first time a session is seen, carrying the clause count. The liveness
     proof, and the reason the log answers "did it run" separately from "did it find anything". A
@@ -26,6 +26,8 @@ FIVE ROW KINDS:
   * `block`   -- a Stop/SubagentStop reconciliation block, naming the unreconciled count.
   * `fault`   -- an event that could not be evaluated, and which way it fell.
   * `repair`  -- an envelope that needed repair before it could be read (see `note_repair`).
+  * `reconcile` -- every open row before terminal deny text is grouped for display.
+  * `retired_missing` -- a changed-path demand retired because its target no longer exists.
 
 There is deliberately NO row per allowed call: a sibling plugin measured that policy and found the
 log ran 99%+ noise. A log nobody can read is a log nobody reads.
@@ -58,10 +60,9 @@ def _root(root=None) -> pathlib.Path:
 def _append(row: dict, root=None) -> None:
     """Append one compact JSON line to `decisions.jsonl`.
 
-    POSIX guarantees atomicity for short append-mode writes (<= PIPE_BUF); a row is far under, so
-    concurrent hook processes cannot interleave. `ensure_ascii=True` deliberately -- unlike the
-    ledger's canonical form, this writer must never be able to become the encoding failure it
-    exists to record.
+    Reconciliation rows retain the entire open list and can be large. `ensure_ascii=True`
+    deliberately -- unlike the ledger's canonical form, this writer must never be able to
+    become the encoding failure it exists to record.
     """
     path = _root(root)
     path.mkdir(parents=True, exist_ok=True)
@@ -255,6 +256,22 @@ def note_fault(event: dict, stage: str, detail: str, *, failed_closed: bool, roo
     try:
         _append(_row(event, "fault", stage=stage, detail=detail[:400],
                      failed_closed=bool(failed_closed)), root=root)
+    except Exception:
+        pass
+
+
+def note_reconcile(event: dict, open_rows, root=None) -> None:
+    """Preserve every row for replay, including subjects omitted from grouped deny text."""
+    try:
+        _append(_row(event, "reconcile", open_rows=list(open_rows)), root=root)
+    except Exception:
+        pass
+
+
+def note_retired_missing(event: dict, demand: dict, path: str, root=None) -> None:
+    """A vanished target makes comparison impossible; this is retirement, not discharge."""
+    try:
+        _append(_row(event, "retired_missing", demand=demand, path=path), root=root)
     except Exception:
         pass
 

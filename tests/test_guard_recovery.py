@@ -13,7 +13,7 @@ from unittest import mock
 
 from tests.plant_support import PLUGIN, record
 from keel import clauses as C, dispatch, effects
-from keel.ledger import Ledger
+from keel.ledger import Demand, Ledger
 
 
 class GuardRecovery(unittest.TestCase):
@@ -44,6 +44,70 @@ class GuardRecovery(unittest.TestCase):
         event.update(hook_event_name="PostToolUse", tool_response=path.read_text())
         dispatch.post_tool_use(self.table, self.ledger, event)
         return event["keel_effect"]
+
+    def test_stop_retires_files_created_and_deleted_in_one_bash_act(self):
+        self.table = [cl for cl in self.table if cl.id in {"U12", "U13", "U19"}]
+        for index, removed in enumerate((None, [], ["other.txt"])):
+            with self.subTest(files_removed=removed):
+                session = f"unobserved-{index}"
+                post = self.event(hook_event_name="PostToolUse", session_id=session,
+                                  keel_effect=record(files_changed=["fleeting.txt"],
+                                                     files_removed=removed))
+                dispatch.post_tool_use(self.table, self.ledger, post)
+                rows = self.ledger.open_demands(session, "")
+                self.assertEqual(3, len(rows))
+                stop = self.event(hook_event_name="Stop", session_id=session,
+                                  keel_effect=record(files_removed=["fleeting.txt"]))
+                self.assertEqual("block", dispatch.reconcile(self.table, self.ledger, stop)["decision"])
+                # Neither Stop's record nor a later deleting act owns these demands.
+                dispatch.post_tool_use(self.table, self.ledger, {
+                    **post, "keel_effect": record(files_changed=["fleeting.txt"],
+                                                 files_removed=["fleeting.txt"])})
+                self.assertEqual("block", dispatch.reconcile(self.table, self.ledger, stop)["decision"])
+                self.assertEqual(rows, self.ledger.open_demands(session, ""))
+        event = self.event(command="printf fixture > fleeting.txt; rm fleeting.txt")
+        self.assertEqual({}, self.pre(event))
+        subprocess.run(["bash", "-c", event["tool_input"]["command"]],
+                       cwd=self.cwd, check=True)
+        self.assertFalse((self.cwd / "fleeting.txt").exists())
+        # Supply both observations at the host boundary; absence alone is not removal evidence.
+        dispatch.post_tool_use(self.table, self.ledger, {
+            **event, "hook_event_name": "PostToolUse",
+            "keel_effect": record(files_changed=["fleeting.txt"], files_removed=["fleeting.txt"])})
+        rows = self.ledger.open_demands("recovery", "")
+        self.assertEqual({"U12", "U13", "U19"}, self.owed())
+        stop = self.event(hook_event_name="Stop", keel_effect=record())
+        dispatch.reconcile(self.table, self.ledger, stop)
+        self.assertEqual([], self.ledger.open_demands("recovery", ""))
+        notes = [json.loads(line) for line in (self.state / "decisions.jsonl").read_text().splitlines()]
+        retired = [note for note in notes if note["kind"] == "retired_missing"]
+        self.assertEqual({row["id"] for row in rows}, {note["demand"]["id"] for note in retired})
+        for row in rows:
+            self.assertFalse(self.ledger.is_licensed("recovery", "", row["id"]))
+        self.assertIsNone(self.ledger.verify_chain())
+        dispatch.reconcile(self.table, self.ledger, stop)
+        self.assertEqual(notes, [json.loads(line) for line in
+                               (self.state / "decisions.jsonl").read_text().splitlines()])
+
+    def test_stop_groups_forty_rows_and_journals_every_row(self):
+        clause = next(cl for cl in self.table if cl.id == "U12")
+        self.table = [clause]
+        paths = [f"changed-{i:02d}.txt" for i in range(40)]
+        for path in paths:
+            (self.cwd / path).write_text("changed\n")
+            self.ledger.demand(Demand("recovery", "", clause.id, path, clause.deny_reason))
+        rows = self.ledger.open_demands("recovery", "")
+        result = dispatch.reconcile(self.table, self.ledger,
+                                    self.event(hook_event_name="Stop", keel_effect=record()))
+        message = result["reason"]
+        self.assertEqual(1, message.count(clause.deny_reason))
+        self.assertIn("[U12] x40", message)
+        self.assertIn(", ".join(paths[:5]) + ", +35 more", message)
+        self.assertNotIn(paths[5], message)
+        self.assertEqual(rows, self.ledger.open_demands("recovery", ""))
+        notes = [json.loads(line) for line in (self.state / "decisions.jsonl").read_text().splitlines()]
+        self.assertEqual(rows, next(note["open_rows"] for note in notes
+                                    if note["kind"] == "reconcile"))
 
     def test_non_git_remote_read_discharges_first_bash_a03_demand(self):
         self.assertIsNone(effects._repo_root(str(self.cwd)))

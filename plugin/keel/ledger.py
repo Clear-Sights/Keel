@@ -221,7 +221,12 @@ class Ledger:
             if row.get("kind") == "demand":
                 demanded.setdefault(rid, row)
             elif row.get("kind") == "discharge":
-                closed.add(rid)
+                if row.get("how") == "retired_missing":
+                    # Reuse the existing closure envelope without granting a guard licence.
+                    # The original demand stays on disk; a later demand can open again.
+                    demanded.pop(rid, None)
+                else:
+                    closed.add(rid)
         return books, tail
 
     def scope(self, session: str, agent: str):
@@ -274,6 +279,17 @@ class Ledger:
     def is_licensed(self, session: str, agent: str, demand_id: str) -> bool:
         """True once the guard call for this exact subject has been observed (see `scope`)."""
         return demand_id in self.scope(session, agent)[1]
+
+    def retire_missing(self, session: str, agent: str, demand_id: str) -> None:
+        """Retire an uncomparable pre-image using the existing closure row schema.
+
+        `how` distinguishes retirement from discharge: `_books` removes the demand without
+        licensing it, and the decision journal records `retired_missing`, never a paid guard.
+        """
+        if demand_id not in self.open_ids(session, agent):
+            return
+        self._append({"kind": "discharge", "session": session, "agent": agent,
+                      "id": demand_id, "how": "retired_missing"})
 
     def open_ids(self, session: str, agent: str) -> set[str]:
         return set(self.scope(session, agent)[0])
