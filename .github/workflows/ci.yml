@@ -44,6 +44,12 @@ on:
 permissions:
   contents: read
 
+# A push supersedes the run before it: the sweep below is the long step, and a run on a head that
+# is no longer the PR's head reports nothing anyone reads.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -119,7 +125,13 @@ jobs:
           restore() { local q; for q in $PAGES; do cp "$BAK/$q" "$D/$q"; done; }
           trap restore EXIT
 
-          suite() { python3 -m unittest discover -s tests; }
+          # A planted fault is caught in seconds by the fence modules; the whole suite takes minutes.
+          # So a plant asks the fast modules first and runs the whole suite only when they stay green:
+          # the verdict is the same (a plant the fast modules miss still meets the full run), the
+          # red runs are short. Measured: test_fence alone catches the first plant in 1 s; the full
+          # suite took 5 min per plant, 24 plants, in the run this replaces.
+          fast() { python3 -m unittest -f tests.test_fence tests.test_derived_closure tests.test_register_map tests.test_loader_refuses tests.test_host_shape tests.test_shim_visibility; }
+          suite() { fast || return 1; python3 -m unittest discover -s tests; }
 
           plant() {
             name="$1"; shift
@@ -266,7 +278,8 @@ jobs:
               echo "::error::$target still present -- the move never happened" >&2
               exit 1
             fi
-            if python3 -m unittest discover -s tests >/dev/null 2>&1; then
+            # Same shape as the sweep above: the fast modules first, the whole suite only if they stay green.
+            if { python3 -m unittest -f tests.test_fence tests.test_host_shape tests.test_shim_visibility && python3 -m unittest discover -s tests; } >/dev/null 2>&1; then
               mv /tmp/absent.tmp "$D/$target"
               echo "::error::GREEN ON MISSING -- the fence passed with $target absent" >&2
               exit 1
