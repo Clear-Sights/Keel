@@ -2002,11 +2002,7 @@
     "occasion": "a worker was launched and this session had already launched one -- a re-launch, by whatever program",
     "costly": "re-launch a nested-worker target",
     "guard": "after a failure, change something, then run the target's probe and see it report PASS",
-    "subject": {
-      "on": "tool_input.command",
-      "pattern": "(?:dispatch\\.sh|--target)\\s+([A-Za-z0-9][\\w.-]*)\\b",
-      "group": 1
-    },
+    "subject": "session_id",
     "fingerprint": {
       "kind": "effect",
       "effect": "pids_spawned_again"

@@ -47,7 +47,7 @@ EFFECTS: dict[str, str] = {
     "remote_ref_moved": "a remote-tracking ref names a different commit after the act. At Stop, a second definition applies: the remote's head disagrees with the local tracking ref, listed at the remote directly -- asked whenever this session may have transmitted (net_out ever True, or unmeasurable) or a tracking ref moved locally without a counted connection (a push over a local path), never assumed",
     "remote_landed": "every remote head this session moved is equal to a local ref (measured at the remote)",
     "pids_gone": "a process of this session (its tree, or one it launched and orphaned) that was running before the act is not running after it",
-    "pids_spawned": "a process of this session other than the hook's own chain -- alive at snapshot and gone at delta by construction, so never the act's doing -- that did not exist before the act is still running after it (stated limit: a worker that exited before the act returned was never a process that outlived it, and is not observed), assigned to this session by lineage: in its tree, or in one of its process sessions",
+    "pids_spawned": "a process of this session that did not exist before an act and is still running at the next observed act -- a candidate at the act that bore it, a spawn at the next; host reads and the Stop observe no act, so a launch followed only by those is unconfirmed (stated residue) -- assigned to this session by lineage: in its tree, or in one of its process sessions",
     "pids_spawned_again": "pids_spawned, and this session had already spawned one before",
     "net_out": "the act opened an outbound connection; NOT-EVALUABLE when the host's counter moved while no act of this session was running, because then its movement cannot be assigned to the act. Remembered across the session as a sticky three-valued mark: once True it stays True; once it has gone NOT-EVALUABLE (some act could not be measured) it never reads back as False -- a session with an unmeasurable act cannot end as \"nothing transmitted\"",
     "report_null": "the act printed a bare `null`, on any act; or nothing, while reading a structured file. Stated limit: a bare `null` fires whether or not the command read a structured file at all -- firing wide is the cheap direction for a guard, so the ungated arm stands",
@@ -833,6 +833,7 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     out["files_changed"], out["files_removed"], out["files_created"] = changed, removed, created
     table = proc_table()
     then = before.get("pids")
+    born: dict = {}
     if table is not None and then is not None:
         own = _own_chain()
         in_tree = under(before.get("session_root") or 0, table)
@@ -840,11 +841,17 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
                                   if int(p) not in table or table[int(p)][0] != s)
         # New on the HOST (not merely absent from the tree's snapshot), alive, and assigned.
         alive_then, sids_then = set(before.get("alive") or []), set(before.get("sids") or [])
-        spawned = sorted(
-            p for p, (start, _, sid) in table.items()
+        born = {
+            p: table[p][0] for p, (start, _, sid) in table.items()
             if p not in own
             and (p not in alive_then or (str(p) in then and then[str(p)] != start))
-            and assigned_process(p, sid, in_tree, sids_then))
+            and assigned_process(p, sid, in_tree, sids_then)}
+        # A worker is a process still there at the NEXT act. A child alive for the instant after
+        # this act (a test runner's collector, a shell's last pipeline stage) is a candidate, not a
+        # launch; it becomes pids_spawned when the following delta finds it alive, same start time.
+        candidates = {str(p): s for p, s in (memory.get("candidates") or {}).items()}
+        spawned = sorted(int(p) for p, s in candidates.items() if int(p) in table and table[int(p)][0] == s)
+        memory["candidates"] = {str(p): s for p, s in born.items()}
         out["pids_spawned"] = spawned
         out["pids_spawned_again"] = bool(spawned) and memory.get("spawns", 0) > 0
         if spawned:
@@ -881,8 +888,8 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     out["report_after_change"] = bool(out["report_pass"]) and bool(memory.get("changed_since_spawn"))
     if changed or created:
         memory["changed_since_spawn"] = True
-    if spawned:
-        memory["changed_since_spawn"] = False
+    if born:
+        memory["changed_since_spawn"] = False  # the launch is the bearing act, confirmed or not
     out["observed_read"] = False
     out["remote_read"] = False
     _remember(slot, memory)

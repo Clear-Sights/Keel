@@ -140,6 +140,23 @@ class TheProbeCanRefuse(unittest.TestCase):
         self.assertEqual(1, done.returncode, done.stdout)
         self.assertIn("not usable", done.stdout)
 
+    def test_require_change_is_not_evaluable_for_a_non_path_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = str(Path(directory) / "state")
+            for _ in range(2):
+                done = run("--target", "research-report", "--after-failure", "--require-change", state=state)
+                self.assertEqual(1, done.returncode, done.stdout)
+                self.assertIn("NOT-EVALUABLE", done.stdout)
+            self.assertFalse(list((Path(state) / "probe").glob("*.sha256")), "a literal was recorded")
+
+    def test_require_change_reports_an_unreadable_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, \
+                unittest.mock.patch.object(Path, "is_file", return_value=True), \
+                unittest.mock.patch.object(probe_module, "_fingerprint", side_effect=OSError("unreadable")):
+            ok, detail = probe_module.probe_require_change(str(Path(directory) / "brief"))
+            self.assertFalse(ok, detail)
+            self.assertIn("not usable", detail)
+
     def test_the_spawning_arms_refuse_when_a_child_cannot_be_spawned(self) -> None:
         """Branch executed through a stub; the host condition is not reproduced. See the docstring."""
         with unittest.mock.patch.object(probe_module, "_spawn", side_effect=OSError("no fork")):
