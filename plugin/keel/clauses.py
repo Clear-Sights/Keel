@@ -887,7 +887,7 @@ def _admit(clause: Clause) -> Clause:
         if isinstance(clause.subject, dict) and "effect" not in clause.subject:
             keyed = _fixture_event(clause.subject, fixture)
             fields = subject_fields(clause.subject)
-            value = _resolve(keyed, fields[0] if fields else "")
+            value = next((v for v in (_resolve(keyed, f) for f in fields) if isinstance(v, str) and v), "")
             found = (re.search(clause.subject["pattern"], value)
                      if isinstance(value, str) and clause.subject.get("pattern") else None)
             if not (found and found.group(clause.subject.get("group", 0))):

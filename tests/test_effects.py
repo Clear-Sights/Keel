@@ -264,10 +264,13 @@ class TheObserverSeesTheWorld(Repo):
     def test_a_worker_surviving_its_launch_is_seen_orphaned_and_a_second_is_a_relaunch(self) -> None:
         """A daemonized worker is reparented to pid 1 and leaves the session's tree; it is
         still this session's process -- seen when it appears, remembered, seen when it ends."""
-        first = self.observe("nohup sleep 60 >/dev/null 2>&1 &")
-        self.assertTrue(first["pids_spawned"])
+        bearing = self.observe("nohup sleep 60 >/dev/null 2>&1 &")
+        self.assertEqual([], bearing["pids_spawned"], "a child alive for the instant after its act is a candidate")
+        first = self.observe("true")
+        self.assertTrue(first["pids_spawned"], "alive at the next act, same start: a spawn")
         self.assertFalse(first["pids_spawned_again"])
-        second = self.observe("nohup sleep 60 >/dev/null 2>&1 &")
+        self.observe("nohup sleep 60 >/dev/null 2>&1 &")
+        second = self.observe("true")
         self.assertTrue(second["pids_spawned"])
         self.assertTrue(second["pids_spawned_again"])
         launched = first["pids_spawned"] + second["pids_spawned"]
@@ -321,6 +324,8 @@ class TheObserverSeesTheWorld(Repo):
         self.assertTrue(grand, "the grandchild was never reparented to pid 1")
         grandchild = grand[0]
         self.addCleanup(lambda: (os.kill(grandchild, 9) if _alive(grandchild) else None))
+        effects.delta(self.state, "s", "", {})
+        effects.snapshot(self.state, "s", "", self.repo)
         d = effects.delta(self.state, "s", "", {})
         self.assertIn(leader_pid, d["pids_spawned"], "the session leader itself, in the tree by ppid")
         self.assertIn(grandchild, d["pids_spawned"],
@@ -386,6 +391,8 @@ class TheObserverSeesTheWorld(Repo):
         time.sleep(0.1)
         effects.snapshot(self.state, "s", "", self.repo)
         time.sleep(0.6)  # the act; the foreign session starts its worker meanwhile
+        effects.delta(self.state, "s", "", {})
+        effects.snapshot(self.state, "s", "", self.repo)
         d = effects.delta(self.state, "s", "", {})
         born = [p for p, (_, _, sid) in (effects.proc_table() or {}).items() if sid == foreign]
         self.assertTrue(born, "the foreign session left nothing alive to judge")

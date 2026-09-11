@@ -131,14 +131,8 @@ def probe_result_write() -> tuple[bool, str]:
 
 
 def _fingerprint(target: str) -> str:
-    """The target's content when it is a path, else the literal text. Hashed either way."""
-    path = pathlib.Path(target)
-    try:
-        if path.is_file():
-            return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError:
-        pass
-    return hashlib.sha256(target.encode("utf-8")).hexdigest()
+    """The target file's content, hashed."""
+    return hashlib.sha256(pathlib.Path(target).read_bytes()).hexdigest()
 
 
 def _record_path(target: str) -> pathlib.Path:
@@ -148,22 +142,21 @@ def _record_path(target: str) -> pathlib.Path:
 def probe_require_change(target: str) -> tuple[bool, str]:
     """Refuse a re-launch that carries the same subject as the attempt that just failed.
 
-    Re-running an identical brief after a failure spends the whole cost again to reach the same
-    place. The prior art is `codex-herd`, which pins a brief by `git hash-object` so that rewriting
-    it voids the receipt; the same idea, without requiring git: the subject is fingerprinted, and a
-    fingerprint equal to the recorded one is the refusal.
-
-    THE FIRST CALL CANNOT REFUSE, and says so rather than passing quietly. With nothing recorded
-    there is no failed attempt to differ from, so the honest report is that the record was written,
-    not that a change was observed.
+    The subject is fingerprinted; a fingerprint equal to the recorded one is the refusal. THE
+    FIRST CALL ON A FILE CANNOT REFUSE, and says so. A target that is not a file has no bytes that can
+    change: its fingerprint would be a constant, so the probe is NOT-EVALUABLE for it and records
+    nothing -- a constant recorded once would refuse every later call forever.
     """
-    record, now = _record_path(target), _fingerprint(target)
+    record = _record_path(target)
     try:
         record.parent.mkdir(parents=True, exist_ok=True)
+        if not pathlib.Path(target).is_file():
+            return False, f"NOT-EVALUABLE: --target {target!r} is not a file; a literal cannot witness a change"
+        now = _fingerprint(target)
         previous = record.read_text(encoding="utf-8").strip() if record.exists() else ""
         record.write_text(now, encoding="utf-8")
     except OSError as error:
-        return False, f"the probe record under {state_dir()} is not usable: {error}"
+        return False, f"the target or the probe record under {state_dir()} is not usable: {error}"
     if not previous:
         return True, f"no prior failure recorded for this target; recorded {now[:12]}"
     if previous == now:
