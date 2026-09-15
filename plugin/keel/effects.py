@@ -760,8 +760,15 @@ def delta(state: pathlib.Path, session: str, agent: str, event: dict[str, Any]) 
     slot = _slot(state, session, agent)
     out: dict[str, Any] = {name: None for name in EFFECTS}
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
-    response = event.get("tool_response") if isinstance(event.get("tool_response"), dict) else {}
-    out.update(report_effects(response.get("stdout"), tool_input.get("command")))
+    raw = event.get("tool_response")
+    response = raw if isinstance(raw, dict) else {}
+    # C08 asks to see a checker FAIL, and a checker fails by exit code with its report on stderr,
+    # or arrives as a bare error string rather than a dict. Reading stdout alone read every such
+    # failure as silence: the readers suite was driven red seven times under a planted fault and
+    # no discharge was ever recorded. The report is wherever the tool put it.
+    report = raw if isinstance(raw, str) else "\n".join(
+        s for s in (response.get("stdout"), response.get("stderr")) if isinstance(s, str))
+    out.update(report_effects(report, tool_input.get("command")))
     act = event.get("tool_use_id")
     pre = _before_path(slot, act if isinstance(act, str) else None)
     if not pre.exists():
