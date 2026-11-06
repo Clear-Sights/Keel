@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import pathlib
 import subprocess
 import sys

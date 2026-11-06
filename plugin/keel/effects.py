@@ -660,7 +660,8 @@ def observe_remote(state: pathlib.Path, root: str | None) -> dict[str, Any] | No
         return None
     tips: dict[str, str] = {}
     if remotes.strip():
-        listing = _git(root, "ls-remote", "--heads", "origin")
+        names = remotes.split()
+        listing = _git(root, "ls-remote", "--heads", "origin" if "origin" in names else names[0])
         if listing is None:
             return None
         for line in listing.splitlines():
@@ -926,7 +927,10 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     if not root:
         return out
     remotes = _git(root, "remote")
-    if remotes is not None and not remotes.strip():
+    if remotes is None:
+        out["not_evaluable"] = "the remotes could not be listed"
+        return out
+    if not remotes.strip():
         # A repository with no remote has no remote ref to have moved.
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
@@ -938,7 +942,7 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     moved, unlanded = [], []
     # EVERY remote, not only origin: a push to `upstream` moves that tracking ref and origin
     # says nothing about it.
-    for remote in (remotes or "").split():
+    for remote in remotes.split():
         listing = _git(root, "ls-remote", "--heads", remote)
         if listing is None:
             out["not_evaluable"] = f"the remote {remote} could not be listed"

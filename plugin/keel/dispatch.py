@@ -162,11 +162,12 @@ def _names(clause, event: dict, subject: str) -> bool:
     if record.get("observed_read") is True:
         return True
     named = record.get(_NAMED_BY.get(effect, ""))
-    if isinstance(named, list) and subject in {str(n) for n in named}:
+    if isinstance(named, list) and subject in {str(n)[:_EFFECT_SUBJECT_LIMIT] for n in named}:
         return True
     for field in ("tool_input.file_path", "tool_input.path", "tool_input.notebook_path"):
         value = _get(event, field)
-        if isinstance(value, str) and value and (value == subject or value.endswith("/" + subject)):
+        if isinstance(value, str) and value and (value[:_EFFECT_SUBJECT_LIMIT] == subject
+                                                   or value.endswith("/" + subject)):
             return True
     return False
 
@@ -433,7 +434,7 @@ NON_ACTS = frozenset({"AskUserQuestion", "ExitPlanMode"})
 # https://code.claude.com/docs/en/hooks#powershell
 # Exactly ["Bash"] in the clause table denotes this shell scope. Mixed and wildcard scopes
 # retain their literal meaning. Keep both hook manifests in sync (covered by regression tests).
-SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
+SHELL_TOOLS = C.SHELL_TOOLS
 COMMIT_HINT = (" -- a guard that is itself a shell act passes on a leading `# keel-guard: <clause id>` "
                "line and is checked by its effect after it runs")
 
@@ -679,7 +680,9 @@ def _pending_lost(root: pathlib.Path, session: str) -> list[str]:
             try:
                 os.kill(int(pid), 0)
                 continue  # still running: a concurrent hook, not a dead one
-            except (ValueError, ProcessLookupError, PermissionError):
+            except PermissionError:
+                continue  # alive, under another uid
+            except (ValueError, ProcessLookupError):
                 pass
             try:
                 row = json.loads(path.read_text(encoding="utf-8"))
@@ -1108,6 +1111,7 @@ def main() -> int:
             return 0
     try:
         encoded = json.dumps(out)
+        printed = out
     except Exception as exc:
         closed = _closed_not_evaluable(event, f"serialization {type(exc).__name__}")
         print(f"keel: {type(exc).__name__} while serializing -- NOT-EVALUABLE, failing "
@@ -1120,7 +1124,8 @@ def main() -> int:
                 f"{event.get('hook_event_name') or 'this event'} has no deny wire")))
             return 0
         encoded = json.dumps(closed)
-    _record(event, out if isinstance(out, dict) else {})
+        printed = closed
+    _record(event, printed if isinstance(printed, dict) else {})
     print(encoded)
     return 0
 

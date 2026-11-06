@@ -51,7 +51,9 @@ def dispatch(event: dict, state_dir: str) -> dict:
     )
     try:
         decision = json.loads(proc.stdout or "{}")
-        parsed = True
+        parsed = isinstance(decision, dict)
+        if not parsed:
+            decision = {}
     except json.JSONDecodeError:
         decision, parsed = {}, False
     return {"decision": decision, "exit": proc.returncode, "parsed": parsed,

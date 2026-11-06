@@ -286,6 +286,10 @@ def _measure_probe(spec: dict[str, Any]) -> bool | None:
     return re.search(expect["regex"], output) is not None
 
 
+# The shell tools: a clause or predicate that declares `tools: ["Bash"]` covers every one of them.
+SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
+
+
 def _on_surface(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     """Whether the event is on the surface the predicate declares (`event`, `tools`). ONE owner:
     both evaluation and the unmeasured-effect check bound themselves by this, so neither can
@@ -293,6 +297,8 @@ def _on_surface(predicate: dict[str, Any], event: dict[str, Any]) -> bool:
     if predicate.get("event") is not None and event.get("hook_event_name") != predicate["event"]:
         return False
     tools = predicate.get("tools")
+    if tools == ["Bash"]:
+        return event.get("tool_name") in SHELL_TOOLS
     return not (tools and tools != ["*"] and event.get("tool_name") not in tools)
 
 
@@ -641,6 +647,8 @@ def _refuse_retired_spellings(predicate: dict[str, Any], clause_id: str) -> None
         if not isinstance(node, dict):
             continue
         kind = node.get("kind")
+        if kind is not None and not isinstance(kind, str):
+            raise ClauseError("CLAUSE-SIDE-UNCLASSIFIED", f"{clause_id}: `kind` is not a name")
         if kind in _RETIRED_KINDS:
             raise ClauseError("CLAUSE-KIND-RETIRED",
                               f"{clause_id}: `kind: {kind}` was removed -- {_RETIRED_KINDS[kind]}")
@@ -684,6 +692,8 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
     probe = predicate.get("probe")
     if probe is None:
         return
+    if not isinstance(probe, dict):
+        raise ClauseError("CLAUSE-PROBE-INVALID", clause_id)
     cmd, timeout, expect = probe.get("cmd"), probe.get("timeout_ms"), probe.get("expect")
     valid_expect = expect in ("empty", "nonempty") or (
         isinstance(expect, dict) and set(expect) == {"regex"} and isinstance(expect["regex"], str)
@@ -936,26 +946,30 @@ def _admit(clause: Clause) -> Clause:
 
 
 def _load_object(data: dict[str, Any]) -> Clause:
-    clause = Clause(
-        id=data["id"],
-        event=data["event"],
-        tools=data["tools"],
-        occasion=data["occasion"],
-        costly=data["costly"],
-        guard=data["guard"],
-        subject=data["subject"],
-        fingerprint=data["fingerprint"],
-        discharged_by=data.get("discharged_by"),
-        window=data["window"],
-        deny_reason=data["deny_reason"],
-        fixtures_pos=data["fixtures_pos"],
-        fixtures_neg=data["fixtures_neg"],
-        activated_by=data.get("activated_by"),
-        fixtures_activate=data.get("fixtures_activate"),
-        fixtures_discharge=data.get("fixtures_discharge") or [],
-        fixtures_no_discharge=data.get("fixtures_no_discharge") or [],
-        construction=data.get("construction") or "",
-    )
+    try:
+        clause = Clause(
+            id=data["id"],
+            event=data["event"],
+            tools=data["tools"],
+            occasion=data["occasion"],
+            costly=data["costly"],
+            guard=data["guard"],
+            subject=data["subject"],
+            fingerprint=data["fingerprint"],
+            discharged_by=data.get("discharged_by"),
+            window=data["window"],
+            deny_reason=data["deny_reason"],
+            fixtures_pos=data["fixtures_pos"],
+            fixtures_neg=data["fixtures_neg"],
+            activated_by=data.get("activated_by"),
+            fixtures_activate=data.get("fixtures_activate"),
+            fixtures_discharge=data.get("fixtures_discharge") or [],
+            fixtures_no_discharge=data.get("fixtures_no_discharge") or [],
+            construction=data.get("construction") or "",
+        )
+    except KeyError as exc:
+        raise ClauseError("CLAUSE-BUNDLE-INVALID",
+                          f"{data.get('id')}: row has no {exc.args[0]!r} field") from exc
     carried = sorted(EXCUSE_FIELDS & set(data))
     if carried:
         raise ClauseError(
