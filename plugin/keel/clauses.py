@@ -647,8 +647,6 @@ def _refuse_retired_spellings(predicate: dict[str, Any], clause_id: str) -> None
         if not isinstance(node, dict):
             continue
         kind = node.get("kind")
-        if kind is not None and not isinstance(kind, str):
-            raise ClauseError("CLAUSE-SIDE-UNCLASSIFIED", f"{clause_id}: `kind` is not a name")
         if kind in _RETIRED_KINDS:
             raise ClauseError("CLAUSE-KIND-RETIRED",
                               f"{clause_id}: `kind: {kind}` was removed -- {_RETIRED_KINDS[kind]}")
@@ -692,8 +690,6 @@ def _compile(predicate: dict[str, Any] | None, clause_id: str) -> None:
     probe = predicate.get("probe")
     if probe is None:
         return
-    if not isinstance(probe, dict):
-        raise ClauseError("CLAUSE-PROBE-INVALID", clause_id)
     cmd, timeout, expect = probe.get("cmd"), probe.get("timeout_ms"), probe.get("expect")
     valid_expect = expect in ("empty", "nonempty") or (
         isinstance(expect, dict) and set(expect) == {"regex"} and isinstance(expect["regex"], str)
@@ -945,31 +941,57 @@ def _admit(clause: Clause) -> Clause:
     return clause
 
 
+_REQUIRED_FIELDS = ("id", "event", "tools", "occasion", "costly", "guard", "subject", "fingerprint",
+                    "window", "deny_reason", "fixtures_pos", "fixtures_neg")
+
+
+def _check_shape(data: Any) -> None:
+    """The ONE place a raw row's shape is checked, before any admission code reads it: required
+    fields present, and every predicate node's `kind` a name and `probe` an object. Everything
+    downstream may then index and call methods on these without a raw TypeError/KeyError/
+    AttributeError escaping as a crash instead of a refusal."""
+    if not isinstance(data, dict):
+        raise ClauseError("CLAUSE-BUNDLE-INVALID", "a row is not an object")
+    for name in _REQUIRED_FIELDS:
+        if name not in data:
+            raise ClauseError("CLAUSE-BUNDLE-INVALID", f"{data.get('id')}: row has no {name!r} field")
+    for side in ("fingerprint", "discharged_by", "activated_by"):
+        nodes = [data.get(side)]
+        while nodes:
+            node = nodes.pop()
+            if not isinstance(node, dict):
+                continue
+            if node.get("kind") is not None and not isinstance(node["kind"], str):
+                raise ClauseError("CLAUSE-SIDE-UNCLASSIFIED", f"{data['id']}.{side}: `kind` is not a name")
+            if node.get("probe") is not None and not isinstance(node["probe"], dict):
+                raise ClauseError("CLAUSE-PROBE-INVALID", f"{data['id']}.{side}: `probe` is not an object")
+            for branch in ("any_of", "all_of"):
+                if isinstance(node.get(branch), list):
+                    nodes.extend(node[branch])
+
+
 def _load_object(data: dict[str, Any]) -> Clause:
-    try:
-        clause = Clause(
-            id=data["id"],
-            event=data["event"],
-            tools=data["tools"],
-            occasion=data["occasion"],
-            costly=data["costly"],
-            guard=data["guard"],
-            subject=data["subject"],
-            fingerprint=data["fingerprint"],
-            discharged_by=data.get("discharged_by"),
-            window=data["window"],
-            deny_reason=data["deny_reason"],
-            fixtures_pos=data["fixtures_pos"],
-            fixtures_neg=data["fixtures_neg"],
-            activated_by=data.get("activated_by"),
-            fixtures_activate=data.get("fixtures_activate"),
-            fixtures_discharge=data.get("fixtures_discharge") or [],
-            fixtures_no_discharge=data.get("fixtures_no_discharge") or [],
-            construction=data.get("construction") or "",
-        )
-    except KeyError as exc:
-        raise ClauseError("CLAUSE-BUNDLE-INVALID",
-                          f"{data.get('id')}: row has no {exc.args[0]!r} field") from exc
+    _check_shape(data)
+    clause = Clause(
+        id=data["id"],
+        event=data["event"],
+        tools=data["tools"],
+        occasion=data["occasion"],
+        costly=data["costly"],
+        guard=data["guard"],
+        subject=data["subject"],
+        fingerprint=data["fingerprint"],
+        discharged_by=data.get("discharged_by"),
+        window=data["window"],
+        deny_reason=data["deny_reason"],
+        fixtures_pos=data["fixtures_pos"],
+        fixtures_neg=data["fixtures_neg"],
+        activated_by=data.get("activated_by"),
+        fixtures_activate=data.get("fixtures_activate"),
+        fixtures_discharge=data.get("fixtures_discharge") or [],
+        fixtures_no_discharge=data.get("fixtures_no_discharge") or [],
+        construction=data.get("construction") or "",
+    )
     carried = sorted(EXCUSE_FIELDS & set(data))
     if carried:
         raise ClauseError(

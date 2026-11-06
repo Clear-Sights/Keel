@@ -648,6 +648,15 @@ def trace_effects(text: str, before: dict[str, Any], root: str | None, quiet: bo
     return out
 
 
+def _remotes(root: str | None) -> list[str] | None:
+    """The ONE enumeration of a repository's remotes: [] outside a repository or with none,
+    None when git could not be asked. Both the A03 datum and the ending read it."""
+    if root is None:
+        return []
+    listed = _git(root, "remote")
+    return None if listed is None else listed.split()
+
+
 def observe_remote(state: pathlib.Path, root: str | None) -> dict[str, Any] | None:
     """Measure the remote tips once and write them for the operator to Read (A03's datum).
 
@@ -655,13 +664,12 @@ def observe_remote(state: pathlib.Path, root: str | None) -> dict[str, Any] | No
     written, so a Read of it cannot happen and the demand stays owed: fails closed.
     Outside a repository, an empty tips datum records the terminal no-repository result.
     """
-    remotes = _git(root, "remote") if root is not None else ""
+    remotes = _remotes(root)
     if remotes is None:
         return None
     tips: dict[str, str] = {}
-    if remotes.strip():
-        names = remotes.split()
-        listing = _git(root, "ls-remote", "--heads", "origin" if "origin" in names else names[0])
+    if remotes:
+        listing = _git(root, "ls-remote", "--heads", "origin" if "origin" in remotes else remotes[0])
         if listing is None:
             return None
         for line in listing.splitlines():
@@ -926,11 +934,11 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     root = _repo_root(cwd) if os.path.isdir(cwd) else None
     if not root:
         return out
-    remotes = _git(root, "remote")
+    remotes = _remotes(root)
     if remotes is None:
         out["not_evaluable"] = "the remotes could not be listed"
         return out
-    if not remotes.strip():
+    if not remotes:
         # A repository with no remote has no remote ref to have moved.
         out["remote_ref_moved"], out["remote_landed"] = [], True
         return out
@@ -942,7 +950,7 @@ def at_stop(state: pathlib.Path, session: str, agent: str, cwd: str) -> dict[str
     moved, unlanded = [], []
     # EVERY remote, not only origin: a push to `upstream` moves that tracking ref and origin
     # says nothing about it.
-    for remote in remotes.split():
+    for remote in remotes:
         listing = _git(root, "ls-remote", "--heads", remote)
         if listing is None:
             out["not_evaluable"] = f"the remote {remote} could not be listed"
